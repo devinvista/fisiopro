@@ -1,5 +1,17 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 2 (item 2): refator de `saas-plans`
+
+| Arquivo | Antes | Depois |
+|---|---|---|
+| `saas-plans.routes.ts` | **645 linhas** com `db.*` direto, `try/catch` repetido, dupla escrita (route + service) na lógica de pagamento | **126 linhas** (só roteamento → service via `asyncHandler`) |
+| `saas-plans.service.ts` | 64 linhas (só `seedDefaultPlans`, `applyPaymentToSubscription`, `calculateTrialEnd`) | **287 linhas**: 19 funções de caso de uso (planos CRUD, stats, public; clinic-subscriptions list/create/update; mine/limits; admin clinics; payment-history list/create/delete/stats) |
+| `saas-plans.repository.ts` | 241 linhas | inalterado (já cobria tudo) |
+
+**Comportamento preservado**: mesmos HTTP status (incluindo o **400** específico para violação de unique `23505` em criação de plano), mesmos payloads (incluindo o `{ ok: true, results }` do seed), mesma rolagem de período (currentPeriodEnd → trialEndDate → hoje + 30 dias) ao registrar pagamento. A responsabilidade de avançar o período após pagamento, antes duplicada entre route handler e `applyPaymentToSubscription`, agora vive **somente** no service.
+
+Validação: `pnpm typecheck` ✅ • `pnpm test` 142/142 ✅ • workflow restart OK.
+
 ### Sessão abril/2026 — Sprint 2 (item 1): refator de `medical-records`
 
 **Objetivo:** afinar o roteador do prontuário (950 linhas, ~30 handlers com lógica de DB inline) para o padrão `routes → service → repository`.
