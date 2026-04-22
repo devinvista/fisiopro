@@ -68,7 +68,6 @@ export function generateContractHTML(
 
   const grandTotal = totalSessoesVal + totalMensalVal;
 
-  const contratada = plan.responsibleProfessional || clinicRT || clinicName;
   const contratadaCouncil = clinicCrefito;
 
   const cancellationHours = clinic?.cancellationPolicyHours;

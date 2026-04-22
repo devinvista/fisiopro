@@ -3,158 +3,21 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart,
+  ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Users, TrendingUp, TrendingDown, Calendar, BarChart3, Clock,
-  AlertTriangle, CheckCircle2, XCircle, Activity, CalendarDays,
-  ArrowUpRight, ArrowDownRight, Stethoscope, Target, DollarSign,
+  Users, TrendingUp, TrendingDown, Calendar, BarChart3,
+  AlertTriangle, CheckCircle2, CalendarDays, Stethoscope,
+  Target, DollarSign,
 } from "lucide-react";
 
-// ─── Auth helper ──────────────────────────────────────────────────────────────
-function authFetch(url: string): Promise<Response> {
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("fisiogest_token") : null;
-  return fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-const MONTH_NAMES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
-const CATEGORY_COLORS = [
-  "#6366f1", "#10b981", "#f59e0b", "#ec4899", "#0ea5e9", "#8b5cf6", "#14b8a6", "#f97316",
-];
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface MonthlyRevenue {
-  month: number;
-  monthName: string;
-  revenue: number;
-  expenses: number;
-  profit: number;
-}
-
-interface ProcedureRevenue {
-  procedureId: number;
-  procedureName: string;
-  category: string;
-  totalRevenue: number;
-  totalSessions: number;
-  averageTicket: number;
-}
-
-interface ScheduleOccupation {
-  totalSlots: number;
-  occupiedSlots: number;
-  occupationRate: number;
-  canceledCount: number;
-  noShowCount: number;
-  noShowRate: number;
-  activePatients: number;
-  byDayOfWeek: { dayOfWeek: string; count: number }[];
-}
-
-interface CategoryRevenue {
-  category: string;
-  revenue: number;
-  sessions: number;
-}
-
-// ─── KPI Card (same system as financial page) ─────────────────────────────────
-function KpiCard({
-  label, value, icon, accentColor = "#6366f1", loading, sub, trend, size = "md",
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  accentColor?: string;
-  loading?: boolean;
-  sub?: string;
-  trend?: { value: number; label?: string };
-  size?: "sm" | "md" | "lg";
-}) {
-  return (
-    <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
-      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: accentColor }} />
-      <div className="pl-5 pr-4 py-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
-          <div className="p-2 rounded-xl shrink-0 opacity-80" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>
-            {icon}
-          </div>
-        </div>
-        <div className="mt-2">
-          {loading ? (
-            <div className="space-y-1.5">
-              <div className="h-7 w-28 bg-slate-100 animate-pulse rounded-lg" />
-              <div className="h-3 w-16 bg-slate-100 animate-pulse rounded" />
-            </div>
-          ) : (
-            <>
-              <p className={`font-bold text-slate-900 tabular-nums ${size === "lg" ? "text-3xl" : size === "sm" ? "text-lg" : "text-2xl"}`}>
-                {value}
-              </p>
-              {trend && (
-                <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${trend.value >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                  {trend.value >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                  {Math.abs(trend.value).toFixed(1)}%
-                  <span className="text-slate-400 font-normal">{trend.label ?? "vs período anterior"}</span>
-                </div>
-              )}
-              {sub && !trend && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
-function ChartSkeleton({ height = 280 }: { height?: number }) {
-  return (
-    <div className="w-full animate-pulse" style={{ height }}>
-      <div className="flex items-end gap-3 h-full px-4 pb-6 pt-4">
-        {[65, 45, 80, 55, 70, 40, 90, 60, 75, 50, 85, 65].map((h, i) => (
-          <div key={i} className="flex-1 bg-slate-100 rounded-t-lg" style={{ height: `${h}%` }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
-function CustomTooltipContent({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white border border-slate-100 rounded-xl shadow-xl p-3 text-xs min-w-[140px]">
-      <p className="font-semibold text-slate-700 mb-2">{label}</p>
-      {payload.map((entry: any, i: number) => (
-        <div key={i} className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-            <span className="text-slate-500">{entry.name}</span>
-          </div>
-          <span className="font-semibold text-slate-800">
-            {typeof entry.value === "number" && entry.value > 100
-              ? formatCurrency(entry.value)
-              : entry.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import { KpiCard } from "./relatorios/KpiCard";
+import { ChartSkeleton } from "./relatorios/ChartSkeleton";
+import { CustomTooltipContent } from "./relatorios/CustomTooltipContent";
+import { MONTH_NAMES, CATEGORY_COLORS, formatCurrency, authFetch } from "./relatorios/constants";
+import type { MonthlyRevenue, ProcedureRevenue, ScheduleOccupation, CategoryRevenue } from "./relatorios/types";
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Relatorios() {
@@ -696,7 +559,7 @@ export default function Relatorios() {
                   <tbody>
                     {activeProcedures
                       .sort((a, b) => Number(b.totalRevenue) - Number(a.totalRevenue))
-                      .map((p, idx) => {
+                      .map((p) => {
                         const pct = maxProcedureRevenue > 0 ? (Number(p.totalRevenue) / maxProcedureRevenue) * 100 : 0;
                         const sharePct = totalCategoryRevenue > 0 ? (Number(p.totalRevenue) / totalCategoryRevenue) * 100 : 0;
                         return (

@@ -38,6 +38,36 @@ export async function apiFetch<T = unknown>(url: string, options?: RequestInit):
   return r.json();
 }
 
+export function buildPackagePayload(data: PackageFormData) {
+  const base = {
+    name: data.name,
+    description: data.description || null,
+    procedureId: Number(data.procedureId),
+    packageType: data.packageType,
+    sessionsPerWeek: Number(data.sessionsPerWeek),
+  };
+  if (data.packageType === "sessoes") {
+    return {
+      ...base,
+      totalSessions: Number(data.totalSessions),
+      validityDays: Number(data.validityDays),
+      price: Number(data.price),
+      monthlyPrice: null,
+      billingDay: null,
+      absenceCreditLimit: 0,
+    };
+  }
+  return {
+    ...base,
+    totalSessions: null,
+    validityDays: null,
+    price: Number(data.monthlyPrice),
+    monthlyPrice: Number(data.monthlyPrice),
+    billingDay: Number(data.billingDay),
+    absenceCreditLimit: Number(data.absenceCreditLimit),
+  };
+}
+
 export const EMPTY_FORM: PackageFormData = {
   name: "",
   description: "",

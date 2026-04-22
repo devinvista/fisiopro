@@ -249,6 +249,14 @@ Hooks reutilizáveis ficam em `src/hooks/`. Contexts em `src/utils/` (TODO mover
 
 ## Refatorações recentes (estrutura)
 
+- **Sprint 2 (abr/2026)** — quebrados todos os 7 arquivos > 750 linhas:
+  - `print-html.tsx` (961 → 14 barrel) → 7 arquivos em `utils/print/`
+  - `FinancialTab.tsx` (877 → 369) → pasta `FinancialTab/` (Subscriptions/Credits/Wallet sections + constants)
+  - `pacotes/index.tsx` (797 → 284) → `PackageCard`, `PackageFormModal`, `helpers.ts`, `types.ts`
+  - `CreateAppointmentForm.tsx` (795 → 524) → pasta `create-appointment/` (PatientStep, ProcedureSelector, RecurrenceSection)
+  - `LancamentosTab.tsx` (777 → 429) → pasta `lancamentos/` (SubscriptionBillingPanel, RecordsTable)
+  - `relatorios.tsx` (760 → 623) → pasta `relatorios/` (KpiCard, ChartSkeleton, CustomTooltipContent, constants, types)
+  - Padrão adotado: pasta com mesmo nome co-localizada; arquivo principal vira shell/orquestrador; preserva imports externos. Typecheck passa em todos.
 - **`agenda/index.tsx`** — antes 986 linhas, agora 318 linhas (orquestrador). Quebrado em:
   - Hooks: `useAgendaQueries`, `useAgendaNavigation`, `useAgendaMutations`
   - Helpers: `helpers/scheduleConfig.ts` (computeScheduleConfig, isWorkingDay)
