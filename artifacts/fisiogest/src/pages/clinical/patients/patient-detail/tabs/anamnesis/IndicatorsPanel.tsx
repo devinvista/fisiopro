@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
@@ -343,8 +344,8 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
           <div className="space-y-4 pt-1">
             <div className="space-y-1">
               <Label className="text-[11px] text-slate-500">Data da medição</Label>
-              <Input type="date" value={measForm.measuredAt}
-                onChange={e => setMeasForm(f => ({ ...f, measuredAt: e.target.value }))} className="h-8 text-sm" />
+              <DatePickerPTBR value={measForm.measuredAt}
+                onChange={(v) => setMeasForm(f => ({ ...f, measuredAt: v }))} className="h-8 text-sm" />
             </div>
 
             <div>

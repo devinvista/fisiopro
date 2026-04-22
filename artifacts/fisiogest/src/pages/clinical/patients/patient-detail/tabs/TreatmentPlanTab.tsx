@@ -388,8 +388,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-slate-700">Data de Início</Label>
-                <Input type="date" className="bg-slate-50 border-slate-200 focus:bg-white"
-                  value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} />
+                <DatePickerPTBR className="bg-slate-50 border-slate-200 focus:bg-white h-9"
+                  value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">

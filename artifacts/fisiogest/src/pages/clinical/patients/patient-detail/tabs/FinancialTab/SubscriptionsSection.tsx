@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -115,7 +116,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Início *</Label>
-                <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="text-sm" />
+                <DatePickerPTBR value={form.startDate} onChange={(v) => setForm(f => ({ ...f, startDate: v }))} className="text-sm h-9" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Valor Mensal (R$) *</Label>

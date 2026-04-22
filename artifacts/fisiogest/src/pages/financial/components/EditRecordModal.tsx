@@ -5,6 +5,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -137,12 +138,12 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Vencimento</Label>
-              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="rounded-xl" />
+              <DatePickerPTBR value={dueDate} onChange={(v) => setDueDate(v)} className="rounded-xl h-9" />
             </div>
             {status !== "pendente" && (
               <div className="space-y-1.5">
                 <Label>Data de Pagamento</Label>
-                <Input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="rounded-xl" />
+                <DatePickerPTBR value={paymentDate} onChange={(v) => setPaymentDate(v)} className="rounded-xl h-9" />
               </div>
             )}
             <div className="space-y-1.5">

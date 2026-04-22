@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -699,16 +700,16 @@ export function SubscriptionsTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Trial válido até</Label>
-              <Input type="date" value={subForm.trialEndDate} onChange={(e) => setSubForm({ ...subForm, trialEndDate: e.target.value })} className="rounded-xl" />
+              <DatePickerPTBR value={subForm.trialEndDate} onChange={(v) => setSubForm({ ...subForm, trialEndDate: v })} className="rounded-xl h-9" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Início do período</Label>
-                <Input type="date" value={subForm.currentPeriodStart} onChange={(e) => setSubForm({ ...subForm, currentPeriodStart: e.target.value })} className="rounded-xl" />
+                <DatePickerPTBR value={subForm.currentPeriodStart} onChange={(v) => setSubForm({ ...subForm, currentPeriodStart: v })} className="rounded-xl h-9" />
               </div>
               <div className="space-y-1.5">
                 <Label>Fim do período</Label>
-                <Input type="date" value={subForm.currentPeriodEnd} onChange={(e) => setSubForm({ ...subForm, currentPeriodEnd: e.target.value })} className="rounded-xl" />
+                <DatePickerPTBR value={subForm.currentPeriodEnd} onChange={(v) => setSubForm({ ...subForm, currentPeriodEnd: v })} className="rounded-xl h-9" />
               </div>
             </div>
             <div className="space-y-1.5">

@@ -5,6 +5,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -160,21 +161,19 @@ export function NewRecordModal({ open, onClose, onSuccess }: { open: boolean; on
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Vencimento *</Label>
-              <Input
-                type="date"
+              <DatePickerPTBR
                 value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="rounded-xl"
+                onChange={(v) => setDueDate(v)}
+                className="rounded-xl h-9"
               />
             </div>
             {status === "pago" && (
               <div className="space-y-1.5">
                 <Label>Data de Pagamento</Label>
-                <Input
-                  type="date"
+                <DatePickerPTBR
                   value={paymentDate}
-                  onChange={e => setPaymentDate(e.target.value)}
-                  className="rounded-xl"
+                  onChange={(v) => setPaymentDate(v)}
+                  className="rounded-xl h-9"
                 />
               </div>
             )}

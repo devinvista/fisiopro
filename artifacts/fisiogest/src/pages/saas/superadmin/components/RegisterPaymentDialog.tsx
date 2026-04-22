@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -238,11 +239,10 @@ export function RegisterPaymentDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Data do pagamento</Label>
-              <Input
-                type="date"
+              <DatePickerPTBR
                 value={paidAt}
-                onChange={(e) => setPaidAt(e.target.value)}
-                className="rounded-xl"
+                onChange={(v) => setPaidAt(v)}
+                className="rounded-xl h-9"
               />
             </div>
           </div>
