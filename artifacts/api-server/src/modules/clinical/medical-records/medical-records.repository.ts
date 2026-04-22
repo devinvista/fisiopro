@@ -163,6 +163,35 @@ export async function createEvolution(patientId: number, data: Record<string, un
   return created;
 }
 
+/**
+ * Idempotent: cria um stub de evolução quando uma sessão é concluída,
+ * caso ainda não exista evolução para este atendimento. Retorna a evolução
+ * criada, ou `null` se já havia uma associada ao mesmo `appointmentId`.
+ */
+export async function ensureAutoEvolutionForAppointment(
+  patientId: number,
+  appointmentId: number,
+  sessionDuration?: number | null,
+) {
+  const existing = await db
+    .select({ id: evolutionsTable.id })
+    .from(evolutionsTable)
+    .where(eq(evolutionsTable.appointmentId, appointmentId))
+    .limit(1);
+  if (existing.length > 0) return null;
+
+  const [created] = await db
+    .insert(evolutionsTable)
+    .values({
+      patientId,
+      appointmentId,
+      description: "Sessão concluída automaticamente — registre a evolução clínica.",
+      sessionDuration: sessionDuration ?? null,
+    } as any)
+    .returning();
+  return created;
+}
+
 export async function updateEvolution(evolutionId: number, patientId: number, data: Record<string, unknown>) {
   const [existing] = await db.select().from(evolutionsTable).where(eq(evolutionsTable.id, evolutionId));
   if (!existing || existing.patientId !== patientId) return null;

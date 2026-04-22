@@ -13,6 +13,7 @@ import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,
 } from "./appointments.repository.js";
+import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
 
 // ─── Billing rules ────────────────────────────────────────────────────────────
 export async function applyBillingRules(
@@ -72,6 +73,18 @@ export async function applyBillingRules(
 
   // ── BILLING: attendance → billing logic by type ────────────────────────────
   if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
+
+    // Cria stub de evolução clínica automática (idempotente por appointmentId).
+    // Falhas aqui não devem bloquear o billing — apenas logar.
+    try {
+      await ensureAutoEvolutionForAppointment(
+        patientId,
+        appointmentId,
+        (procedure as any)?.durationMinutes ?? null,
+      );
+    } catch (err) {
+      console.error("[applyBillingRules] failed to create auto evolution:", err);
+    }
 
     // ── Priority 1: fatura consolidada subscription ────────────────────────
     const consolidatedConditions: any[] = [
