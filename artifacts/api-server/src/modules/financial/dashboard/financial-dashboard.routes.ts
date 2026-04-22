@@ -19,11 +19,11 @@ import {
   revenueSummarySql,
 } from "../../../services/financialReportsService.js";
 import { apptClinicCond, clinicCond } from "../financial.repository.js";
+import { asyncHandler } from "../../../utils/asyncHandler.js";
 
 const router = Router();
 
-router.get("/dashboard", requirePermission("financial.read"), async (req: AuthRequest, res) => {
-  try {
+router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
     const brt = nowBRT();
     const month = parseInt(req.query.month as string) || brt.month;
     const year = parseInt(req.query.year as string) || brt.year;
@@ -174,10 +174,6 @@ router.get("/dashboard", requirePermission("financial.read"), async (req: AuthRe
         total: Number(pendingConsolidatedInvoices[0]?.total ?? 0),
       },
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+}));
 
 export default router;

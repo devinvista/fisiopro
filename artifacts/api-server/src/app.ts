@@ -1,8 +1,9 @@
-import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
 import rateLimit from "express-rate-limit";
 import router from "./modules/index.js";
+import { errorHandler } from "./middleware/errorHandler.js";
 
 const app: Express = express();
 
@@ -70,10 +71,6 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[Global Error Handler]", err);
-  const message = err instanceof Error ? err.message : "Internal Server Error";
-  res.status(500).json({ error: "Internal Server Error", message });
-});
+app.use(errorHandler);
 
 export default app;

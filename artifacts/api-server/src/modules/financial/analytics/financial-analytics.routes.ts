@@ -17,18 +17,18 @@ import {
   revenueSummarySql,
 } from "../../../services/financialReportsService.js";
 import { clinicCond } from "../financial.repository.js";
+import { asyncHandler } from "../../../utils/asyncHandler.js";
+import { HttpError } from "../../../utils/httpError.js";
 
 const router = Router();
 
 // ─── GET /cost-per-procedure ───────────────────────────────────────────────────
 // Returns all active procedures with estimated cost, real (overhead-rateado) cost per session,
 // revenue generated in the month, and margin analysis.
-router.get("/cost-per-procedure", requirePermission("financial.read"), async (req: AuthRequest, res) => {
-  try {
+router.get("/cost-per-procedure", requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
     const clinicId = req.clinicId;
     if (!clinicId && !req.isSuperAdmin) {
-      res.status(400).json({ error: "Bad Request", message: "Clínica não identificada" });
-      return;
+      throw HttpError.badRequest("Clínica não identificada");
     }
 
     const brt = nowBRT();
@@ -216,16 +216,11 @@ router.get("/cost-per-procedure", requirePermission("financial.read"), async (re
       estCostPerHour:   Math.round(estCostPerHour * 100) / 100,
       procedures: results,
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+}));
 
 // ─── GET /dre ─────────────────────────────────────────────────────────────────
 // Mini Demonstrativo de Resultado do Exercício (DRE) mensal
-router.get("/dre", requirePermission("financial.read"), async (req: AuthRequest, res) => {
-  try {
+router.get("/dre", requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
     const clinicId = req.clinicId;
     const cc = clinicCond(req);
     const brt = nowBRT();
@@ -354,10 +349,6 @@ router.get("/dre", requirePermission("financial.read"), async (req: AuthRequest,
         monthlyEquivalent: r.frequency === "anual" ? Number(r.amount) / 12 : r.frequency === "semanal" ? Number(r.amount) * 4.33 : Number(r.amount),
       })),
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+}));
 
 export default router;

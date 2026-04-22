@@ -111,10 +111,16 @@ export async function runSubscriptionCheck(): Promise<SubscriptionCheckResult> {
           continue;
         }
 
-        // 3. Assinatura ativa com período vencido → marcar como overdue
-        // Usa currentPeriodEnd se disponível; cai para trialEndDate quando o trial
-        // expirou sem pagamento e currentPeriodEnd ainda não foi definido.
-        if (sub.status === "active" && sub.paymentStatus !== "paid" && sub.paymentStatus !== "free") {
+        // 3. Transição para overdue: assinatura ativa com pagamento ainda não
+        // recebido (pending/expired/etc., mas ainda não marcado como overdue) e
+        // período vencido → marcar como overdue. Não faz `continue` — deixa
+        // cair para o passo 4 caso já tenha excedido o grace period.
+        if (
+          sub.status === "active" &&
+          sub.paymentStatus !== "paid" &&
+          sub.paymentStatus !== "free" &&
+          sub.paymentStatus !== "overdue"
+        ) {
           const referenceDate = sub.currentPeriodEnd ?? sub.trialEndDate;
           if (referenceDate && referenceDate < today) {
             const updateFields: Partial<typeof clinicSubscriptionsTable.$inferInsert> = {
@@ -133,8 +139,13 @@ export async function runSubscriptionCheck(): Promise<SubscriptionCheckResult> {
 
             result.markedOverdue++;
             result.details.push({ clinicId, clinicName, action: "marked_overdue", reason: "Período vencido sem pagamento" });
+
+            // Atualiza o objeto em memória para que o passo 4 enxergue o novo estado.
+            sub.paymentStatus = "overdue";
+            if (updateFields.currentPeriodEnd) {
+              sub.currentPeriodEnd = updateFields.currentPeriodEnd as string;
+            }
           }
-          continue;
         }
 
         // 4. Overdue além do período de carência → suspender
