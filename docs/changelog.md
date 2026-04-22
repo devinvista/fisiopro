@@ -1,5 +1,18 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 2 (item 3): refator de `procedures`
+
+| Arquivo | Antes | Depois |
+|---|---|---|
+| `procedures.routes.ts` | **658 linhas** com `db.*` direto, `try/catch` em todo handler, `getEffectiveProcedurePrice` exportado de dentro do roteador | **141 linhas** (rotas finas com `asyncHandler`) |
+| `procedures.service.ts` | inexistente | **378 linhas**: 9 funções de caso de uso (list, create, update, toggleActive, delete, getCosts, upsertCosts, deleteCosts, overheadAnalysis) + `getEffectiveProcedurePrice` |
+| `procedures.repository.ts` | inexistente | **293 linhas**: acesso ao DB para `proceduresTable`, `procedureCostsTable`, despesas mensais, schedules ativos, uso de procedimento por período |
+| `procedures.schemas.ts` | inline no routes | **67 linhas** (Zod) |
+
+**Comportamento preservado**: HTTP 400 quando clínica não selecionada, 403 para não-admin em costs/toggle, 404 para procedimento inexistente, **409 com a mesma mensagem** ao deletar procedimento com consultas vinculadas, 204 em delete/cost-delete; payload das listagens (incluindo `isGlobal`, `effectivePrice`, `effectiveTotalCost`, `clinicCost` agregado) idêntico; cálculo de overhead-analysis (despesas mensais → custo por hora → divisão por capacidade real/estimada) idêntico. A função `getEffectiveProcedurePrice` continua sendo re-exportada pelo `routes.ts` para preservar qualquer importador externo.
+
+Validação: `pnpm typecheck` ✅ • `pnpm test` 142/142 ✅ • workflow restart OK.
+
 ### Sessão abril/2026 — Sprint 2 (item 2): refator de `saas-plans`
 
 | Arquivo | Antes | Depois |
