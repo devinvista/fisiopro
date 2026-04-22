@@ -51,16 +51,25 @@ const LEVEL_METHODS = new Set(["info", "warn", "error", "debug", "trace", "fatal
 export const logger = new Proxy(baseLogger, {
   get(target, prop: string | symbol) {
     const value = (target as unknown as Record<string | symbol, unknown>)[prop];
-    if (typeof prop !== "string" || !LEVEL_METHODS.has(prop)) return value;
-    const ctx = requestContext.getStore();
-    if (!ctx) return value;
-    const child = target.child({
-      requestId: ctx.requestId,
-      userId: ctx.userId,
-      clinicId: ctx.clinicId,
-    });
-    const childMethod = (child as unknown as Record<string, unknown>)[prop];
-    return typeof childMethod === "function" ? (childMethod as Function).bind(child) : value;
+    // Para métodos de log de nível, injeta o requestContext (se existir) via child logger.
+    if (typeof prop === "string" && LEVEL_METHODS.has(prop)) {
+      const ctx = requestContext.getStore();
+      if (ctx) {
+        const child = target.child({
+          requestId: ctx.requestId,
+          userId: ctx.userId,
+          clinicId: ctx.clinicId,
+        });
+        const childMethod = (child as unknown as Record<string, unknown>)[prop];
+        return typeof childMethod === "function" ? (childMethod as Function).bind(child) : value;
+      }
+    }
+    // Para qualquer outro método/prop (notavelmente `child`, usado por pino-http para anexar
+    // serializers de req/res), preserva o `this` correto via bind no target original.
+    // Sem isso, pino-http cria um child logger sem serializers e o log dump de cada request
+    // serializa o objeto req/res inteiro (centenas de linhas).
+    if (typeof value === "function") return (value as Function).bind(target);
+    return value;
   },
 }) as Logger;
 

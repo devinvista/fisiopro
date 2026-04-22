@@ -1,5 +1,33 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Bug fix: logger Proxy quebrava serializers do `pino-http`
+
+**Sintoma:** cada request HTTP gerava um log com **centenas de linhas** despejando o objeto `req`/`res` interno do Express (socket, parser, headers, writableState, eventListeners…), apesar de `app.ts` configurar `serializers: { req: ({method,url}), res: ({statusCode}) }` no `pinoHttp(...)`.
+
+**Causa raiz:** o `logger` exportado por `lib/logger.ts` é um `Proxy` sobre o `baseLogger` do pino para injetar `requestId` automaticamente via AsyncLocalStorage. O handler `get` interceptava apenas os métodos de nível (`info/warn/error/debug/trace/fatal`) e devolvia o restante via `target[prop]` — **sem bind**. Quando o `pino-http` chamava `logger.child(bindings, { serializers })` para criar seu logger interno, `this` resolvia para o Proxy (não o `baseLogger`), e o `child()` interno do pino acabava ignorando os `serializers` passados pelo `pino-http`.
+
+**Fix:** no Proxy, qualquer `function` que **não** seja um método de log de nível agora é retornada com `bind(target)`, preservando o `this` correto do pino. Comentário inline documenta o porquê para evitar regressão futura.
+
+**Arquivo:** `artifacts/api-server/src/lib/logger.ts`
+
+**Validação:** após restart, `GET /api/healthz` log = 6 linhas (antes: ~430 linhas). Nenhum impacto no `requestId` (continua sendo injetado pelo handler do nível de log).
+
+### Sessão abril/2026 — Limpeza de configuração e arquivos obsoletos
+
+**Problema:** `pnpm -r exec tsc --noEmit` falhava em `lib/api-spec` com `TS18003: No inputs were found in config file '/tsconfig.json'`. Investigação mostrou três artefatos legados deixados de uma estrutura anterior do projeto:
+
+| Arquivo removido | Motivo |
+|---|---|
+| `tsconfig.json` (raiz) | Configuração de Vite app que esperava `src/` na raiz; raiz não tem `src/`. Não estendido por nenhum `tsconfig` de pacote (todos estendem `tsconfig.base.json`). Causava o `lib/api-spec` (sem tsconfig próprio) a herdar essa configuração quebrada. |
+| `tsconfig.server.json` (raiz) | Apontava para `server/` e `db/` na raiz; ambos diretórios não existem mais (movidos para `artifacts/api-server/` e `lib/db/`). Não referenciado em nenhum script. |
+| `scripts/package.json` | Declarava `@workspace/scripts` com script `hello` apontando para `./src/hello.ts` (inexistente) e `typecheck` para `tsconfig.json` (inexistente). `pnpm-workspace.yaml` lista apenas `artifacts/*` e `lib/*`, então `scripts/` **nunca foi um pacote pnpm de fato** — os seeds são executados via `tsx scripts/*.ts` da raiz. |
+
+**Adicionado:** script `db:seed-financial` em `package.json` da raiz (o arquivo `scripts/seed-financial.ts` já existia mas não tinha entrypoint).
+
+**Validação:**
+- `pnpm typecheck` ✅ (zero erros)
+- `pnpm -r exec tsc --noEmit` ✅ (todos os 7 pacotes do workspace passam — antes falhava 1)
+
 ### Sessão abril/2026 — Sprint 2 (item 3): refator de `procedures`
 
 | Arquivo | Antes | Depois |

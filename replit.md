@@ -254,6 +254,7 @@ Hooks reutilizáveis ficam em `src/hooks/`. Contexts em `src/utils/` (TODO mover
   - Helpers: `helpers/scheduleConfig.ts` (computeScheduleConfig, isWorkingDay)
   - Componentes: `AgendaToolbar`, `AgendaSidebar`, `WeekHeader`, `DayColumn` (290 linhas isoladas)
 - **`_shared` → `shared`** — pastas renomeadas em `modules/` e `modules/financial/`; 11 arquivos de imports atualizados.
+- **Limpeza de configuração (abr/2026)** — removidos `tsconfig.json` e `tsconfig.server.json` da raiz (legados, apontavam para diretórios inexistentes) e `scripts/package.json` (declarava `@workspace/scripts` mas a pasta não está no `pnpm-workspace.yaml`). Adicionado script `db:seed-financial` em `package.json`. `pnpm -r exec tsc --noEmit` agora passa em todos os 7 pacotes.
 
 ## Documentação completa
 
