@@ -6,7 +6,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireFeature } from "../../../middleware/plan-features.js";
 import { validateBody } from "../../../utils/validate.js";
-import { postPackageSale } from "../../_shared/accounting/accounting.service.js";
+import { postPackageSale } from "../../shared/accounting/accounting.service.js";
 import { z } from "zod/v4";
 
 const paymentStatusEnum = z.enum(["pendente", "pago", "cancelado"]);

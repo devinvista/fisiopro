@@ -240,6 +240,21 @@ Hooks reutilizáveis ficam em `src/hooks/`. Contexts em `src/utils/` (TODO mover
 
 ---
 
+## Observabilidade
+
+- **Logger backend** — `lib/logger.ts` (pino + AsyncLocalStorage). Importar `logger` em vez de `console.*`. Anexa `requestId` automaticamente em qualquer chamada feita dentro de uma request HTTP. Redact configurado para `password`, `token`, `authorization`.
+- **Correlation ID** — middleware `requestContext.ts` aceita header `X-Request-Id` (ou gera UUID), ecoa na resposta e propaga via AsyncLocalStorage.
+- **Sentry** — desativado em dev (sem DSN). Para ativar, definir `SENTRY_DSN_BACKEND` (api-server) e `VITE_SENTRY_DSN` (fisiogest). Tracesample padrão `0.1`.
+- **Scheduler** — cada job CRON é instrumentado com duração em ms, log de sucesso/erro contável e `captureException` em falhas críticas. `silentSuccess: true` em jobs de alta frequência sem efeito (auto-confirmação).
+
+## Refatorações recentes (estrutura)
+
+- **`agenda/index.tsx`** — antes 986 linhas, agora 318 linhas (orquestrador). Quebrado em:
+  - Hooks: `useAgendaQueries`, `useAgendaNavigation`, `useAgendaMutations`
+  - Helpers: `helpers/scheduleConfig.ts` (computeScheduleConfig, isWorkingDay)
+  - Componentes: `AgendaToolbar`, `AgendaSidebar`, `WeekHeader`, `DayColumn` (290 linhas isoladas)
+- **`_shared` → `shared`** — pastas renomeadas em `modules/` e `modules/financial/`; 11 arquivos de imports atualizados.
+
 ## Documentação completa
 
 Para reduzir o tamanho deste arquivo (sempre carregado em contexto), a documentação detalhada foi quebrada em `docs/`:

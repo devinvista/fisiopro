@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createDbMock } from "../../_shared/test-utils/db-mock.js";
+import { createDbMock } from "../../shared/test-utils/db-mock.js";
 
 // Hoisted: precisa estar disponível antes de o vi.mock executar.
 const dbMock = vi.hoisted(() => {

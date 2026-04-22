@@ -2,12 +2,40 @@ import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
 import rateLimit from "express-rate-limit";
+import pinoHttp from "pino-http";
 import router from "./modules/index.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { requestContextMiddleware } from "./middleware/requestContext.js";
+import { logger } from "./lib/logger.js";
+import { initSentry, Sentry } from "./lib/sentry.js";
+
+initSentry();
 
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Sentry — request handler precisa vir antes de qualquer middleware/rota
+if (process.env.SENTRY_DSN_BACKEND) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
+app.use(requestContextMiddleware);
+app.use(
+  pinoHttp({
+    logger,
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      return "info";
+    },
+    serializers: {
+      req: (req) => ({ method: req.method, url: req.url }),
+      res: (res) => ({ statusCode: res.statusCode }),
+    },
+    autoLogging: { ignore: (req) => req.url === "/healthz" },
+  }),
+);
 
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())

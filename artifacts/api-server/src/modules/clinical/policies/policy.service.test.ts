@@ -51,8 +51,8 @@ vi.mock("../../../utils/auditLog.js", () => ({
 }));
 
 const accountingCalls: any[] = [];
-vi.mock("../../_shared/accounting/accounting.service.js", async () => {
-  const actual = await vi.importActual<any>("../../_shared/accounting/accounting.service.js");
+vi.mock("../../shared/accounting/accounting.service.js", async () => {
+  const actual = await vi.importActual<any>("../../shared/accounting/accounting.service.js");
   return {
     ...actual,
     postReceivableRevenue: vi.fn(async (input: any) => {

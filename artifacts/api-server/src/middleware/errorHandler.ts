@@ -1,6 +1,8 @@
 import type { ErrorRequestHandler } from "express";
 import { ZodError } from "zod/v4";
 import { HttpError } from "../utils/httpError.js";
+import { logger } from "../lib/logger.js";
+import { captureException } from "../lib/sentry.js";
 
 /**
  * Middleware central de erros.
@@ -37,7 +39,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
 
   // Log apenas erros inesperados — HttpError/ZodError são fluxo normal.
-  console.error(`[errorHandler] ${req.method} ${req.originalUrl}`, err);
+  logger.error(
+    { err, method: req.method, url: req.originalUrl },
+    `[errorHandler] erro inesperado em ${req.method} ${req.originalUrl}`,
+  );
+  captureException(err, { method: req.method, url: req.originalUrl });
 
   const message =
     process.env.NODE_ENV === "production"

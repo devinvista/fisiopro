@@ -8,7 +8,7 @@ import { eq, and, gt, sql, desc } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
   postPackageCreditUsage, postReceivableRevenue, postWalletUsage,
-} from "../../_shared/accounting/accounting.service.js";
+} from "../../shared/accounting/accounting.service.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,

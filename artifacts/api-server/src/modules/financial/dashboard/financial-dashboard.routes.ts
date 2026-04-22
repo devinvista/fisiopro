@@ -11,13 +11,13 @@ import {
   ACCOUNT_CODES,
   getAccountingBalances,
   getAccountingTotals,
-} from "../../_shared/accounting/accounting.service.js";
+} from "../../shared/accounting/accounting.service.js";
 import {
   RECEIVABLE_TYPES,
   monthDateRange,
   recordDateFilter,
   revenueSummarySql,
-} from "../_shared/financial-reports.service.js";
+} from "../shared/financial-reports.service.js";
 import { apptClinicCond, clinicCond } from "../financial.repository.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
 

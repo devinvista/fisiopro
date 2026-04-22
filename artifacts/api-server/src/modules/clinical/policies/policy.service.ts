@@ -26,7 +26,7 @@ import {
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { logAudit } from "../../../utils/auditLog.js";
-import { postReceivableRevenue } from "../../_shared/accounting/accounting.service.js";
+import { postReceivableRevenue } from "../../shared/accounting/accounting.service.js";
 
 export interface PolicyRunResult {
   autoConfirmed: number;

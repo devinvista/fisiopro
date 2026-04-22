@@ -55,6 +55,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@sentry/react": "^10.49.0",
     "browser-image-compression": "^2.0.2"
   }
 }

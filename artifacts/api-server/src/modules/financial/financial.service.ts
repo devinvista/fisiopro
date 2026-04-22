@@ -1,6 +1,6 @@
 // ─── Financial Service ────────────────────────────────────────────────────────
 // Thin orchestration layer for complex multi-step financial operations.
-// Heavy accounting logic lives in ../_shared/accounting/accounting.service.ts
+// Heavy accounting logic lives in ../shared/accounting/accounting.service.ts
 
 import { db } from "@workspace/db";
 import {
@@ -13,8 +13,8 @@ import {
   allocateReceivable,
   postReceivableSettlement,
   postReversal,
-} from "../_shared/accounting/accounting.service.js";
-import { RECEIVABLE_TYPES, monthlyCreditQuantity } from "./_shared/financial-reports.service.js";
+} from "../shared/accounting/accounting.service.js";
+import { RECEIVABLE_TYPES, monthlyCreditQuantity } from "./shared/financial-reports.service.js";
 import { todayBRT } from "../../utils/dateUtils.js";
 import { clinicCond, resolvePackageForSubscription } from "./financial.repository.js";
 import type { AuthRequest } from "../../middleware/auth.js";
