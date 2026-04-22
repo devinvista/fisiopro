@@ -1,5 +1,26 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 2 (item 1): refator de `medical-records`
+
+**Objetivo:** afinar o roteador do prontuário (950 linhas, ~30 handlers com lógica de DB inline) para o padrão `routes → service → repository`.
+
+**Resultado:**
+
+| Arquivo | Antes | Depois |
+|---|---|---|
+| `medical-records.routes.ts` | **950 linhas** com `db.*` direto, `try/catch` repetido, `logAudit` inline | **286 linhas**: só roteamento + `validateBody` + `asyncHandler` chamando o serviço |
+| `medical-records.service.ts` | 138 linhas (só `buildIndicators`) | **727 linhas**: 30 funções de caso de uso (anamnese, indicadores, medidas corporais, avaliações, planos multi e compat, evoluções, alta, financeiro, anexos, atestados) |
+| `medical-records.repository.ts` | 295 linhas (já cobria a maioria) | inalterado — todas as funções já existiam |
+
+**Mudanças funcionalmente equivalentes** (mesmo HTTP status, mesmo payload, mesmos audit logs). Diferenças deliberadas:
+
+- Erros 404/403/400 agora são lançados como `HttpError` e capturados pelo middleware central de erros.
+- `try/catch` de boilerplate removido com `asyncHandler`.
+- Middleware de tenant-isolation continua rodando primeiro, validando que o `patientId` da rota pertence à clínica do `req.clinicId`.
+- A rota POST `/financial` continua devolvendo **404** quando o paciente não existe (foreign key violation `23503` traduzida no service).
+
+Validação: `pnpm typecheck` ✅ • `pnpm test` 142/142 ✅ • workflow restart OK.
+
 ### Sessão abril/2026 — Sprint 1: governança e consolidação backend
 
 **Convenção `services/` → `modules/<dominio>/<feature>/<feature>.service.ts`**
