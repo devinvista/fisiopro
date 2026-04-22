@@ -33,13 +33,39 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 
 ---
 
+## Regra Máxima de Compatibilidade (Hospedagem)
+
+> **Esta regra tem prioridade sobre qualquer outra escolha técnica.** Toda dependência de runtime, framework ou gerenciador de pacotes adicionada ao projeto **DEVE** estar dentro da matriz oficial de compatibilidade da plataforma de hospedagem. Qualquer PR/refatoração que introduza tecnologia fora desta lista deve ser rejeitada.
+
+**Matriz oficial de compatibilidade:**
+
+| Categoria | Opções permitidas | Escolha do projeto | Justificativa |
+|---|---|---|---|
+| **Frontend** | Angular, Astro, Next.js, Nuxt, Parcel, **React**, React Router, Svelte, SvelteKit, **Vite**, Vue.js | **React 19 + Vite 7** | Combinação mais moderna e eficiente para SPA com tooling rápido (HMR sub-segundo, build via Rollup/esbuild), ecossistema shadcn/ui maduro, suporte total a React Server Components opcional |
+| **Backend** | Astro, **Express**, Fastify, Hono, NestJS, Next.js, Nuxt, React Router, SvelteKit | **Express 5** | API REST stateless desacoplada do frontend; Express 5 traz async/await nativo, melhor tratamento de erros e mantém o maior ecossistema de middlewares Node |
+| **Node.js** | 24.x, 22.x | **22.x (LTS)** | LTS estável até abril/2027; cobre todos os requisitos (Vite 7, ESM, fetch nativo) sem o churn da 24 |
+| **Gerenciador de pacotes** | npm, yarn, **pnpm** | **pnpm 10** (workspaces) | Único com suporte nativo a monorepo via `pnpm-workspace.yaml`, store global deduplicado e instalação até 2× mais rápida que npm/yarn |
+
+**Decisões e por que NÃO escolhemos as alternativas:**
+- **Next.js / Nuxt / SvelteKit / React Router (framework):** descartados porque o backend é uma API REST independente (Express) e o frontend é uma SPA pura — não precisamos de SSR/SSG/file-based routing. Adotar um meta-framework adicionaria complexidade sem ganho real.
+- **NestJS / Fastify / Hono:** Express 5 cobre o caso de uso com menor curva de aprendizado e maior compatibilidade com o ecossistema atual de middlewares (cors, cookie-parser, multer, etc.).
+- **Astro:** focado em conteúdo estático/MPA; inadequado para um SaaS altamente interativo.
+- **Angular / Vue / Svelte:** o time já é proficiente em React; trocar a linguagem de view não traria ganho de eficiência.
+- **Parcel:** Vite é mais rápido em dev (esbuild + Rollup) e tem ecossistema de plugins mais ativo.
+- **Node 24.x:** ainda não é LTS; mantemos 22.x para estabilidade de produção.
+- **npm / yarn:** sem suporte de primeira classe para monorepo eficiente; pnpm já está padronizado.
+
+> **Antes de adicionar qualquer dependência nova**, confirme que ela é compatível com Node 22, ESM e pnpm workspaces. Antes de propor uma migração de framework, valide que o destino está nesta matriz.
+
+---
+
 ## Stack Técnica
 
-- **Node.js**: 22 (requer 20+ para o Vite 7)
-- **Gerenciador de pacotes**: pnpm 10.26 (workspace)
+- **Node.js**: **22.x LTS** (compatível com a matriz de hospedagem; requer 20+ para Vite 7)
+- **Gerenciador de pacotes**: **pnpm 10.26** (workspace) — opção mais eficiente da matriz
 - **TypeScript**: 5.9
-- **Frontend** (`artifacts/fisiogest`): React 19 + Vite 7 + TailwindCSS v4 + shadcn/ui (new-york)
-- **Backend** (`artifacts/api-server`): Express 5
+- **Frontend** (`artifacts/fisiogest`): **React 19 + Vite 7** + TailwindCSS v4 + shadcn/ui (new-york) — combinação mais moderna da matriz
+- **Backend** (`artifacts/api-server`): **Express 5** — opção mais leve e madura da matriz para API REST pura
 - **Banco de dados**: PostgreSQL + Drizzle ORM (`lib/db`)
 - **Validação**: Zod v4, drizzle-zod (`lib/api-zod`)
 - **API client**: hooks React Query gerados pelo Orval (`lib/api-client-react`)

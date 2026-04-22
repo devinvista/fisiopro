@@ -1,5 +1,11 @@
 ## Arquitetura Replit — IMPORTANTE
 
+> ⚠️ **Compatibilidade de hospedagem é regra máxima.** Toda escolha técnica deve respeitar a matriz definida em [`replit.md` → "Regra Máxima de Compatibilidade (Hospedagem)"](../replit.md). Resumo:
+> - **Frontend permitido:** Angular, Astro, Next.js, Nuxt, Parcel, React, React Router, Svelte, SvelteKit, Vite, Vue.js → **escolha atual: React 19 + Vite 7**
+> - **Backend permitido:** Astro, Express, Fastify, Hono, NestJS, Next.js, Nuxt, React Router, SvelteKit → **escolha atual: Express 5**
+> - **Node.js:** 24.x ou 22.x → **escolha atual: 22.x LTS**
+> - **Gerenciador de pacotes:** npm, yarn ou pnpm → **escolha atual: pnpm 10**
+
 O Replit usa um **proxy reverso compartilhado na porta 80** para rotear tráfego entre serviços.
 
 | Serviço | Filtro do pacote | Porta local | Caminho proxy |
