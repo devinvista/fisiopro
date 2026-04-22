@@ -1,5 +1,11 @@
 import { fetchJSON, ClinicBasic } from "../helpers";
-import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, EMPTY_PLAN, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats, EMPTY_COUPON } from "../constants";
+import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats, EMPTY_COUPON } from "../constants";
+import {
+  planFormSchema,
+  planFormDefaults,
+  buildPlanPayload,
+  type PlanFormValues,
+} from "@/schemas/plan.schema";
 import { Plan, PlanStats, SubRow } from "../types";
 import { fmtDate, fmtCurrency, limitLabel } from "../utils";
 import { ClinicsTab, CouponsTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, RegisterPaymentDialog, StatusBadge, SubscriptionsTab } from "./";
@@ -95,7 +101,7 @@ export function PlansTab() {
   const { toast } = useToast();
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState<typeof EMPTY_PLAN>(EMPTY_PLAN);
+  const [form, setForm] = useState<PlanFormValues>({ ...planFormDefaults });
   const [featuresText, setFeaturesText] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [view, setView] = useState<"cards" | "table">("cards");
@@ -133,11 +139,12 @@ export function PlansTab() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        ...form,
-        price: Number(form.price),
-        features: featuresText.split("\n").map((s) => s.trim()).filter(Boolean),
-      };
+      const parsed = planFormSchema.safeParse(form);
+      if (!parsed.success) {
+        const first = parsed.error.issues[0];
+        throw new Error(first?.message ?? "Dados do plano inválidos");
+      }
+      const payload = buildPlanPayload(parsed.data, featuresText);
       const url = editPlan ? api(`/plans/${editPlan.id}`) : api("/plans");
       const method = editPlan ? "PUT" : "POST";
       const res = await apiFetch(url, {
@@ -157,7 +164,7 @@ export function PlansTab() {
       toast({ title: editPlan ? "Plano atualizado!" : "Plano criado!" });
       setEditPlan(null);
       setCreating(false);
-      setForm(EMPTY_PLAN);
+      setForm({ ...planFormDefaults });
       setFeaturesText("");
     },
     onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
@@ -179,14 +186,15 @@ export function PlansTab() {
 
   const openEdit = (plan: Plan) => {
     setEditPlan(plan);
-    setForm({ ...plan });
+    const { id: _id, ...rest } = plan;
+    setForm({ ...rest });
     setFeaturesText((plan.features ?? []).join("\n"));
   };
 
   const openCreate = () => {
     setCreating(true);
     setEditPlan(null);
-    setForm(EMPTY_PLAN);
+    setForm({ ...planFormDefaults });
     setFeaturesText("");
   };
 
