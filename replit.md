@@ -400,12 +400,14 @@ Para publicar o projeto no Replit (`.replit.app`):
 │   │       │   │   ├── blocked-slots/      # /api/blocked-slots
 │   │       │   │   ├── patient-journey/    # /api/patients/:id (mergeParams)
 │   │       │   │   ├── patient-photos/     # /api/patients/:id/photos
-│   │       │   │   └── appointments/       # /api/appointments — módulo completo (5 arquivos)
-│   │       │   │       ├── appointments.routes.ts
-│   │       │   │       ├── appointments.service.ts
-│   │       │   │       ├── appointments.repository.ts
-│   │       │   │       ├── appointments.schemas.ts
-│   │       │   │       └── appointments.helpers.ts
+│   │       │   │   └── appointments/       # /api/appointments — módulo completo (7 arquivos)
+│   │       │   │       ├── appointments.routes.ts      # ~165L: handlers finos que delegam ao service
+│   │       │   │       ├── appointments.service.ts     # ~545L: regras de negócio (list/create/update/reschedule/complete/recurring/slots)
+│   │       │   │       ├── appointments.billing.ts     # ~600L: applyBillingRules + auto-evolução
+│   │       │   │       ├── appointments.repository.ts  # consultas (getWithDetails, checkConflict, monthly package policy)
+│   │       │   │       ├── appointments.schemas.ts     # Zod + state machine
+│   │       │   │       ├── appointments.helpers.ts     # utilitários puros de tempo/data
+│   │       │   │       └── appointments.errors.ts      # AppointmentError tipado (httpStatus, code) + helpers
 │   │       │   ├── catalog/
 │   │       │   │   ├── procedures/         # /api/procedures
 │   │       │   │   ├── packages/           # /api/packages

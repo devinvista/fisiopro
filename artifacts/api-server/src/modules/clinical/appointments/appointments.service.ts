@@ -1,602 +1,546 @@
 import { db } from "@workspace/db";
 import {
-  appointmentsTable, financialRecordsTable, sessionCreditsTable, clinicsTable,
-  patientSubscriptionsTable, patientWalletTable, patientWalletTransactionsTable,
-  patientPackagesTable, procedureCostsTable,
+  appointmentsTable, patientsTable, proceduresTable, blockedSlotsTable,
+  schedulesTable, clinicsTable, financialRecordsTable,
 } from "@workspace/db";
-import { eq, and, gt, sql, desc } from "drizzle-orm";
-import { todayBRT } from "../../../utils/dateUtils.js";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { resolvePermissions, type Role } from "@workspace/db";
+import { addMinutes, timeToMinutes, minutesToTime } from "./appointments.helpers.js";
+import { getWithDetails, checkConflict } from "./appointments.repository.js";
+import { isValidTransition } from "./appointments.schemas.js";
+import { applyBillingRules } from "./appointments.billing.js";
+import { logAudit } from "../../../utils/auditLog.js";
 import {
-  postPackageCreditUsage, postReceivableRevenue, postWalletUsage,
-} from "../../../services/accountingService.js";
-import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
-import {
-  getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,
-} from "./appointments.repository.js";
-import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
+  notFound, conflict as conflictErr, unprocessable, badRequest,
+} from "./appointments.errors.js";
 
-// ─── Billing rules ────────────────────────────────────────────────────────────
-export async function applyBillingRules(
-  appointmentId: number,
-  newStatus: string,
-  oldStatus: string,
-  clinicId?: number | null
-): Promise<void> {
-  if (newStatus === oldStatus) return;
+export type AuthCtx = {
+  userId?: number;
+  userName?: string | null;
+  userRoles: Role[];
+  isSuperAdmin?: boolean;
+  clinicId?: number | null;
+};
 
-  const details = await getWithDetails(appointmentId);
-  if (!details || !details.procedure) return;
+function isAdminOrSecretary(ctx: AuthCtx): boolean {
+  const perms = resolvePermissions(ctx.userRoles ?? [], ctx.isSuperAdmin);
+  return !!ctx.isSuperAdmin || perms.has("users.manage") || ctx.userRoles.includes("secretaria");
+}
 
-  const procedure = details.procedure;
-  const billingType: string = procedure.billingType ?? "porSessao";
-  const patientId = details.patientId;
-  const procedureId = details.procedureId;
-  const patientName = details.patient?.name ?? "Paciente";
-  const today = todayBRT();
-  const appointmentDate: string = (details as any).date ?? today;
-
-  const confirmedStatuses = ["compareceu", "concluido"];
-  const canceledStatuses = ["cancelado"];
-  const absenceCreditStatuses = ["cancelado", "faltou"];
-
-  const resolvedClinicId = clinicId ?? details.clinicId ?? null;
-
-  // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias)
-  let clinicDueDays = 3;
-  if (resolvedClinicId) {
-    const [clinicSettings] = await db
-      .select({ defaultDueDays: clinicsTable.defaultDueDays })
-      .from(clinicsTable)
-      .where(eq(clinicsTable.id, resolvedClinicId))
-      .limit(1);
-    clinicDueDays = clinicSettings?.defaultDueDays ?? 3;
+function describeConflict(reason: string | undefined, currentCount: number, maxCapacity: number, procedureName: string | undefined, startTime: string, endTime: string): string {
+  if (maxCapacity > 1) {
+    return reason === "full"
+      ? `Horário lotado: ${currentCount}/${maxCapacity} vagas ocupadas${procedureName ? ` para "${procedureName}"` : ""} neste horário.`
+      : `Conflito de horário: já existe uma sessão${procedureName ? ` de "${procedureName}"` : ""} que se sobrepõe a este horário.`;
   }
-  const dueDatePorSessao = addDaysToDate(appointmentDate, clinicDueDays);
+  return `Conflito de horário: já existe um agendamento entre ${startTime} e ${endTime}.`;
+}
 
-  // Resolve effective price: clinic override takes precedence over base procedure price
-  let effectivePrice = String(procedure.price);
-  if (resolvedClinicId && procedureId) {
-    const [clinicCostRow] = await db
-      .select({ priceOverride: procedureCostsTable.priceOverride })
-      .from(procedureCostsTable)
-      .where(
-        and(
-          eq(procedureCostsTable.procedureId, procedureId),
-          eq(procedureCostsTable.clinicId, resolvedClinicId)
-        )
-      )
-      .limit(1);
-    if (clinicCostRow?.priceOverride) {
-      effectivePrice = String(clinicCostRow.priceOverride);
-    }
+// ─── List ────────────────────────────────────────────────────────────────────
+export async function listAppointments(filters: {
+  date?: string; startDate?: string; endDate?: string;
+  patientId?: string | number; status?: string;
+}, ctx: AuthCtx) {
+  let query = db
+    .select({ appointment: appointmentsTable, patient: patientsTable, procedure: proceduresTable })
+    .from(appointmentsTable)
+    .leftJoin(patientsTable, eq(appointmentsTable.patientId, patientsTable.id))
+    .leftJoin(proceduresTable, eq(appointmentsTable.procedureId, proceduresTable.id));
+
+  const conditions: any[] = [];
+  if (!ctx.isSuperAdmin && ctx.clinicId) {
+    conditions.push(eq(appointmentsTable.clinicId, ctx.clinicId));
   }
-
-  // ── BILLING: attendance → billing logic by type ────────────────────────────
-  if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
-
-    // Cria stub de evolução clínica automática (idempotente por appointmentId).
-    // Falhas aqui não devem bloquear o billing — apenas logar.
-    try {
-      await ensureAutoEvolutionForAppointment(
-        patientId,
-        appointmentId,
-        (procedure as any)?.durationMinutes ?? null,
-      );
-    } catch (err) {
-      console.error("[applyBillingRules] failed to create auto evolution:", err);
-    }
-
-    // ── Priority 1: fatura consolidada subscription ────────────────────────
-    const consolidatedConditions: any[] = [
-      eq(patientSubscriptionsTable.patientId, patientId),
-      eq(patientSubscriptionsTable.procedureId, procedureId),
-      eq(patientSubscriptionsTable.status, "ativa"),
-      eq(patientSubscriptionsTable.subscriptionType, "faturaConsolidada"),
-    ];
-    if (resolvedClinicId) {
-      consolidatedConditions.push(eq(patientSubscriptionsTable.clinicId, resolvedClinicId));
-    }
-
-    const [consolidatedSub] = await db
-      .select()
-      .from(patientSubscriptionsTable)
-      .where(and(...consolidatedConditions))
-      .limit(1);
-
-    if (consolidatedSub) {
-      // Não cobra agora — acumula para a fatura mensal consolidada
-      const existingPendente = await db
-        .select({ id: financialRecordsTable.id })
-        .from(financialRecordsTable)
-        .where(
-          and(
-            eq(financialRecordsTable.appointmentId, appointmentId),
-            eq(financialRecordsTable.transactionType, "pendenteFatura")
-          )
-        )
-        .limit(1);
-
-      if (existingPendente.length === 0) {
-        const [pendingInvoiceItem] = await db.insert(financialRecordsTable).values({
-          type:            "receita",
-          amount:          effectivePrice,
-          description:     `[Aguardando fatura] ${procedure.name} - ${patientName}`,
-          category:        procedure.category,
-          appointmentId,
-          patientId,
-          procedureId,
-          transactionType: "pendenteFatura",
-          status:          "pendente",
-          dueDate:         appointmentDate,
-          subscriptionId:  consolidatedSub.id,
-          clinicId:        resolvedClinicId,
-        }).returning();
-
-        const entry = await postReceivableRevenue({
-          clinicId: resolvedClinicId,
-          entryDate: appointmentDate,
-          amount: Number(effectivePrice),
-          description: `Receita em fatura consolidada — ${procedure.name} - ${patientName}`,
-          sourceType: "financial_record",
-          sourceId: pendingInvoiceItem.id,
-          patientId,
-          appointmentId,
-          procedureId,
-          subscriptionId: consolidatedSub.id,
-          financialRecordId: pendingInvoiceItem.id,
-        });
-
-        await db
-          .update(financialRecordsTable)
-          .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
-          .where(eq(financialRecordsTable.id, pendingInvoiceItem.id));
-      }
-      return;
-    }
-
-    // ── Priority 2: por sessão (crédito de sessão → carteira → a receber) ──
-    if (billingType === "porSessao") {
-      await db.transaction(async (tx) => {
-        // 2a. Verifica créditos de sessão
-        const availableCredit = await tx
-          .select()
-          .from(sessionCreditsTable)
-          .where(
-            and(
-              eq(sessionCreditsTable.patientId, patientId),
-              eq(sessionCreditsTable.procedureId, procedureId),
-              gt(sql`${sessionCreditsTable.quantity} - ${sessionCreditsTable.usedQuantity}`, 0)
-            )
-          )
-          .limit(1);
-
-        if (availableCredit.length > 0) {
-          const credit = availableCredit[0];
-          await tx
-            .update(sessionCreditsTable)
-            .set({ usedQuantity: credit.usedQuantity + 1 })
-            .where(eq(sessionCreditsTable.id, credit.id));
-
-          if (credit.patientPackageId) {
-            const [patientPackage] = await tx
-              .select({ usedSessions: patientPackagesTable.usedSessions, totalSessions: patientPackagesTable.totalSessions, price: patientPackagesTable.price })
-              .from(patientPackagesTable)
-              .where(eq(patientPackagesTable.id, credit.patientPackageId))
-              .limit(1);
-
-            if (patientPackage && patientPackage.usedSessions < patientPackage.totalSessions) {
-              await tx
-                .update(patientPackagesTable)
-                .set({ usedSessions: patientPackage.usedSessions + 1 })
-                .where(eq(patientPackagesTable.id, credit.patientPackageId));
-            }
-          }
-
-          const [creditUsageRecord] = await tx.insert(financialRecordsTable).values({
-            type:            "receita",
-            amount:          "0",
-            description:     `Uso de crédito #${credit.id} — ${procedure.name} - ${patientName}`,
-            category:        procedure.category,
-            appointmentId,
-            patientId,
-            procedureId,
-            transactionType: "usoCredito",
-            status:          "pago",
-            dueDate:         today,
-            clinicId:        resolvedClinicId,
-          }).returning();
-
-          if (credit.patientPackageId) {
-            const [packageForRevenue] = await tx
-              .select({ price: patientPackagesTable.price, totalSessions: patientPackagesTable.totalSessions, usedSessions: patientPackagesTable.usedSessions })
-              .from(patientPackagesTable)
-              .where(eq(patientPackagesTable.id, credit.patientPackageId))
-              .limit(1);
-
-            const unitAmount = packageForRevenue && packageForRevenue.totalSessions > 0
-              ? Number(packageForRevenue.price) / packageForRevenue.totalSessions
-              : 0;
-
-            if (unitAmount > 0) {
-              const entry = await postPackageCreditUsage({
-                clinicId: resolvedClinicId,
-                entryDate: appointmentDate,
-                amount: unitAmount,
-                description: `Receita reconhecida por crédito — ${procedure.name} - ${patientName}`,
-                sourceType: "session_credit",
-                sourceId: credit.id,
-                patientId,
-                appointmentId,
-                procedureId,
-                patientPackageId: credit.patientPackageId,
-                financialRecordId: creditUsageRecord.id,
-              }, tx as any);
-
-              await tx
-                .update(financialRecordsTable)
-                .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
-                .where(eq(financialRecordsTable.id, creditUsageRecord.id));
-            }
-          }
-          return;
-        }
-
-        // 2b. Verifica carteira de crédito (R$)
-        if (resolvedClinicId) {
-          const [wallet] = await tx
-            .select()
-            .from(patientWalletTable)
-            .where(
-              and(
-                eq(patientWalletTable.patientId, patientId),
-                eq(patientWalletTable.clinicId, resolvedClinicId)
-              )
-            )
-            .limit(1);
-
-          if (wallet && Number(wallet.balance) >= Number(effectivePrice)) {
-            const newBalance = (Number(wallet.balance) - Number(effectivePrice)).toFixed(2);
-
-            await tx
-              .update(patientWalletTable)
-              .set({ balance: newBalance, updatedAt: new Date() })
-              .where(eq(patientWalletTable.id, wallet.id));
-
-            const [fr] = await tx.insert(financialRecordsTable).values({
-              type:            "receita",
-              amount:          effectivePrice,
-              description:     `Débito carteira — ${procedure.name} - ${patientName}`,
-              category:        procedure.category,
-              appointmentId,
-              patientId,
-              procedureId,
-              transactionType: "usoCarteira",
-              status:          "pago",
-              dueDate:         today,
-              clinicId:        resolvedClinicId,
-            }).returning();
-
-            const [walletTransaction] = await tx.insert(patientWalletTransactionsTable).values({
-              walletId:          wallet.id,
-              patientId,
-              clinicId:          resolvedClinicId,
-              amount:            `-${effectivePrice}`,
-              type:              "debito",
-              description:       `Sessão: ${procedure.name} — consulta #${appointmentId}`,
-              appointmentId,
-              financialRecordId: fr.id,
-            }).returning();
-
-            const entry = await postWalletUsage({
-              clinicId: resolvedClinicId,
-              entryDate: appointmentDate,
-              amount: Number(effectivePrice),
-              description: `Receita por uso de carteira — ${procedure.name} - ${patientName}`,
-              sourceType: "patient_wallet_transaction",
-              sourceId: walletTransaction.id,
-              patientId,
-              appointmentId,
-              procedureId,
-              walletTransactionId: walletTransaction.id,
-              financialRecordId: fr.id,
-            }, tx as any);
-
-            await tx
-              .update(financialRecordsTable)
-              .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
-              .where(eq(financialRecordsTable.id, fr.id));
-            return;
-          }
-        }
-
-        // 2c. Gera lançamento a receber com vencimento 3 dias após a sessão
-        const existing = await tx
-          .select()
-          .from(financialRecordsTable)
-          .where(
-            and(
-              eq(financialRecordsTable.appointmentId, appointmentId),
-              eq(financialRecordsTable.transactionType, "creditoAReceber")
-            )
-          )
-          .limit(1);
-
-        if (existing.length === 0) {
-          const [receivableRecord] = await tx.insert(financialRecordsTable).values({
-            type:            "receita",
-            amount:          effectivePrice,
-            description:     `${procedure.name} - ${patientName}`,
-            category:        procedure.category,
-            appointmentId,
-            patientId,
-            procedureId,
-            transactionType: "creditoAReceber",
-            status:          "pendente",
-            dueDate:         dueDatePorSessao,
-            clinicId:        resolvedClinicId,
-          }).returning();
-
-          const entry = await postReceivableRevenue({
-            clinicId: resolvedClinicId,
-            entryDate: appointmentDate,
-            amount: Number(effectivePrice),
-            description: `A receber por sessão — ${procedure.name} - ${patientName}`,
-            sourceType: "financial_record",
-            sourceId: receivableRecord.id,
-            patientId,
-            appointmentId,
-            procedureId,
-            financialRecordId: receivableRecord.id,
-          }, tx as any);
-
-          await tx
-            .update(financialRecordsTable)
-            .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
-            .where(eq(financialRecordsTable.id, receivableRecord.id));
-        }
-      });
-    }
+  if (!isAdminOrSecretary(ctx) && ctx.userRoles.includes("profissional") && ctx.userId) {
+    conditions.push(eq(appointmentsTable.professionalId, ctx.userId));
   }
+  if (filters.date) conditions.push(eq(appointmentsTable.date, String(filters.date)));
+  if (filters.startDate) conditions.push(gte(appointmentsTable.date, String(filters.startDate)));
+  if (filters.endDate) conditions.push(lte(appointmentsTable.date, String(filters.endDate)));
+  if (filters.patientId !== undefined) conditions.push(eq(appointmentsTable.patientId, parseInt(String(filters.patientId))));
+  if (filters.status) conditions.push(eq(appointmentsTable.status, String(filters.status)));
 
-  // ── ROLLBACK: compareceu/concluido → cancelado → cancela lançamentos pendentes
-  if (canceledStatuses.includes(newStatus) && confirmedStatuses.includes(oldStatus)) {
-    await db
-      .update(financialRecordsTable)
-      .set({ status: "cancelado" })
-      .where(
-        and(
-          eq(financialRecordsTable.appointmentId, appointmentId),
-          sql`${financialRecordsTable.transactionType} IN ('creditoAReceber', 'pendenteFatura')`,
-          eq(financialRecordsTable.status, "pendente")
-        )
-      );
+  if (conditions.length > 0) query = query.where(and(...conditions)) as any;
 
-    // Estorna uso de carteira se aplicável
-    const walletUsage = await db
-      .select()
-      .from(financialRecordsTable)
-      .where(
-        and(
-          eq(financialRecordsTable.appointmentId, appointmentId),
-          eq(financialRecordsTable.transactionType, "usoCarteira"),
-          eq(financialRecordsTable.status, "pago")
-        )
-      )
-      .limit(1);
+  const results = await query.orderBy(appointmentsTable.date, appointmentsTable.startTime);
+  return results.map(({ appointment, patient, procedure }) => ({ ...appointment, patient, procedure }));
+}
 
-    if (walletUsage.length > 0 && resolvedClinicId) {
-      const fr = walletUsage[0];
-      const [wallet] = await db
-        .select()
-        .from(patientWalletTable)
-        .where(
-          and(
-            eq(patientWalletTable.patientId, patientId),
-            eq(patientWalletTable.clinicId, resolvedClinicId)
-          )
-        )
-        .limit(1);
+// ─── Available slots ─────────────────────────────────────────────────────────
+export async function getAvailableSlots(params: {
+  date?: string; procedureId?: string | number; scheduleId?: string | number;
+  clinicStart?: string; clinicEnd?: string;
+}, ctx: AuthCtx) {
+  if (!params.date || params.procedureId === undefined) {
+    throw badRequest("date e procedureId são obrigatórios");
+  }
+  const date = String(params.date);
+  let clinicStart = params.clinicStart ?? "08:00";
+  let clinicEnd = params.clinicEnd ?? "18:00";
+  let slotStep = 30;
 
-      if (wallet) {
-        const restoredBalance = (Number(wallet.balance) + Number(fr.amount)).toFixed(2);
-        await db
-          .update(patientWalletTable)
-          .set({ balance: restoredBalance, updatedAt: new Date() })
-          .where(eq(patientWalletTable.id, wallet.id));
-
-        await db.insert(patientWalletTransactionsTable).values({
-          walletId:          wallet.id,
-          patientId,
-          clinicId:          resolvedClinicId,
-          amount:            String(fr.amount),
-          type:              "estorno",
-          description:       `Estorno de cancelamento — consulta #${appointmentId}`,
-          appointmentId,
-          financialRecordId: fr.id,
-        });
-
-        await db
-          .update(financialRecordsTable)
-          .set({ status: "estornado" })
-          .where(eq(financialRecordsTable.id, fr.id));
+  let resolvedScheduleId: number | null = null;
+  if (params.scheduleId !== undefined) {
+    resolvedScheduleId = parseInt(String(params.scheduleId));
+    const [schedule] = await db.select().from(schedulesTable).where(eq(schedulesTable.id, resolvedScheduleId));
+    if (schedule) {
+      clinicStart = schedule.startTime;
+      clinicEnd = schedule.endTime;
+      slotStep = schedule.slotDurationMinutes ?? 30;
+      if (schedule.workingDays) {
+        const workingDayNums = schedule.workingDays.split(",").map(Number);
+        const dateDow = new Date(date + "T12:00:00Z").getUTCDay();
+        if (!workingDayNums.includes(dateDow)) {
+          return {
+            date,
+            procedure: { id: 0, name: "", durationMinutes: 0, maxCapacity: 1 },
+            slots: [],
+            notWorkingDay: true,
+          };
+        }
       }
     }
-
-    const creditUsage = await db
-      .select()
-      .from(financialRecordsTable)
-      .where(
-        and(
-          eq(financialRecordsTable.appointmentId, appointmentId),
-          eq(financialRecordsTable.transactionType, "usoCredito"),
-          eq(financialRecordsTable.status, "pago")
-        )
-      )
-      .limit(1);
-
-    if (creditUsage.length > 0) {
-      await db.transaction(async (tx) => {
-        const [credit] = await tx
-          .select()
-          .from(sessionCreditsTable)
-          .where(
-            and(
-              eq(sessionCreditsTable.patientId, patientId),
-              eq(sessionCreditsTable.procedureId, procedureId),
-              gt(sessionCreditsTable.usedQuantity, 0)
-            )
-          )
-          .orderBy(desc(sessionCreditsTable.createdAt))
-          .limit(1);
-
-        if (credit) {
-          await tx
-            .update(sessionCreditsTable)
-            .set({ usedQuantity: Math.max(0, credit.usedQuantity - 1) })
-            .where(eq(sessionCreditsTable.id, credit.id));
-
-          if (credit.patientPackageId) {
-            const [patientPackage] = await tx
-              .select({ usedSessions: patientPackagesTable.usedSessions })
-              .from(patientPackagesTable)
-              .where(eq(patientPackagesTable.id, credit.patientPackageId))
-              .limit(1);
-
-            if (patientPackage && patientPackage.usedSessions > 0) {
-              await tx
-                .update(patientPackagesTable)
-                .set({ usedSessions: patientPackage.usedSessions - 1 })
-                .where(eq(patientPackagesTable.id, credit.patientPackageId));
-            }
-          }
-        }
-
-        await tx
-          .update(financialRecordsTable)
-          .set({ status: "estornado" })
-          .where(eq(financialRecordsTable.id, creditUsage[0].id));
-      });
-    }
   }
 
-  // ── BILLING: absence/cancellation on monthly plan → generate limited session credit ─────────
-  if (absenceCreditStatuses.includes(newStatus) && !absenceCreditStatuses.includes(oldStatus) && !confirmedStatuses.includes(oldStatus)) {
-    if (billingType === "mensal") {
-      await db.transaction(async (tx) => {
-        const { patientPackageId, absenceCreditLimit } = await resolveMonthlyPackageCreditPolicy(tx, patientId, procedureId, resolvedClinicId);
-        if (absenceCreditLimit !== null) {
-          if (absenceCreditLimit <= 0) {
-            await tx.insert(financialRecordsTable).values({
-              type:            "receita",
-              amount:          "0",
-              description:     `Crédito não gerado — limite de faltas zerado — ${procedure.name} - ${patientName}`,
-              category:        procedure.category,
-              appointmentId,
-              patientId,
-              procedureId,
-              transactionType: "creditoSessao",
-              status:          "cancelado",
-              dueDate:         today,
-              clinicId:        resolvedClinicId,
-            });
-            return;
-          }
+  const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, parseInt(String(params.procedureId))));
+  if (!procedure) throw notFound("Procedimento não encontrado");
 
-          const { startDate, endDate } = monthRangeFromDate(appointmentDate);
-          const alreadyGranted = await countAbsenceCreditsInMonth(tx, patientId, procedureId, startDate, endDate, resolvedClinicId);
-          if (alreadyGranted >= absenceCreditLimit) {
-            await tx.insert(financialRecordsTable).values({
-              type:            "receita",
-              amount:          "0",
-              description:     `Crédito não gerado — limite mensal de ${absenceCreditLimit} falta(s) atingido — ${procedure.name} - ${patientName}`,
-              category:        procedure.category,
-              appointmentId,
-              patientId,
-              procedureId,
-              transactionType: "creditoSessao",
-              status:          "cancelado",
-              dueDate:         today,
-              clinicId:        resolvedClinicId,
-            });
-            return;
-          }
-        }
+  const openMin = timeToMinutes(clinicStart);
+  const closeMin = timeToMinutes(clinicEnd);
+  const duration = procedure.durationMinutes;
+  const maxCap = procedure.maxCapacity ?? 1;
 
-        await tx
-          .insert(sessionCreditsTable)
-          .values({
-            patientId,
-            procedureId,
-            quantity: 1,
-            usedQuantity: 0,
-            sourceAppointmentId: appointmentId,
-            patientPackageId,
-            clinicId: resolvedClinicId,
-            notes: `Crédito por ${newStatus === "faltou" ? "falta" : "cancelamento"} — ${procedure.name}`,
-          });
+  const apptConditions: any[] = [
+    eq(appointmentsTable.date, date),
+    sql`status NOT IN ('cancelado', 'faltou', 'remarcado')`,
+  ];
+  if (resolvedScheduleId) apptConditions.push(eq(appointmentsTable.scheduleId, resolvedScheduleId));
 
-        await tx.insert(financialRecordsTable).values({
-          type:            "receita",
-          amount:          "0",
-            description:     `Crédito de sessão gerado por ${newStatus === "faltou" ? "falta" : "cancelamento"} — ${procedure.name} - ${patientName}`,
-          category:        procedure.category,
-          appointmentId,
-          patientId,
-          procedureId,
-          transactionType: "creditoSessao",
-          status:          "pago",
-          dueDate:         today,
-          clinicId:        resolvedClinicId,
-        });
-      });
+  const existingAppts = await db
+    .select({ id: appointmentsTable.id, procedureId: appointmentsTable.procedureId, startTime: appointmentsTable.startTime, endTime: appointmentsTable.endTime })
+    .from(appointmentsTable)
+    .where(and(...apptConditions));
+
+  const blockedConditions: any[] = [eq(blockedSlotsTable.date, date)];
+  if (!ctx.isSuperAdmin && ctx.clinicId) blockedConditions.push(eq(blockedSlotsTable.clinicId, ctx.clinicId));
+  if (resolvedScheduleId) blockedConditions.push(eq(blockedSlotsTable.scheduleId, resolvedScheduleId));
+
+  const blockedSlots = await db
+    .select({ startTime: blockedSlotsTable.startTime, endTime: blockedSlotsTable.endTime })
+    .from(blockedSlotsTable)
+    .where(and(...blockedConditions));
+
+  const slots: { time: string; available: boolean; spotsLeft: number }[] = [];
+  const effectiveStep = Math.min(slotStep, duration > 0 ? duration : slotStep);
+
+  for (let start = openMin; start + duration <= closeMin; start += effectiveStep) {
+    const startTime = minutesToTime(start);
+    const slotEnd = start + duration;
+
+    const isBlocked = blockedSlots.some(
+      (b) => timeToMinutes(b.startTime) < slotEnd && timeToMinutes(b.endTime) > start
+    );
+    if (isBlocked) {
+      slots.push({ time: startTime, available: false, spotsLeft: 0 });
+      continue;
     }
-  }
 
-  // ── ROLLBACK: faltou → agendado → cancel no-show fee if pending ───────────
-  if (newStatus === "agendado" && oldStatus === "faltou") {
-    await db
-      .update(financialRecordsTable)
-      .set({ status: "cancelado" })
-      .where(
-        and(
-          eq(financialRecordsTable.appointmentId, appointmentId),
-          eq(financialRecordsTable.transactionType, "taxaNoShow"),
-          eq(financialRecordsTable.status, "pendente")
-        )
+    let spotsLeft: number;
+    if (maxCap > 1) {
+      const sameSessionCount = existingAppts.filter(
+        (a) => a.procedureId === procedure.id && a.startTime === startTime
+      ).length;
+      const hasConflictingSession = existingAppts.some(
+        (a) =>
+          a.procedureId === procedure.id &&
+          a.startTime !== startTime &&
+          timeToMinutes(a.startTime) < slotEnd &&
+          timeToMinutes(a.endTime) > start
       );
+      spotsLeft = hasConflictingSession ? 0 : Math.max(0, maxCap - sameSessionCount);
+    } else {
+      const occupiedCount = existingAppts.filter(
+        (a) => timeToMinutes(a.startTime) < slotEnd && timeToMinutes(a.endTime) > start
+      ).length;
+      spotsLeft = Math.max(0, maxCap - occupiedCount);
+    }
+    slots.push({ time: startTime, available: spotsLeft > 0, spotsLeft });
   }
 
-  // ── ROLLBACK: absence/cancellation → active state → remove available absence credit ───────────
-  if (["agendado", "remarcado"].includes(newStatus) && absenceCreditStatuses.includes(oldStatus)) {
-    await db.transaction(async (tx) => {
-      const [credit] = await tx
-        .select()
-        .from(sessionCreditsTable)
-        .where(
-          and(
-            eq(sessionCreditsTable.sourceAppointmentId, appointmentId),
-            eq(sessionCreditsTable.patientId, patientId),
-            eq(sessionCreditsTable.procedureId, procedureId)
-          )
-        )
-        .limit(1);
+  return {
+    date,
+    procedure: { id: procedure.id, name: procedure.name, durationMinutes: procedure.durationMinutes, maxCapacity: maxCap },
+    slots,
+  };
+}
 
-      if (credit) {
-        await tx
-          .update(sessionCreditsTable)
-          .set({ quantity: credit.usedQuantity })
-          .where(eq(sessionCreditsTable.id, credit.id));
-      }
+// ─── Create ──────────────────────────────────────────────────────────────────
+export async function createAppointment(body: {
+  patientId: number; procedureId: number; date: string; startTime: string;
+  notes?: string | null; scheduleId?: number | string | null; professionalId?: number | null;
+}, ctx: AuthCtx) {
+  const { patientId, procedureId, date, startTime, notes, scheduleId } = body;
 
-      await tx
-        .update(financialRecordsTable)
-        .set({ status: "cancelado" })
-        .where(
-          and(
-            eq(financialRecordsTable.appointmentId, appointmentId),
-            eq(financialRecordsTable.transactionType, "creditoSessao")
-          )
+  const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, procedureId));
+  if (!procedure) throw notFound("Procedimento não encontrado");
+
+  const endTime = addMinutes(startTime, procedure.durationMinutes);
+  const maxCapacity = procedure.maxCapacity ?? 1;
+  const resolvedScheduleId = scheduleId ? parseInt(String(scheduleId)) : null;
+
+  if (resolvedScheduleId) {
+    const [schedule] = await db
+      .select({ startTime: schedulesTable.startTime, endTime: schedulesTable.endTime })
+      .from(schedulesTable)
+      .where(eq(schedulesTable.id, resolvedScheduleId));
+    if (schedule) {
+      if (
+        timeToMinutes(startTime) < timeToMinutes(schedule.startTime) ||
+        timeToMinutes(endTime) > timeToMinutes(schedule.endTime)
+      ) {
+        throw unprocessable(
+          "OutOfHours",
+          `O procedimento extrapola o horário de atendimento da agenda (${schedule.startTime}–${schedule.endTime}). Escolha um horário em que o procedimento termine até às ${schedule.endTime}.`
         );
+      }
+    }
+  }
+
+  const { conflict, currentCount, reason } = await checkConflict(
+    date, startTime, endTime, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId
+  );
+  if (conflict) {
+    throw conflictErr(describeConflict(reason, currentCount, maxCapacity, procedure.name, startTime, endTime));
+  }
+
+  const resolvedProfessionalId = isAdminOrSecretary(ctx)
+    ? (body.professionalId ?? ctx.userId)
+    : ctx.userId;
+
+  const [appointment] = await db
+    .insert(appointmentsTable)
+    .values({
+      patientId, procedureId, date, startTime, endTime,
+      status: "agendado", notes,
+      professionalId: resolvedProfessionalId,
+      clinicId: ctx.clinicId ?? null,
+      scheduleId: resolvedScheduleId,
+    })
+    .returning();
+
+  const actor = ctx.userName ?? `usuário #${ctx.userId}`;
+  await logAudit({
+    userId: ctx.userId, userName: ctx.userName ?? undefined,
+    patientId, action: "create", entityType: "appointment", entityId: appointment.id,
+    summary: `Agendamento criado: ${procedure.name} em ${date} às ${startTime} (por ${actor})`,
+  });
+
+  return await getWithDetails(appointment.id);
+}
+
+// ─── Get one ─────────────────────────────────────────────────────────────────
+export async function getAppointment(id: number, ctx: AuthCtx) {
+  const details = await getWithDetails(id, ctx.clinicId);
+  if (!details) throw notFound();
+  return details;
+}
+
+// ─── Update ──────────────────────────────────────────────────────────────────
+export async function updateAppointment(id: number, body: {
+  patientId?: number; procedureId?: number; date?: string; startTime?: string;
+  status?: string; notes?: string | null;
+}, ctx: AuthCtx) {
+  const { patientId, procedureId, date, startTime, status, notes } = body;
+
+  const currentAppt = await getWithDetails(id);
+  if (!currentAppt) throw notFound();
+  const oldStatus = currentAppt.status;
+
+  if (status && status !== oldStatus) {
+    if (!isValidTransition(oldStatus, status, isAdminOrSecretary(ctx))) {
+      throw unprocessable("InvalidTransition", `Não é possível alterar de "${oldStatus}" para "${status}".`);
+    }
+  }
+
+  // Cancellation policy
+  if (status === "cancelado" && oldStatus !== "cancelado") {
+    if (!isAdminOrSecretary(ctx) && ctx.clinicId) {
+      const [clinic] = await db
+        .select({ cancellationPolicyHours: clinicsTable.cancellationPolicyHours })
+        .from(clinicsTable)
+        .where(eq(clinicsTable.id, ctx.clinicId))
+        .limit(1);
+      if (clinic?.cancellationPolicyHours && clinic.cancellationPolicyHours > 0) {
+        const apptDatetime = new Date(`${currentAppt.date}T${currentAppt.startTime}:00`);
+        const nowBRT = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const diffHours = (apptDatetime.getTime() - nowBRT.getTime()) / (1000 * 60 * 60);
+        if (diffHours < clinic.cancellationPolicyHours && diffHours > 0) {
+          throw unprocessable(
+            "CancellationPolicyViolation",
+            `Cancelamento não permitido: a política da clínica exige aviso com ${clinic.cancellationPolicyHours}h de antecedência. Contate a secretaria.`
+          );
+        }
+      }
+    }
+  }
+
+  let endTime: string | undefined;
+  let maxCapacity = 1;
+  let effectiveProcedureId = procedureId;
+  let effectiveScheduleId: number | null = null;
+
+  const needsEndTimeRecalc = !!(startTime || procedureId);
+  if (needsEndTimeRecalc) {
+    const targetProcedureId = procedureId ?? currentAppt.procedureId;
+    const targetStartTime = startTime ?? currentAppt.startTime;
+    const [proc] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, targetProcedureId));
+    if (proc) {
+      endTime = addMinutes(targetStartTime, proc.durationMinutes);
+      maxCapacity = proc.maxCapacity ?? 1;
+      effectiveProcedureId = targetProcedureId;
+      effectiveScheduleId = currentAppt.scheduleId ?? null;
+    }
+  }
+
+  const targetDate = date ?? currentAppt.date;
+  const targetStart = startTime ?? currentAppt.startTime;
+  if (endTime && effectiveProcedureId != null) {
+    const { conflict, currentCount, reason } = await checkConflict(
+      targetDate, targetStart, endTime, effectiveProcedureId, maxCapacity, id, effectiveScheduleId, ctx.clinicId
+    );
+    if (conflict) {
+      throw conflictErr(describeConflict(reason, currentCount, maxCapacity, undefined, targetStart, endTime));
+    }
+  }
+
+  const updateFields: Record<string, any> = {};
+  if (patientId !== undefined) updateFields.patientId = patientId;
+  if (procedureId !== undefined) updateFields.procedureId = procedureId;
+  if (date !== undefined) updateFields.date = date;
+  if (startTime !== undefined) updateFields.startTime = startTime;
+  if (endTime !== undefined) updateFields.endTime = endTime;
+  if (status !== undefined) updateFields.status = status;
+  if (notes !== undefined) updateFields.notes = notes;
+
+  if (status === "confirmado" && oldStatus !== "confirmado") {
+    updateFields.confirmedBy = isAdminOrSecretary(ctx) ? "secretaria" : "paciente";
+    updateFields.confirmedAt = new Date();
+  }
+
+  const updateWhere = (!ctx.isSuperAdmin && ctx.clinicId)
+    ? and(eq(appointmentsTable.id, id), eq(appointmentsTable.clinicId, ctx.clinicId))
+    : eq(appointmentsTable.id, id);
+
+  const [appointment] = await db.update(appointmentsTable).set(updateFields).where(updateWhere).returning();
+  if (!appointment) throw notFound();
+
+  if (status && status !== oldStatus) {
+    await applyBillingRules(appointment.id, status, oldStatus, ctx.clinicId);
+  }
+
+  const auditActor = ctx.userName ?? `usuário #${ctx.userId}`;
+  if (status && status !== oldStatus) {
+    await logAudit({
+      userId: ctx.userId, userName: ctx.userName ?? undefined,
+      patientId: currentAppt.patientId, action: "update", entityType: "appointment", entityId: id,
+      summary: `Status: ${oldStatus} → ${status} (por ${auditActor})`,
+    });
+  } else if (Object.keys(updateFields).length > 0) {
+    await logAudit({
+      userId: ctx.userId, userName: ctx.userName ?? undefined,
+      patientId: currentAppt.patientId, action: "update", entityType: "appointment", entityId: id,
+      summary: `Agendamento atualizado (por ${auditActor})`,
     });
   }
+
+  return await getWithDetails(appointment.id);
 }
+
+// ─── Delete ──────────────────────────────────────────────────────────────────
+export async function deleteAppointment(id: number, ctx: AuthCtx) {
+  const whereClause = (!ctx.isSuperAdmin && ctx.clinicId)
+    ? and(eq(appointmentsTable.id, id), eq(appointmentsTable.clinicId, ctx.clinicId))
+    : eq(appointmentsTable.id, id);
+  const [deleted] = await db.delete(appointmentsTable).where(whereClause).returning({ id: appointmentsTable.id });
+  if (!deleted) throw notFound();
+  await logAudit({
+    userId: ctx.userId, action: "delete", entityType: "appointment", entityId: id,
+    summary: `Agendamento excluído`,
+  });
+}
+
+// ─── Reschedule ──────────────────────────────────────────────────────────────
+export async function rescheduleAppointment(id: number, body: {
+  date: string; startTime: string; notes?: string | null;
+}, ctx: AuthCtx) {
+  const { date, startTime, notes } = body;
+
+  const original = await getWithDetails(id, ctx.clinicId);
+  if (!original) throw notFound();
+
+  const blockableStatuses = ["agendado", "confirmado", "faltou"];
+  if (!blockableStatuses.includes(original.status)) {
+    throw unprocessable("InvalidOperation", `Não é possível remarcar um agendamento com status "${original.status}".`);
+  }
+  if (!original.procedure) {
+    throw unprocessable("InvalidOperation", "Procedimento do agendamento não encontrado.");
+  }
+
+  const endTime = addMinutes(startTime, original.procedure.durationMinutes);
+  const maxCapacity = original.procedure.maxCapacity ?? 1;
+
+  if (original.scheduleId) {
+    const [schedule] = await db
+      .select({ startTime: schedulesTable.startTime, endTime: schedulesTable.endTime })
+      .from(schedulesTable)
+      .where(eq(schedulesTable.id, original.scheduleId));
+    if (schedule) {
+      if (
+        timeToMinutes(startTime) < timeToMinutes(schedule.startTime) ||
+        timeToMinutes(endTime) > timeToMinutes(schedule.endTime)
+      ) {
+        throw unprocessable(
+          "OutOfHours",
+          `O procedimento extrapola o horário de atendimento da agenda (${schedule.startTime}–${schedule.endTime}). Escolha um horário em que o procedimento termine até às ${schedule.endTime}.`
+        );
+      }
+    }
+  }
+
+  const { conflict, currentCount, reason } = await checkConflict(
+    date, startTime, endTime, original.procedureId, maxCapacity, undefined, original.scheduleId, ctx.clinicId
+  );
+  if (conflict) {
+    throw conflictErr(describeConflict(reason, currentCount, maxCapacity, undefined, startTime, endTime));
+  }
+
+  const result = await db.transaction(async (tx) => {
+    const [newAppt] = await tx.insert(appointmentsTable).values({
+      patientId: original.patientId,
+      procedureId: original.procedureId,
+      professionalId: original.professionalId,
+      date, startTime, endTime,
+      status: "agendado",
+      notes: notes ?? original.notes,
+      clinicId: original.clinicId,
+      scheduleId: original.scheduleId,
+      source: original.source,
+    }).returning();
+    await tx.update(appointmentsTable)
+      .set({ status: "remarcado", rescheduledToId: newAppt.id })
+      .where(eq(appointmentsTable.id, id));
+    return newAppt;
+  });
+
+  await db.update(financialRecordsTable)
+    .set({ status: "cancelado" })
+    .where(and(
+      eq(financialRecordsTable.appointmentId, id),
+      eq(financialRecordsTable.transactionType, "taxaNoShow"),
+      eq(financialRecordsTable.status, "pendente")
+    ));
+
+  const actor = ctx.userName ?? `usuário #${ctx.userId}`;
+  await logAudit({
+    userId: ctx.userId, userName: ctx.userName ?? undefined,
+    patientId: original.patientId, action: "update", entityType: "appointment", entityId: id,
+    summary: `Remarcado para ${date} às ${startTime} (novo ID: ${result.id}) (por ${actor})`,
+  });
+
+  const newDetails = await getWithDetails(result.id);
+  const oldDetails = await getWithDetails(id);
+  return { rescheduled: oldDetails, new: newDetails };
+}
+
+// ─── Complete ────────────────────────────────────────────────────────────────
+export async function completeAppointment(id: number, ctx: AuthCtx) {
+  const details = await getWithDetails(id, ctx.clinicId);
+  if (!details) throw notFound();
+
+  const oldStatus = details.status;
+  if (!isValidTransition(oldStatus, "concluido", isAdminOrSecretary(ctx))) {
+    throw unprocessable("InvalidTransition", `Não é possível concluir um agendamento com status "${oldStatus}".`);
+  }
+
+  const [appointment] = await db
+    .update(appointmentsTable)
+    .set({ status: "concluido" })
+    .where(eq(appointmentsTable.id, id))
+    .returning();
+
+  await applyBillingRules(id, "concluido", oldStatus, ctx.clinicId);
+
+  const actor = ctx.userName ?? `usuário #${ctx.userId}`;
+  await logAudit({
+    userId: ctx.userId, userName: ctx.userName ?? undefined,
+    patientId: details.patientId, action: "update", entityType: "appointment", entityId: id,
+    summary: `Status: ${oldStatus} → concluido (por ${actor})`,
+  });
+
+  return await getWithDetails(appointment.id, ctx.clinicId);
+}
+
+// ─── Recurring ───────────────────────────────────────────────────────────────
+export async function createRecurringAppointments(body: {
+  patientId: number; procedureId: number; date: string; startTime: string;
+  notes?: string | null; scheduleId?: number | string | null; professionalId?: number | null;
+  recurrence: { daysOfWeek: number[]; totalSessions: number };
+}, ctx: AuthCtx) {
+  const { patientId, procedureId, date, startTime, notes, recurrence, scheduleId } = body;
+  const { daysOfWeek, totalSessions } = recurrence;
+
+  const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, procedureId));
+  if (!procedure) throw notFound("Procedimento não encontrado");
+
+  const resolvedScheduleId = scheduleId ? parseInt(String(scheduleId)) : null;
+  const resolvedProfessionalId = isAdminOrSecretary(ctx)
+    ? (body.professionalId ?? ctx.userId)
+    : ctx.userId;
+
+  const endTimeFn = (st: string) => addMinutes(st, procedure.durationMinutes);
+  const maxCapacity = procedure.maxCapacity ?? 1;
+  const recurrenceGroupId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const created: any[] = [];
+  const skipped: any[] = [];
+
+  let sessionCount = 0;
+  let cursor = new Date(date + "T12:00:00Z");
+  let safetyLimit = 0;
+
+  while (sessionCount < totalSessions && safetyLimit < 500) {
+    safetyLimit++;
+    const dow = cursor.getUTCDay();
+    if (daysOfWeek.includes(dow)) {
+      const sessionDate = cursor.toISOString().slice(0, 10);
+      const et = endTimeFn(startTime);
+      const { conflict, reason, currentCount } = await checkConflict(
+        sessionDate, startTime, et, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId
+      );
+      if (conflict) {
+        skipped.push({ date: sessionDate, reason: reason || "conflict", currentCount });
+      } else {
+        const [apt] = await db.insert(appointmentsTable).values({
+          patientId, procedureId,
+          date: sessionDate, startTime, endTime: et,
+          status: "agendado",
+          notes: notes || undefined,
+          professionalId: resolvedProfessionalId,
+          clinicId: ctx.clinicId ?? null,
+          scheduleId: resolvedScheduleId,
+          recurrenceGroupId,
+          recurrenceIndex: sessionCount,
+        }).returning();
+        created.push(apt);
+        sessionCount++;
+      }
+    }
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return { created: created.length, skipped: skipped.length, recurrenceGroupId, skippedDetails: skipped };
+}
+
+// ─── Billing rules ───────────────────────────────────────────────────────────
+// Re-exported from the billing module (kept separate due to its size and focus).
+export { applyBillingRules } from "./appointments.billing.js";
