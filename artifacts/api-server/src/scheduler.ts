@@ -28,7 +28,7 @@ interface JobOpts {
   name: string;
   cronExpr: string;
   silentSuccess?: boolean; // não loga sucessos com 0 efeito
-  run: () => Promise<Record<string, unknown>>;
+  run: () => Promise<object>;
 }
 
 function registerJob({ name, cronExpr, run, silentSuccess }: JobOpts): void {
@@ -42,7 +42,7 @@ function registerJob({ name, cronExpr, run, silentSuccess }: JobOpts): void {
       const startedAt = Date.now();
       logger.debug({ job: name }, `[scheduler] iniciando ${name}`);
       try {
-        const result = await run();
+        const result = (await run()) as Record<string, unknown>;
         const durationMs = Date.now() - startedAt;
         const errors = typeof result.errors === "number" ? result.errors : 0;
         const hasEffect = Object.entries(result).some(
