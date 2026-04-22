@@ -1,0 +1,28 @@
+# CODEOWNERS — define revisores padrão para áreas críticas do repo.
+# Sintaxe: <path-pattern>  @user-or-team
+# Substitua os placeholders pelos handles reais do GitHub.
+
+# Default — qualquer arquivo sem dono explícito
+*                                       @fisiogest/maintainers
+
+# Backend — API
+/artifacts/api-server/                   @fisiogest/backend
+/lib/db/                                 @fisiogest/backend
+/lib/api-zod/                            @fisiogest/backend
+/lib/api-spec/                           @fisiogest/backend
+
+# Domínio crítico — financeiro e billing exigem revisão dupla
+/artifacts/api-server/src/modules/financial/    @fisiogest/backend @fisiogest/finance
+/artifacts/api-server/src/modules/_shared/accounting/  @fisiogest/backend @fisiogest/finance
+/artifacts/api-server/src/scheduler.ts          @fisiogest/backend @fisiogest/finance
+
+# Frontend
+/artifacts/fisiogest/                    @fisiogest/frontend
+/lib/api-client-react/                   @fisiogest/frontend
+
+# Infra / build / CI
+/.github/                                @fisiogest/maintainers
+/scripts/                                @fisiogest/maintainers
+/.replit                                 @fisiogest/maintainers
+/replit.md                               @fisiogest/maintainers
+/docs/                                   @fisiogest/maintainers

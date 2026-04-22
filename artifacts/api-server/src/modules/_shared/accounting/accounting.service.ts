@@ -6,7 +6,7 @@ import {
   receivableAllocationsTable,
 } from "@workspace/db";
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
-import { todayBRT } from "../utils/dateUtils.js";
+import { todayBRT } from "../../../utils/dateUtils.js";
 
 export const ACCOUNT_CODES = {
   cash: "1.1.1",

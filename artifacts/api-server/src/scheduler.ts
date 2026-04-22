@@ -18,10 +18,10 @@
  */
 
 import cron from "node-cron";
-import { runBilling } from "./services/billingService.js";
-import { runConsolidatedBilling } from "./services/consolidatedBillingService.js";
-import { runAutoConfirmPolicies, runEndOfDayPolicies } from "./services/policyService.js";
-import { runSubscriptionCheck } from "./services/subscriptionService.js";
+import { runBilling } from "./modules/financial/billing/billing.service.js";
+import { runConsolidatedBilling } from "./modules/financial/billing/consolidated-billing.service.js";
+import { runAutoConfirmPolicies, runEndOfDayPolicies } from "./modules/clinical/policies/policy.service.js";
+import { runSubscriptionCheck } from "./modules/saas/subscriptions/subscription.service.js";
 
 const BILLING_CRON              = "0 9 * * *";    // 09:00 UTC = 06:00 BRT diariamente
 const CONSOLIDATED_BILLING_CRON = "5 9 * * *";    // 09:05 UTC = 06:05 BRT (logo após billing mensal)

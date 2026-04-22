@@ -22,12 +22,12 @@ import {
   billingRunLogsTable,
 } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
-import { todayBRT, nowBRT, lastDayOfMonth } from "../utils/dateUtils.js";
+import { todayBRT, nowBRT, lastDayOfMonth } from "../../../utils/dateUtils.js";
 import {
   calcNextBillingDate,
   effectiveBillingDay,
   isWithinBillingWindow,
-} from "./billing/billingDateUtils.js";
+} from "./billing-date-utils.js";
 
 export interface BillingResult {
   processed: number;

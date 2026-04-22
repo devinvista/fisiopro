@@ -16,8 +16,8 @@ import {
   postCashReceipt,
   postReceivableRevenue,
   postReceivableSettlement,
-} from "../../../services/accountingService.js";
-import { RECEIVABLE_TYPES } from "../../../services/financialReportsService.js";
+} from "../../_shared/accounting/accounting.service.js";
+import { RECEIVABLE_TYPES } from "../_shared/financial-reports.service.js";
 import { createPaymentSchema } from "../financial.schemas.js";
 import { assertPatientInClinic } from "../financial.repository.js";
 

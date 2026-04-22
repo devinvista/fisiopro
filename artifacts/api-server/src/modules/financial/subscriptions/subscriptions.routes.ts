@@ -13,7 +13,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireFeature } from "../../../middleware/plan-features.js";
 import { validateBody } from "../../../utils/validate.js";
-import { runBilling } from "../../../services/billingService.js";
+import { runBilling } from "../billing/billing.service.js";
 
 const createSubscriptionSchema = z.object({
   patientId: z.number().int().positive(),

@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, isNull, isNotNull, or, sql } from "drizzle-orm";
 import { financialRecordsTable } from "@workspace/db";
-import { monthDateRangeBRT } from "../utils/dateUtils.js";
+import { monthDateRangeBRT } from "../../../utils/dateUtils.js";
 
 export const RECEIVABLE_TYPES = [
   "creditoAReceber",

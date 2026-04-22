@@ -44,15 +44,15 @@ vi.mock("@workspace/db", async () => {
 
 // Auditoria e contábil são side-effects irrelevantes para esses testes.
 const auditCalls: any[] = [];
-vi.mock("../../utils/auditLog.js", () => ({
+vi.mock("../../../utils/auditLog.js", () => ({
   logAudit: vi.fn(async (entry: any) => {
     auditCalls.push(entry);
   }),
 }));
 
 const accountingCalls: any[] = [];
-vi.mock("../accountingService.js", async () => {
-  const actual = await vi.importActual<any>("../accountingService.js");
+vi.mock("../../_shared/accounting/accounting.service.js", async () => {
+  const actual = await vi.importActual<any>("../../_shared/accounting/accounting.service.js");
   return {
     ...actual,
     postReceivableRevenue: vi.fn(async (input: any) => {
@@ -62,7 +62,7 @@ vi.mock("../accountingService.js", async () => {
   };
 });
 
-import { runAutoConfirmPolicies, runEndOfDayPolicies } from "../policyService.js";
+import { runAutoConfirmPolicies, runEndOfDayPolicies } from "./policy.service.js";
 
 beforeEach(() => {
   dbMock.reset();

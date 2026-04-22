@@ -5,7 +5,7 @@ import {
   isRevenueSummaryRecord,
   monthDateRange,
   monthlyCreditQuantity,
-} from "../financialReportsService.js";
+} from "./financial-reports.service.js";
 
 describe("financialReportsService — pure helpers", () => {
   describe("RECEIVABLE_TYPES", () => {

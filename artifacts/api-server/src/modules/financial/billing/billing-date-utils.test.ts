@@ -3,7 +3,7 @@ import {
   calcNextBillingDate,
   effectiveBillingDay,
   isWithinBillingWindow,
-} from "./billingDateUtils.js";
+} from "./billing-date-utils.js";
 
 describe("effectiveBillingDay", () => {
   it("retorna o próprio billingDay quando o mês comporta", () => {

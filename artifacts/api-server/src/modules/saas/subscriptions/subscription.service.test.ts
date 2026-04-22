@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createDbMock } from "./dbMock.js";
+import { createDbMock } from "../../_shared/test-utils/db-mock.js";
 
 // Hoisted: precisa estar disponível antes de o vi.mock executar.
 const dbMock = vi.hoisted(() => {
@@ -46,8 +46,8 @@ vi.mock("@workspace/db", async () => {
 });
 
 // Dataset de hoje (BRT). Importa todayBRT real para alinhar com a função em teste.
-import { todayBRT, addDays } from "../../utils/dateUtils.js";
-import { runSubscriptionCheck } from "../subscriptionService.js";
+import { todayBRT, addDays } from "../../../utils/dateUtils.js";
+import { runSubscriptionCheck } from "./subscription.service.js";
 
 const today = todayBRT();
 const yesterday = addDays(today, -1);

@@ -14,12 +14,12 @@ import {
   postReceivableRevenue,
   postReceivableSettlement,
   postReversal,
-} from "../../../services/accountingService.js";
+} from "../../_shared/accounting/accounting.service.js";
 import {
   RECEIVABLE_TYPES,
   monthDateRange,
   monthlyCreditQuantity,
-} from "../../../services/financialReportsService.js";
+} from "../_shared/financial-reports.service.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
 } from "../financial.schemas.js";

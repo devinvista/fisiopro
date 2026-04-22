@@ -42,8 +42,8 @@ vi.mock("@workspace/db", async () => {
   return { ...actual, db: dbMock.db };
 });
 
-import { runBilling } from "../billingService.js";
-import { nowBRT } from "../../utils/dateUtils.js";
+import { runBilling } from "./billing.service.js";
+import { nowBRT } from "../../../utils/dateUtils.js";
 
 const brt = nowBRT();
 const todayDay = brt.day;

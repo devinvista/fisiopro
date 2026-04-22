@@ -11,11 +11,11 @@ import { monthDateRangeBRT, nowBRT } from "../../../utils/dateUtils.js";
 import {
   ACCOUNT_CODES,
   getAccountingTotals,
-} from "../../../services/accountingService.js";
+} from "../../_shared/accounting/accounting.service.js";
 import {
   RECEIVABLE_TYPES,
   revenueSummarySql,
-} from "../../../services/financialReportsService.js";
+} from "../_shared/financial-reports.service.js";
 import { clinicCond } from "../financial.repository.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
 import { HttpError } from "../../../utils/httpError.js";

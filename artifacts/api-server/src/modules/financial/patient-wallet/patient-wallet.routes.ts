@@ -21,7 +21,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { validateBody } from "../../../utils/validate.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
-import { postWalletDeposit } from "../../../services/accountingService.js";
+import { postWalletDeposit } from "../../_shared/accounting/accounting.service.js";
 import { z } from "zod/v4";
 
 const router = Router({ mergeParams: true });

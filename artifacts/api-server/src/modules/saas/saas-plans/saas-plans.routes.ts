@@ -6,7 +6,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requireSuperAdmin } from "../../../middleware/rbac.js";
 import { validateBody } from "../../../utils/validate.js";
 import { todayBRT, addDays } from "../../../utils/dateUtils.js";
-import { runSubscriptionCheck } from "../../../services/subscriptionService.js";
+import { runSubscriptionCheck } from "../subscriptions/subscription.service.js";
 import { planSchema, subscriptionSchema, updateSubscriptionSchema, paymentSchema } from "./saas-plans.schemas.js";
 import { DEFAULT_PLANS } from "./saas-plans.constants.js";
 import {

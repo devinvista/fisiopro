@@ -5,7 +5,7 @@ import {
   monthDateRangeBRT,
   nowBRT,
   todayBRT,
-} from "../../utils/dateUtils.js";
+} from "./dateUtils.js";
 
 describe("dateUtils", () => {
   describe("lastDayOfMonth", () => {

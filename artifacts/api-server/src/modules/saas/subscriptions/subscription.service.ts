@@ -10,7 +10,7 @@
 import { db } from "@workspace/db";
 import { clinicSubscriptionsTable, subscriptionPlansTable, clinicsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { todayBRT, addDays } from "../utils/dateUtils.js";
+import { todayBRT, addDays } from "../../../utils/dateUtils.js";
 
 const GRACE_PERIOD_DAYS = 7;
 
