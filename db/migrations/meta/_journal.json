@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1773973548457,
+      "tag": "0000_massive_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1742930000000,
+      "tag": "0001_full_schema_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1742931000000,
+      "tag": "0002_enum_values_to_camelcase",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1742932000000,
+      "tag": "0003_audit_log_and_recurrence",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1742933000000,
+      "tag": "0004_clinics_multitenancy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1742934000000,
+      "tag": "0005_multi_treatment_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1744070400000,
+      "tag": "0006_patients_soft_delete",
+      "breakpoints": true
+    }
+  ]
+}

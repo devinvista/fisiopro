@@ -1,0 +1,1789 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: FisioGest Pro API - Clinical management platform for physiotherapy, aesthetics and pilates
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: patients
+    description: Patient management
+  - name: procedures
+    description: Procedure management
+  - name: appointments
+    description: Appointment scheduling
+  - name: medical-records
+    description: Medical records and clinical data
+  - name: financial
+    description: Financial management
+  - name: reports
+    description: Reporting and analytics
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current user
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /patients:
+    get:
+      operationId: listPatients
+      tags: [patients]
+      summary: List all patients
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of patients
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientListResponse"
+    post:
+      operationId: createPatient
+      tags: [patients]
+      summary: Create a new patient
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePatientRequest"
+      responses:
+        "201":
+          description: Patient created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+
+  /patients/{id}:
+    get:
+      operationId: getPatient
+      tags: [patients]
+      summary: Get a patient by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updatePatient
+      tags: [patients]
+      summary: Update a patient
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePatientRequest"
+      responses:
+        "200":
+          description: Patient updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+    delete:
+      operationId: deletePatient
+      tags: [patients]
+      summary: Delete a patient
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Patient deleted
+
+  /procedures:
+    get:
+      operationId: listProcedures
+      tags: [procedures]
+      summary: List all procedures
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [fisioterapia, estetica, pilates]
+      responses:
+        "200":
+          description: List of procedures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Procedure"
+    post:
+      operationId: createProcedure
+      tags: [procedures]
+      summary: Create a procedure
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProcedureRequest"
+      responses:
+        "201":
+          description: Procedure created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+
+  /procedures/{id}:
+    put:
+      operationId: updateProcedure
+      tags: [procedures]
+      summary: Update a procedure
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProcedureRequest"
+      responses:
+        "200":
+          description: Procedure updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+    delete:
+      operationId: deleteProcedure
+      tags: [procedures]
+      summary: Delete a procedure
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      summary: List appointments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: patientId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [agendado, confirmado, concluido, cancelado, faltou]
+      responses:
+        "200":
+          description: List of appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentWithDetails"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      summary: Create an appointment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentRequest"
+      responses:
+        "201":
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentWithDetails"
+        "409":
+          description: Time slot conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /appointments/{id}:
+    get:
+      operationId: getAppointment
+      tags: [appointments]
+      summary: Get an appointment by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentWithDetails"
+    put:
+      operationId: updateAppointment
+      tags: [appointments]
+      summary: Update an appointment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentRequest"
+      responses:
+        "200":
+          description: Appointment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentWithDetails"
+    delete:
+      operationId: deleteAppointment
+      tags: [appointments]
+      summary: Cancel/delete an appointment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /appointments/{id}/complete:
+    post:
+      operationId: completeAppointment
+      tags: [appointments]
+      summary: Mark appointment as completed and generate financial record
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentWithDetails"
+
+  /patients/{patientId}/anamnesis:
+    get:
+      operationId: getAnamnesis
+      tags: [medical-records]
+      summary: Get patient anamnesis
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Anamnesis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anamnesis"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createAnamnesis
+      tags: [medical-records]
+      summary: Create or update patient anamnesis
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnamnesisRequest"
+      responses:
+        "200":
+          description: Anamnesis saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anamnesis"
+
+  /patients/{patientId}/evaluations:
+    get:
+      operationId: listEvaluations
+      tags: [medical-records]
+      summary: List patient evaluations
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Evaluations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Evaluation"
+    post:
+      operationId: createEvaluation
+      tags: [medical-records]
+      summary: Create a patient evaluation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEvaluationRequest"
+      responses:
+        "201":
+          description: Evaluation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+
+  /patients/{patientId}/evaluations/{evaluationId}:
+    put:
+      operationId: updateEvaluation
+      tags: [medical-records]
+      summary: Update a patient evaluation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: evaluationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEvaluationRequest"
+      responses:
+        "200":
+          description: Evaluation updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evaluation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteEvaluation
+      tags: [medical-records]
+      summary: Delete a patient evaluation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: evaluationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /patients/{patientId}/treatment-plan:
+    get:
+      operationId: getTreatmentPlan
+      tags: [medical-records]
+      summary: Get patient treatment plan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Treatment plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreatmentPlan"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: saveTreatmentPlan
+      tags: [medical-records]
+      summary: Create or update treatment plan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTreatmentPlanRequest"
+      responses:
+        "200":
+          description: Treatment plan saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreatmentPlan"
+
+  /patients/{patientId}/evolutions:
+    get:
+      operationId: listEvolutions
+      tags: [medical-records]
+      summary: List patient session evolutions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Evolutions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Evolution"
+    post:
+      operationId: createEvolution
+      tags: [medical-records]
+      summary: Create a session evolution note
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEvolutionRequest"
+      responses:
+        "201":
+          description: Evolution created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evolution"
+
+  /patients/{patientId}/evolutions/{evolutionId}:
+    put:
+      operationId: updateEvolution
+      tags: [medical-records]
+      summary: Update a session evolution note
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: evolutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEvolutionRequest"
+      responses:
+        "200":
+          description: Evolution updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evolution"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteEvolution
+      tags: [medical-records]
+      summary: Delete a session evolution note
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: evolutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /patients/{patientId}/discharge-summary:
+    get:
+      operationId: getDischarge
+      tags: [medical-records]
+      summary: Get patient discharge summary
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Discharge summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeSummary"
+        "404":
+          description: Not found
+    post:
+      operationId: saveDischarge
+      tags: [medical-records]
+      summary: Create or update patient discharge summary
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveDischargeRequest"
+      responses:
+        "200":
+          description: Discharge summary saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeSummary"
+
+  /financial/dashboard:
+    get:
+      operationId: getFinancialDashboard
+      tags: [financial]
+      summary: Get financial dashboard data
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Financial dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialDashboard"
+
+  /financial/records:
+    get:
+      operationId: listFinancialRecords
+      tags: [financial]
+      summary: List financial records
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [receita, despesa]
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Financial records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FinancialRecord"
+    post:
+      operationId: createFinancialRecord
+      tags: [financial]
+      summary: Create a financial record (expense)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFinancialRecordRequest"
+      responses:
+        "201":
+          description: Record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialRecord"
+
+  /reports/monthly-revenue:
+    get:
+      operationId: getMonthlyRevenue
+      tags: [reports]
+      summary: Monthly revenue report
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly revenue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyRevenue"
+
+  /reports/procedure-revenue:
+    get:
+      operationId: getProcedureRevenue
+      tags: [reports]
+      summary: Revenue by procedure
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Revenue by procedure
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProcedureRevenue"
+
+  /reports/schedule-occupation:
+    get:
+      operationId: getScheduleOccupation
+      tags: [reports]
+      summary: Schedule occupation report
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Schedule occupation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleOccupation"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [reports]
+      summary: Main dashboard overview
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardData"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    RegisterRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        role:
+          type: string
+          enum: [admin, profissional, secretaria]
+          default: profissional
+      required:
+        - name
+        - email
+        - password
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - token
+        - user
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - role
+        - createdAt
+
+    Patient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        cpf:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        profession:
+          type: string
+        emergencyContact:
+          type: string
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - cpf
+        - phone
+        - createdAt
+
+    PatientDetail:
+      allOf:
+        - $ref: "#/components/schemas/Patient"
+        - type: object
+          properties:
+            totalAppointments:
+              type: integer
+            lastAppointment:
+              type: string
+              format: date-time
+            totalSpent:
+              type: number
+
+    PatientListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Patient"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+
+    CreatePatientRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        cpf:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        profession:
+          type: string
+        emergencyContact:
+          type: string
+        notes:
+          type: string
+      required:
+        - name
+        - cpf
+        - phone
+
+    UpdatePatientRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        cpf:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        profession:
+          type: string
+        emergencyContact:
+          type: string
+        notes:
+          type: string
+
+    Procedure:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+          enum: [fisioterapia, estetica, pilates]
+        durationMinutes:
+          type: integer
+        price:
+          type: number
+        cost:
+          type: number
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - category
+        - durationMinutes
+        - price
+        - createdAt
+
+    CreateProcedureRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [fisioterapia, estetica, pilates]
+        durationMinutes:
+          type: integer
+        price:
+          type: number
+        cost:
+          type: number
+        description:
+          type: string
+      required:
+        - name
+        - category
+        - durationMinutes
+        - price
+
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        procedureId:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        endTime:
+          type: string
+        status:
+          type: string
+          enum: [agendado, confirmado, concluido, cancelado, faltou]
+        notes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - procedureId
+        - date
+        - startTime
+        - endTime
+        - status
+        - createdAt
+
+    AppointmentWithDetails:
+      allOf:
+        - $ref: "#/components/schemas/Appointment"
+        - type: object
+          properties:
+            patient:
+              $ref: "#/components/schemas/Patient"
+            procedure:
+              $ref: "#/components/schemas/Procedure"
+
+    CreateAppointmentRequest:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        procedureId:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        notes:
+          type: string
+      required:
+        - patientId
+        - procedureId
+        - date
+        - startTime
+
+    UpdateAppointmentRequest:
+      type: object
+      properties:
+        patientId:
+          type: integer
+        procedureId:
+          type: integer
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        status:
+          type: string
+          enum: [agendado, confirmado, concluido, cancelado, faltou]
+        notes:
+          type: string
+
+    Anamnesis:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        mainComplaint:
+          type: string
+        diseaseHistory:
+          type: string
+        medicalHistory:
+          type: string
+        medications:
+          type: string
+        allergies:
+          type: string
+        familyHistory:
+          type: string
+        lifestyle:
+          type: string
+        painScale:
+          type: integer
+          minimum: 0
+          maximum: 10
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - createdAt
+
+    CreateAnamnesisRequest:
+      type: object
+      properties:
+        mainComplaint:
+          type: string
+        diseaseHistory:
+          type: string
+        medicalHistory:
+          type: string
+        medications:
+          type: string
+        allergies:
+          type: string
+        familyHistory:
+          type: string
+        lifestyle:
+          type: string
+        painScale:
+          type: integer
+          minimum: 0
+          maximum: 10
+
+    Evaluation:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        inspection:
+          type: string
+        posture:
+          type: string
+        rangeOfMotion:
+          type: string
+        muscleStrength:
+          type: string
+        orthopedicTests:
+          type: string
+        functionalDiagnosis:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - createdAt
+        - updatedAt
+
+    CreateEvaluationRequest:
+      type: object
+      properties:
+        inspection:
+          type: string
+        posture:
+          type: string
+        rangeOfMotion:
+          type: string
+        muscleStrength:
+          type: string
+        orthopedicTests:
+          type: string
+        functionalDiagnosis:
+          type: string
+
+    TreatmentPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        objectives:
+          type: string
+        techniques:
+          type: string
+        frequency:
+          type: string
+        estimatedSessions:
+          type: integer
+        status:
+          type: string
+          enum: [ativo, concluido, suspenso]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - createdAt
+
+    CreateTreatmentPlanRequest:
+      type: object
+      properties:
+        objectives:
+          type: string
+        techniques:
+          type: string
+        frequency:
+          type: string
+        estimatedSessions:
+          type: integer
+        status:
+          type: string
+          enum: [ativo, concluido, suspenso]
+
+    Evolution:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        appointmentId:
+          type: integer
+        description:
+          type: string
+        patientResponse:
+          type: string
+        clinicalNotes:
+          type: string
+        complications:
+          type: string
+        painScale:
+          type: integer
+          minimum: 0
+          maximum: 10
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - createdAt
+
+    CreateEvolutionRequest:
+      type: object
+      properties:
+        appointmentId:
+          type: integer
+        description:
+          type: string
+        patientResponse:
+          type: string
+        clinicalNotes:
+          type: string
+        complications:
+          type: string
+        painScale:
+          type: integer
+          minimum: 0
+          maximum: 10
+
+    DischargeSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        patientId:
+          type: integer
+        dischargeDate:
+          type: string
+          format: date
+        dischargeReason:
+          type: string
+        achievedResults:
+          type: string
+        recommendations:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - patientId
+        - dischargeDate
+        - dischargeReason
+        - createdAt
+        - updatedAt
+
+    SaveDischargeRequest:
+      type: object
+      properties:
+        dischargeDate:
+          type: string
+          format: date
+        dischargeReason:
+          type: string
+        achievedResults:
+          type: string
+        recommendations:
+          type: string
+      required:
+        - dischargeDate
+        - dischargeReason
+
+    FinancialRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [receita, despesa]
+        amount:
+          type: string
+          description: Numeric string returned by PostgreSQL (e.g. "150.00")
+        description:
+          type: string
+        category:
+          type: string
+          nullable: true
+        appointmentId:
+          type: integer
+          nullable: true
+        patientId:
+          type: integer
+          nullable: true
+        procedureId:
+          type: integer
+          nullable: true
+        procedureName:
+          type: string
+          nullable: true
+        transactionType:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pendente, pago, cancelado, estornado]
+        paymentDate:
+          type: string
+          format: date
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+        subscriptionId:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - amount
+        - description
+        - status
+        - createdAt
+
+    CreateFinancialRecordRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [receita, despesa]
+          default: despesa
+        amount:
+          type: number
+        description:
+          type: string
+        category:
+          type: string
+        procedureId:
+          type: integer
+      required:
+        - amount
+        - description
+
+    FinancialDashboard:
+      type: object
+      properties:
+        monthlyRevenue:
+          type: number
+        monthlyExpenses:
+          type: number
+        monthlyProfit:
+          type: number
+        averageTicket:
+          type: number
+        totalAppointments:
+          type: integer
+        completedAppointments:
+          type: integer
+        topProcedure:
+          type: string
+        revenueByCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              revenue:
+                type: number
+            required:
+              - category
+              - revenue
+      required:
+        - monthlyRevenue
+        - monthlyExpenses
+        - monthlyProfit
+        - averageTicket
+        - totalAppointments
+        - completedAppointments
+
+    DashboardData:
+      type: object
+      properties:
+        todayAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppointmentWithDetails"
+        upcomingAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppointmentWithDetails"
+        monthlyRevenue:
+          type: number
+        totalPatients:
+          type: integer
+        todayTotal:
+          type: integer
+        occupationRate:
+          type: number
+      required:
+        - todayAppointments
+        - upcomingAppointments
+        - monthlyRevenue
+        - totalPatients
+        - todayTotal
+        - occupationRate
+
+    MonthlyRevenue:
+      type: object
+      properties:
+        month:
+          type: integer
+        monthName:
+          type: string
+        revenue:
+          type: number
+        expenses:
+          type: number
+        profit:
+          type: number
+      required:
+        - month
+        - monthName
+        - revenue
+        - expenses
+        - profit
+
+    ProcedureRevenue:
+      type: object
+      properties:
+        procedureId:
+          type: integer
+        procedureName:
+          type: string
+        category:
+          type: string
+        totalRevenue:
+          type: number
+        totalSessions:
+          type: integer
+        averageTicket:
+          type: number
+      required:
+        - procedureId
+        - procedureName
+        - category
+        - totalRevenue
+        - totalSessions
+        - averageTicket
+
+    ScheduleOccupation:
+      type: object
+      properties:
+        totalSlots:
+          type: integer
+        occupiedSlots:
+          type: integer
+        occupationRate:
+          type: number
+        canceledCount:
+          type: integer
+        noShowCount:
+          type: integer
+        byDayOfWeek:
+          type: array
+          items:
+            type: object
+            properties:
+              dayOfWeek:
+                type: string
+              count:
+                type: integer
+            required:
+              - dayOfWeek
+              - count
+      required:
+        - totalSlots
+        - occupiedSlots
+        - occupationRate
+        - canceledCount
+        - noShowCount
+        - byDayOfWeek

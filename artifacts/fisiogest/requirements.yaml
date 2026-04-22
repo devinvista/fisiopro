@@ -1,0 +1,19 @@
+packages:
+  "date-fns": "For calendar calculations and localized date formatting"
+  "recharts": "For interactive financial and analytical charts"
+  "lucide-react": "For crisp, consistent iconography throughout the dashboard"
+  "clsx": "For conditional tailwind class joining"
+  "tailwind-merge": "For conflict-free tailwind class merging"
+
+images:
+  - path: "artifacts/fisiogest/public/images/auth-bg.png"
+    description: "Abstract, calming gradient mesh in soft teals, whites, and light blues, suitable for a healthcare application login background. Premium, modern, clean."
+    aspect_ratio: "16:9"
+  - path: "artifacts/fisiogest/public/images/logo-icon.png"
+    description: "Minimalist geometric icon combining a leaf and a medical cross in deep teal and blue, transparent background, premium medical feel."
+    aspect_ratio: "1:1"
+
+notes:
+  - Global fetch interceptor added to inject JWT token from localStorage into all requests.
+  - Using wouter for routing.
+  - Assuming UI components from shadcn are available in @/components/ui/

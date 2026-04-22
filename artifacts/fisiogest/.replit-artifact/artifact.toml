@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "FisioGest Pro"
+version = "1.0.0"
+id = "artifacts/fisiogest"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 3000
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/fisiogest run dev"
+
+[services.env]
+PORT = "3000"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/fisiogest", "run", "build"]
+publicDir = "artifacts/fisiogest/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
