@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import multer from "multer";
-import { authMiddleware } from "../middleware/auth.js";
-import { generateUploadSignature, cloudinary } from "../utils/cloudinary.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { generateUploadSignature, cloudinary } from "../../utils/cloudinary.js";
 
 const router: IRouter = Router();
 

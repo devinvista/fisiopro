@@ -1,0 +1,427 @@
+import { Router } from "express";
+import { db } from "@workspace/db";
+import {
+  financialRecordsTable, proceduresTable, patientSubscriptionsTable, sessionCreditsTable,
+} from "@workspace/db";
+import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import type { AuthRequest } from "../../../middleware/auth.js";
+import { requirePermission } from "../../../middleware/rbac.js";
+import { logAudit } from "../../../utils/auditLog.js";
+import { todayBRT } from "../../../utils/dateUtils.js";
+import { validateBody } from "../../../utils/validate.js";
+import {
+  allocateReceivable,
+  postReceivableRevenue,
+  postReceivableSettlement,
+  postReversal,
+} from "../../../services/accountingService.js";
+import {
+  RECEIVABLE_TYPES,
+  monthDateRange,
+  monthlyCreditQuantity,
+} from "../../../services/financialReportsService.js";
+import {
+  createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
+} from "../financial.schemas.js";
+import { clinicCond, resolvePackageForSubscription } from "../financial.repository.js";
+
+const router = Router();
+
+router.get("/records", requirePermission("financial.read"), async (req: AuthRequest, res) => {
+  try {
+    const type = req.query.type as string | undefined;
+    const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+    const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+
+    const conditions: any[] = [];
+
+    const cc = clinicCond(req);
+    if (cc) conditions.push(cc);
+    if (type) conditions.push(eq(financialRecordsTable.type, type));
+    if (month && year) {
+      const { startDate, endDate } = monthDateRange(year, month);
+      conditions.push(
+        or(
+          and(isNotNull(financialRecordsTable.paymentDate), gte(financialRecordsTable.paymentDate, startDate), lte(financialRecordsTable.paymentDate, endDate)),
+          and(isNull(financialRecordsTable.paymentDate), isNotNull(financialRecordsTable.dueDate), gte(financialRecordsTable.dueDate, startDate), lte(financialRecordsTable.dueDate, endDate)),
+          and(
+            isNull(financialRecordsTable.paymentDate),
+            isNull(financialRecordsTable.dueDate),
+            gte(sql`DATE(${financialRecordsTable.createdAt})`, startDate),
+            lte(sql`DATE(${financialRecordsTable.createdAt})`, endDate)
+          )
+        )!
+      );
+    }
+
+    const records = await db
+      .select({
+        id: financialRecordsTable.id,
+        type: financialRecordsTable.type,
+        amount: financialRecordsTable.amount,
+        description: financialRecordsTable.description,
+        category: financialRecordsTable.category,
+        appointmentId: financialRecordsTable.appointmentId,
+        patientId: financialRecordsTable.patientId,
+        procedureId: financialRecordsTable.procedureId,
+        transactionType: financialRecordsTable.transactionType,
+        status: financialRecordsTable.status,
+        paymentDate: financialRecordsTable.paymentDate,
+        dueDate: financialRecordsTable.dueDate,
+        paymentMethod: financialRecordsTable.paymentMethod,
+        subscriptionId: financialRecordsTable.subscriptionId,
+        procedureName: proceduresTable.name,
+        createdAt: financialRecordsTable.createdAt,
+      })
+      .from(financialRecordsTable)
+      .leftJoin(proceduresTable, eq(financialRecordsTable.procedureId, proceduresTable.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(financialRecordsTable.createdAt);
+
+    res.json(records);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.post("/records", requirePermission("financial.write"), async (req: AuthRequest, res) => {
+  try {
+    const body = validateBody(createRecordSchema, req.body, res);
+    if (!body) return;
+    const { type, amount, description, category, patientId, procedureId, paymentDate, dueDate, status, paymentMethod } = body;
+
+    const today = todayBRT();
+    const resolvedPaymentDate = status === "pendente" ? null : (paymentDate ?? today);
+    const resolvedDueDate = dueDate ?? paymentDate ?? today;
+
+    const [record] = await db
+      .insert(financialRecordsTable)
+      .values({
+        type,
+        amount: String(amount),
+        description,
+        category: category ?? null,
+        patientId: patientId ?? null,
+        procedureId: procedureId ?? null,
+        clinicId: req.clinicId ?? null,
+        paymentDate: resolvedPaymentDate,
+        dueDate: resolvedDueDate,
+        status: status ?? "pago",
+        paymentMethod: paymentMethod ?? null,
+      })
+      .returning();
+
+    const result = { ...record, procedureName: null as string | null };
+
+    if (record.procedureId) {
+      const [proc] = await db
+        .select({ name: proceduresTable.name })
+        .from(proceduresTable)
+        .where(eq(proceduresTable.id, record.procedureId));
+      result.procedureName = proc?.name ?? null;
+    }
+
+    res.status(201).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.patch("/records/:id", requirePermission("financial.write"), async (req: AuthRequest, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const body = validateBody(updateRecordSchema, req.body, res);
+    if (!body) return;
+
+    const cc = clinicCond(req);
+    const whereClause = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
+
+    const [existing] = await db.select().from(financialRecordsTable).where(whereClause);
+    if (!existing) {
+      res.status(404).json({ error: "Not Found", message: "Registro não encontrado" });
+      return;
+    }
+
+    const updates: Record<string, any> = {};
+    if (body.type !== undefined) updates.type = body.type;
+    if (body.amount !== undefined) updates.amount = String(body.amount);
+    if (body.description !== undefined) updates.description = body.description;
+    if (body.category !== undefined) updates.category = body.category;
+    if (body.procedureId !== undefined) updates.procedureId = body.procedureId;
+    if (body.dueDate !== undefined) updates.dueDate = body.dueDate;
+    if (body.paymentMethod !== undefined) updates.paymentMethod = body.paymentMethod;
+    if (body.status !== undefined) updates.status = body.status;
+    if (body.status === "pendente") {
+      updates.paymentDate = null;
+    } else if (body.paymentDate !== undefined) {
+      updates.paymentDate = body.paymentDate;
+    }
+
+    const [record] = await db
+      .update(financialRecordsTable)
+      .set(updates)
+      .where(whereClause)
+      .returning();
+
+    await logAudit({
+      userId: req.userId,
+      action: "update",
+      entityType: "financial_record",
+      entityId: id,
+      patientId: record.patientId ?? null,
+      summary: `Lançamento editado: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+    });
+
+    let procedureName: string | null = null;
+    if (record.procedureId) {
+      const [proc] = await db.select({ name: proceduresTable.name }).from(proceduresTable).where(eq(proceduresTable.id, record.procedureId));
+      procedureName = proc?.name ?? null;
+    }
+
+    res.json({ ...record, procedureName });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.patch("/records/:id/status", requirePermission("financial.write"), async (req: AuthRequest, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const body = validateBody(updateRecordStatusSchema, req.body, res);
+    if (!body) return;
+    const { status, paymentDate, paymentMethod } = body;
+
+    const cc = clinicCond(req);
+    const existingWhere = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
+
+    const [existing] = await db
+      .select()
+      .from(financialRecordsTable)
+      .where(existingWhere);
+
+    if (!existing) {
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+
+    const [record] = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(financialRecordsTable)
+        .set({
+          status,
+          paymentDate: paymentDate || undefined,
+          paymentMethod: paymentMethod || undefined,
+        })
+        .where(existingWhere)
+        .returning();
+
+      if (!updated) return [];
+
+      if (status === "pago" && existing.status !== "pago" && [...RECEIVABLE_TYPES, "vendaPacote"].includes(existing.transactionType ?? "")) {
+        const settlement = await postReceivableSettlement({
+          clinicId: existing.clinicId ?? req.clinicId ?? null,
+          entryDate: paymentDate || todayBRT(),
+          amount: Number(existing.amount),
+          description: `Baixa de recebível — ${existing.description}`,
+          sourceType: "financial_record",
+          sourceId: existing.id,
+          patientId: existing.patientId,
+          appointmentId: existing.appointmentId,
+          procedureId: existing.procedureId,
+          subscriptionId: existing.subscriptionId,
+          financialRecordId: existing.id,
+        }, tx as any);
+
+        if (existing.accountingEntryId || existing.recognizedEntryId) {
+          await allocateReceivable({
+            clinicId: existing.clinicId ?? req.clinicId ?? null,
+            paymentEntryId: settlement.id,
+            receivableEntryId: existing.accountingEntryId ?? existing.recognizedEntryId!,
+            patientId: existing.patientId!,
+            amount: Number(existing.amount),
+            allocatedAt: paymentDate || todayBRT(),
+          }, tx as any);
+        }
+
+        await tx
+          .update(financialRecordsTable)
+          .set({ settlementEntryId: settlement.id })
+          .where(eq(financialRecordsTable.id, existing.id));
+
+        updated.settlementEntryId = settlement.id;
+      }
+
+      if ((status === "cancelado" || status === "estornado") && existing.status !== status) {
+        const entryId = existing.accountingEntryId ?? existing.recognizedEntryId ?? existing.settlementEntryId;
+        if (entryId) {
+          await postReversal(entryId, {
+            clinicId: existing.clinicId ?? req.clinicId ?? null,
+            entryDate: todayBRT(),
+            description: `Estorno/cancelamento — ${existing.description}`,
+            sourceType: "financial_record",
+            sourceId: existing.id,
+            patientId: existing.patientId,
+            appointmentId: existing.appointmentId,
+            procedureId: existing.procedureId,
+            subscriptionId: existing.subscriptionId,
+            financialRecordId: existing.id,
+          }, tx as any);
+        }
+      }
+
+      return [updated];
+    });
+
+    if (!record) {
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+
+    // Gera session_credit automaticamente quando cobrança de assinatura é paga
+    if (
+      status === "pago" &&
+      existing.status !== "pago" &&
+      existing.subscriptionId != null
+    ) {
+      try {
+        const [sub] = await db
+          .select()
+          .from(patientSubscriptionsTable)
+          .where(eq(patientSubscriptionsTable.id, existing.subscriptionId));
+
+        if (sub && sub.subscriptionType !== "faturaConsolidada" && existing.transactionType !== "faturaConsolidada") {
+          const patientPackage = await resolvePackageForSubscription(sub, req.clinicId);
+          const quantity = monthlyCreditQuantity(patientPackage?.sessionsPerWeek);
+          await db.insert(sessionCreditsTable).values({
+            patientId: sub.patientId,
+            procedureId: sub.procedureId,
+            quantity,
+            usedQuantity: 0,
+            patientPackageId: patientPackage?.id ?? null,
+            clinicId: sub.clinicId ?? req.clinicId ?? null,
+            notes: `Créditos gerados automaticamente — mensalidade #${record.id} paga (${quantity} sessão${quantity === 1 ? "" : "ões"})`,
+          });
+          console.log(
+            `[session-credit] ${quantity} crédito(s) gerado(s) para paciente #${sub.patientId} / procedimento #${sub.procedureId} — registro financeiro #${record.id}`
+          );
+        }
+      } catch (creditErr) {
+        console.error("[session-credit] Erro ao gerar crédito de sessão:", creditErr);
+      }
+    }
+
+    res.json(record);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.patch("/records/:id/estorno", requirePermission("financial.write"), async (req: AuthRequest, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+
+    const cc = clinicCond(req);
+    const whereClause = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
+
+    const [record] = await db
+      .select()
+      .from(financialRecordsTable)
+      .where(whereClause);
+
+    if (!record) {
+      res.status(404).json({ error: "Not Found", message: "Registro financeiro não encontrado" });
+      return;
+    }
+
+    if (record.status === "estornado" || record.status === "cancelado") {
+      res.status(400).json({ error: "Bad Request", message: "Registro já foi estornado ou cancelado" });
+      return;
+    }
+
+    const [updated] = await db.transaction(async (tx) => {
+      const [u] = await tx
+        .update(financialRecordsTable)
+        .set({ status: "estornado" })
+        .where(whereClause)
+        .returning();
+
+      const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
+      if (entryId) {
+        await postReversal(entryId, {
+          clinicId: record.clinicId ?? req.clinicId ?? null,
+          entryDate: todayBRT(),
+          description: `Estorno — ${record.description}`,
+          sourceType: "financial_record",
+          sourceId: record.id,
+          patientId: record.patientId,
+          appointmentId: record.appointmentId,
+          procedureId: record.procedureId,
+          subscriptionId: record.subscriptionId,
+          financialRecordId: record.id,
+          createdBy: req.userId ?? null,
+        }, tx as any);
+      }
+
+      return [u];
+    });
+
+    await logAudit({
+      userId: req.userId,
+      action: "update",
+      entityType: "financial_record",
+      entityId: id,
+      patientId: record.patientId ?? null,
+      summary: `Estorno aplicado: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+router.delete("/records/:id", requirePermission("financial.write"), async (req: AuthRequest, res) => {
+  try {
+    const id = parseInt(req.params.id as string);
+
+    const [record] = await db
+      .select()
+      .from(financialRecordsTable)
+      .where(eq(financialRecordsTable.id, id));
+
+    if (!record) {
+      res.status(404).json({ error: "Not Found", message: "Registro financeiro não encontrado" });
+      return;
+    }
+
+    if (record.type === "despesa") {
+      await db.delete(financialRecordsTable).where(eq(financialRecordsTable.id, id));
+    } else {
+      await db
+        .update(financialRecordsTable)
+        .set({ status: "estornado" })
+        .where(eq(financialRecordsTable.id, id));
+    }
+
+    await logAudit({
+      userId: req.userId,
+      action: "delete",
+      entityType: "financial_record",
+      entityId: id,
+      patientId: record.patientId ?? null,
+      summary: `Registro financeiro estornado/removido: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+export default router;

@@ -397,11 +397,19 @@ Para publicar o projeto no Replit (`.replit.app`):
 │   │       │   │   ├── packages/           # /api/packages
 │   │       │   │   ├── patient-packages/   # /api/patients/:id/packages
 │   │       │   │   └── treatment-plan-procedures/ # /api/treatment-plans/:planId/procedures
-│   │       │   ├── financial/          # /api/financial — módulo com padrão 5 arquivos
-│   │       │   │   ├── financial.routes.ts          # Handlers Express (~1248L — candidato a split futuro)
+│   │       │   ├── financial/          # /api/financial — módulo dividido por subdomínio
+│   │       │   │   ├── financial.routes.ts          # Montador fino (~25L) que monta os 4 sub-routers
 │   │       │   │   ├── financial.service.ts         # updateRecordStatusWithAccounting(), applyEstorno()
 │   │       │   │   ├── financial.repository.ts      # clinicCond(), assertPatientInClinic(), resolvePackageForSubscription()
 │   │       │   │   ├── financial.schemas.ts         # createRecordSchema, updateRecordSchema, etc.
+│   │       │   │   ├── dashboard/           # GET /dashboard — KPIs financeiros
+│   │       │   │   │   └── financial-dashboard.routes.ts
+│   │       │   │   ├── records/             # CRUD /records + status + estorno + delete
+│   │       │   │   │   └── financial-records.routes.ts
+│   │       │   │   ├── payments/            # /patients/:id/{history,summary,payment,credits,subscriptions}
+│   │       │   │   │   └── financial-payments.routes.ts
+│   │       │   │   ├── analytics/           # GET /cost-per-procedure, /dre
+│   │       │   │   │   └── financial-analytics.routes.ts
 │   │       │   │   ├── recurring-expenses/  # /api/recurring-expenses
 │   │       │   │   ├── patient-wallet/      # /api/patients/:id/wallet
 │   │       │   │   ├── subscriptions/       # /api/subscriptions
@@ -425,11 +433,8 @@ Para publicar o projeto no Replit (`.replit.app`):
 │   │       │   ├── policyService.ts
 │   │       │   ├── subscriptionService.ts
 │   │       │   └── financialReportsService.ts
-│   │       └── routes/                 # ← Thin re-exports apontando para modules/
-│   │           ├── index.ts            # Agrega todos os routers (não mudar)
-│   │           ├── health.ts           # GET /api/healthz (implementação local)
-│   │           ├── storage.ts          # /api/storage (implementação local)
-│   │           └── */                  # Todos os outros = 1 linha re-exportando o módulo
+│   │       └── modules/index.ts        # Agrega TODOS os sub-routers em /api (router raiz)
+│   │                                    # (a antiga pasta routes/ foi removida)
 │   │
 │   └── mockup-sandbox/                 # Sandbox de prototipagem de UI (@workspace/mockup-sandbox)
 │       └── .replit-artifact/
