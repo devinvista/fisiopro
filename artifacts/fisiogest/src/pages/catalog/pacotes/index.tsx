@@ -49,93 +49,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/utils/utils";
-
-interface Procedure {
-  id: number;
-  name: string;
-  category: string;
-  modalidade: string;
-  price: string | number;
-  durationMinutes: number;
-  isActive: boolean;
-}
-
-interface PackageItem {
-  id: number;
-  name: string;
-  description?: string | null;
-  procedureId: number;
-  procedureName: string;
-  procedureCategory: string;
-  procedureModalidade: string;
-  procedureDurationMinutes: number;
-  procedurePricePerSession: string | number;
-  packageType: "sessoes" | "mensal" | "faturaConsolidada";
-  totalSessions?: number | null;
-  sessionsPerWeek: number;
-  validityDays?: number | null;
-  price: string | number;
-  monthlyPrice?: string | number | null;
-  billingDay?: number | null;
-  absenceCreditLimit: number;
-  isActive: boolean;
-  createdAt: string;
-}
-
-const CATEGORY_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  "Reabilitação": { label: "Reabilitação", bg: "bg-blue-50",   text: "text-blue-700",  dot: "bg-blue-400" },
-  "Fisioterapia": { label: "Reabilitação", bg: "bg-blue-50",   text: "text-blue-700",  dot: "bg-blue-400" },
-  "fisioterapia": { label: "Reabilitação", bg: "bg-blue-50",   text: "text-blue-700",  dot: "bg-blue-400" },
-  "Estética":     { label: "Estética",     bg: "bg-pink-50",   text: "text-pink-700",  dot: "bg-pink-400" },
-  "estetica":     { label: "Estética",     bg: "bg-pink-50",   text: "text-pink-700",  dot: "bg-pink-400" },
-  "Pilates":      { label: "Pilates",      bg: "bg-purple-50", text: "text-purple-700", dot: "bg-purple-400" },
-  "pilates":      { label: "Pilates",      bg: "bg-purple-50", text: "text-purple-700", dot: "bg-purple-400" },
-};
-
-const MODALIDADE_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  individual: { label: "Individual", icon: User },
-  dupla:      { label: "Dupla",      icon: Users },
-  grupo:      { label: "Grupo",      icon: Users },
-};
-
-function formatCurrency(value: string | number | null | undefined) {
-  if (value === null || value === undefined) return "—";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
-}
-
-function CategoryBadge({ category }: { category: string }) {
-  const cfg = CATEGORY_CONFIG[category] ?? { label: category, bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400" };
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full", cfg.bg, cfg.text)}>
-      <span className={cn("w-1.5 h-1.5 rounded-full", cfg.dot)} />
-      {cfg.label}
-    </span>
-  );
-}
-
-async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
-  const r = await fetch(url, options);
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(body?.message || `Erro ${r.status}`);
-  }
-  if (r.status === 204) return undefined as T;
-  return r.json();
-}
-
-const EMPTY_FORM = {
-  name: "",
-  description: "",
-  procedureId: "",
-  packageType: "sessoes" as "sessoes" | "mensal" | "faturaConsolidada",
-  totalSessions: 8,
-  sessionsPerWeek: 2,
-  validityDays: 30,
-  price: "",
-  monthlyPrice: "",
-  billingDay: 5,
-  absenceCreditLimit: 1,
-};
+import type { Procedure, PackageItem } from "./types";
+import { MODALIDADE_CONFIG, formatCurrency, apiFetch, EMPTY_FORM } from "./helpers";
+import { CategoryBadge } from "./CategoryBadge";
 
 export default function Pacotes() {
   const { toast } = useToast();

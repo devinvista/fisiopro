@@ -5,10 +5,10 @@ import {
   patientPackagesTable, procedureCostsTable,
 } from "@workspace/db";
 import { eq, and, gt, sql, desc } from "drizzle-orm";
-import { todayBRT } from "../../utils/dateUtils.js";
+import { todayBRT } from "../../../utils/dateUtils.js";
 import {
   postPackageCreditUsage, postReceivableRevenue, postWalletUsage,
-} from "../../services/accountingService.js";
+} from "../../../services/accountingService.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,

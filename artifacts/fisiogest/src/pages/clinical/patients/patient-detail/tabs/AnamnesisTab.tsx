@@ -12,12 +12,12 @@ import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateTime } from "../utils/format";
 
-import { AnamnesisForm, AnamTemplate } from "./_anamnesis/types";
-import { TEMPLATE_OPTIONS, emptyForm } from "./_anamnesis/constants";
-import { ExamAttachmentsSection } from "./_anamnesis/ExamAttachmentsSection";
-import { TemplateReabilitacao } from "./_anamnesis/TemplateReabilitacao";
-import { TemplateEsteticaFacial } from "./_anamnesis/TemplateEsteticaFacial";
-import { TemplateEsteticaCorporal } from "./_anamnesis/TemplateEsteticaCorporal";
+import { AnamnesisForm, AnamTemplate } from "./anamnesis/types";
+import { TEMPLATE_OPTIONS, emptyForm } from "./anamnesis/constants";
+import { ExamAttachmentsSection } from "./anamnesis/ExamAttachmentsSection";
+import { TemplateReabilitacao } from "./anamnesis/TemplateReabilitacao";
+import { TemplateEsteticaFacial } from "./anamnesis/TemplateEsteticaFacial";
+import { TemplateEsteticaCorporal } from "./anamnesis/TemplateEsteticaCorporal";
 
 export function AnamnesisTab({ patientId }: { patientId: number }) {
   const { toast } = useToast();

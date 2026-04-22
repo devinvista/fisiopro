@@ -12,10 +12,10 @@ import { apiFetch } from "@/utils/api";
 import { 
   PatientPhoto, 
   groupBySession 
-} from "./_photos/types";
-import { UploadModal } from "./_photos/UploadModal";
-import { CompareModal } from "./_photos/CompareModal";
-import { SessionCard } from "./_photos/SessionCard";
+} from "./photos/types";
+import { UploadModal } from "./photos/UploadModal";
+import { CompareModal } from "./photos/CompareModal";
+import { SessionCard } from "./photos/SessionCard";
 
 export function PhotosTab({ patientId }: { patientId: number }) {
   const { toast } = useToast();

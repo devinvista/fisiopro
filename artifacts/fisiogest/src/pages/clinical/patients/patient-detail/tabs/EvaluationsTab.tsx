@@ -58,7 +58,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
-// ─── Print stack & shared formatters extraídos para _patient-detail/ ──────────
+// ─── Print stack & shared formatters extraídos para patient-detail/ ──────────
 import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "../types";
 import {
   statusConfig,
@@ -78,7 +78,7 @@ import {
   generatePlanHTML,
   generateContractHTML,
 } from "../utils/print-html";
-import { IndicatorsPanel } from "./_anamnesis/IndicatorsPanel";
+import { IndicatorsPanel } from "./anamnesis/IndicatorsPanel";
 
 // ─── Extracted from patients/[id].tsx ──────────────────────────────────────
 

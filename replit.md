@@ -327,15 +327,29 @@ Para publicar o projeto no Replit (`.replit.app`):
 │   │   │   │   ├── dashboard.tsx
 │   │   │   │   ├── agenda.tsx          # Calendário de agendamentos
 │   │   │   │   ├── procedimentos.tsx
-│   │   │   │   ├── pacotes.tsx
+│   │   │   │   ├── catalog/pacotes/    # Pasta de feature (split em arquivos)
+│   │   │   │   │   ├── index.tsx       # Página principal Pacotes
+│   │   │   │   │   ├── types.ts        # Procedure, PackageItem, PackageFormData
+│   │   │   │   │   ├── helpers.ts      # CATEGORY_CONFIG, MODALIDADE_CONFIG, formatCurrency, apiFetch, EMPTY_FORM
+│   │   │   │   │   └── CategoryBadge.tsx
 │   │   │   │   ├── relatorios.tsx
-│   │   │   │   ├── clinicas.tsx
+│   │   │   │   ├── saas/clinicas/      # Pasta de feature (split em arquivos)
+│   │   │   │   │   ├── index.tsx       # Página principal Clinicas
+│   │   │   │   │   ├── types.ts        # Clinic, ClinicUser, *FormData
+│   │   │   │   │   ├── api.ts          # 9 fetch helpers para /api/clinics
+│   │   │   │   │   ├── constants.ts    # EMPTY_FORM, ALL_ROLES, ROLE_COLORS
+│   │   │   │   │   └── components/
+│   │   │   │   │       ├── RoleCheckboxes.tsx
+│   │   │   │   │       └── ClinicForm.tsx  # Formulário compartilhado Create/Edit
 │   │   │   │   ├── configuracoes.tsx   # Clínica + Usuários + Agendas (hash navigation)
 │   │   │   │   ├── agendar.tsx         # Portal público de agendamento
 │   │   │   │   ├── not-found.tsx
-│   │   │   │   ├── patients/
+│   │   │   │   ├── clinical/patients/
 │   │   │   │   │   ├── index.tsx       # Lista de pacientes + busca
-│   │   │   │   │   └── [id].tsx        # Prontuário completo (abas)
+│   │   │   │   │   ├── [id].tsx        # Prontuário completo (abas)
+│   │   │   │   │   ├── patient-detail/ # Tabs e tipos do prontuário (sem prefixo _)
+│   │   │   │   │   │   └── tabs/{anamnesis,evolutions,treatment-plan}/
+│   │   │   │   │   └── photos/         # Componente de fotos do paciente
 │   │   │   │   └── financial/
 │   │   │   │       └── index.tsx       # Lançamentos, custos, DRE, despesas fixas
 │   │   │   │
@@ -385,13 +399,13 @@ Para publicar o projeto no Replit (`.replit.app`):
 │   │       │   │   ├── schedules/          # /api/schedules
 │   │       │   │   ├── blocked-slots/      # /api/blocked-slots
 │   │       │   │   ├── patient-journey/    # /api/patients/:id (mergeParams)
-│   │       │   │   └── patient-photos/     # /api/patients/:id/photos
-│   │       │   ├── appointments/       # /api/appointments — módulo completo (5 arquivos)
-│   │       │   │   ├── appointments.routes.ts
-│   │       │   │   ├── appointments.service.ts
-│   │       │   │   ├── appointments.repository.ts
-│   │       │   │   ├── appointments.schemas.ts
-│   │       │   │   └── appointments.helpers.ts
+│   │       │   │   ├── patient-photos/     # /api/patients/:id/photos
+│   │       │   │   └── appointments/       # /api/appointments — módulo completo (5 arquivos)
+│   │       │   │       ├── appointments.routes.ts
+│   │       │   │       ├── appointments.service.ts
+│   │       │   │       ├── appointments.repository.ts
+│   │       │   │       ├── appointments.schemas.ts
+│   │       │   │       └── appointments.helpers.ts
 │   │       │   ├── catalog/
 │   │       │   │   ├── procedures/         # /api/procedures
 │   │       │   │   ├── packages/           # /api/packages

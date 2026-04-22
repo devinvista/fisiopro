@@ -58,7 +58,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
-// ─── Print stack & shared formatters extraídos para _patient-detail/ ──────────
+// ─── Print stack & shared formatters extraídos para patient-detail/ ──────────
 import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "../types";
 import {
   statusConfig,
@@ -79,7 +79,7 @@ import {
   generateContractHTML,
 } from "../utils/print-html";
 
-import { TreatmentPlanItemsSection } from "./_treatment-plan/TreatmentPlanItemsSection";
+import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSection";
 
 // ─── Treatment Plan Tab ─────────────────────────────────────────────────────────
 

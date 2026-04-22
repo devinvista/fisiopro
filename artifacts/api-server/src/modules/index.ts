@@ -9,7 +9,7 @@ import storageRouter from "./storage/storage.routes.js";
 
 // Clinical domain
 import patientsRouter from "./clinical/patients/patients.routes.js";
-import appointmentsRouter from "./appointments/appointments.routes.js";
+import appointmentsRouter from "./clinical/appointments/appointments.routes.js";
 import schedulesRouter from "./clinical/schedules/schedules.routes.js";
 import medicalRecordsRouter from "./clinical/medical-records/medical-records.routes.js";
 import blockedSlotsRouter from "./clinical/blocked-slots/blocked-slots.routes.js";

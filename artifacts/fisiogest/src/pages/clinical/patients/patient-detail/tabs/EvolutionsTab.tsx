@@ -15,11 +15,11 @@ import { PatientBasic, ClinicInfo } from "../types";
 import { formatDate, formatDateTime } from "../utils/format";
 import { fetchClinicForPrint, printDocument, generateEvolutionsHTML } from "../utils/print-html";
 
-import { EvoForm } from "./_evolutions/EvoForm";
-import { EvolutionCard } from "./_evolutions/EvolutionCard";
-import { PainTrendChart } from "./_evolutions/PainTrendChart";
-import { emptyEvoForm } from "./_evolutions/constants";
-import { EvoFormState } from "./_evolutions/types";
+import { EvoForm } from "./evolutions/EvoForm";
+import { EvolutionCard } from "./evolutions/EvolutionCard";
+import { PainTrendChart } from "./evolutions/PainTrendChart";
+import { emptyEvoForm } from "./evolutions/constants";
+import { EvoFormState } from "./evolutions/types";
 
 export function EvolutionsTab({ patientId, patient }: { patientId: number; patient?: PatientBasic }) {
   const { data: evolutions = [], isLoading } = useListEvolutions(patientId);

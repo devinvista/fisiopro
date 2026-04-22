@@ -58,8 +58,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 
-// ─── Print stack & shared formatters extraídos para _patient-detail/ ──────────
-import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "./_patient-detail/types";
+// ─── Print stack & shared formatters extraídos para patient-detail/ ──────────
+import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "./patient-detail/types";
 import {
   statusConfig,
   formatDate,
@@ -68,7 +68,7 @@ import {
   fmtCur,
   todayBRTDate,
   InfoBlock,
-} from "./_patient-detail/utils/format";
+} from "./patient-detail/utils/format";
 import {
   ExportProntuarioButton,
   fetchClinicForPrint,
@@ -77,19 +77,19 @@ import {
   generateEvolutionsHTML,
   generatePlanHTML,
   generateContractHTML,
-} from "./_patient-detail/utils/print-html";
+} from "./patient-detail/utils/print-html";
 
 // ─── Tabs extraídos ────────────────────────────────────────────────────────
-import { AtestadosTab } from "./_patient-detail/tabs/AtestadosTab";
-import { DischargeTab } from "./_patient-detail/tabs/DischargeTab";
-import { FinancialTab } from "./_patient-detail/tabs/FinancialTab";
-import { HistoryTab } from "./_patient-detail/tabs/HistoryTab";
-import { AuditLogTab } from "./_patient-detail/tabs/AuditLogTab";
-import { JornadaTab } from "./_patient-detail/tabs/JornadaTab";
-import { EvolutionsTab } from "./_patient-detail/tabs/EvolutionsTab";
-import { TreatmentPlanTab } from "./_patient-detail/tabs/TreatmentPlanTab";
-import { EvaluationsTab } from "./_patient-detail/tabs/EvaluationsTab";
-import { AnamnesisTab } from "./_patient-detail/tabs/AnamnesisTab";
+import { AtestadosTab } from "./patient-detail/tabs/AtestadosTab";
+import { DischargeTab } from "./patient-detail/tabs/DischargeTab";
+import { FinancialTab } from "./patient-detail/tabs/FinancialTab";
+import { HistoryTab } from "./patient-detail/tabs/HistoryTab";
+import { AuditLogTab } from "./patient-detail/tabs/AuditLogTab";
+import { JornadaTab } from "./patient-detail/tabs/JornadaTab";
+import { EvolutionsTab } from "./patient-detail/tabs/EvolutionsTab";
+import { TreatmentPlanTab } from "./patient-detail/tabs/TreatmentPlanTab";
+import { EvaluationsTab } from "./patient-detail/tabs/EvaluationsTab";
+import { AnamnesisTab } from "./patient-detail/tabs/AnamnesisTab";
 
 
 interface PatientData {

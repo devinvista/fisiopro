@@ -6,13 +6,13 @@ import {
   financialRecordsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, ne, desc } from "drizzle-orm";
-import { authMiddleware, AuthRequest } from "../../middleware/auth.js";
-import { requirePermission } from "../../middleware/rbac.js";
+import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
+import { requirePermission } from "../../../middleware/rbac.js";
 import { resolvePermissions } from "@workspace/db";
 import type { Role } from "@workspace/db";
-import { todayBRT } from "../../utils/dateUtils.js";
-import { parseIntParam, validateBody } from "../../utils/validate.js";
-import { logAudit } from "../../utils/auditLog.js";
+import { todayBRT } from "../../../utils/dateUtils.js";
+import { parseIntParam, validateBody } from "../../../utils/validate.js";
+import { logAudit } from "../../../utils/auditLog.js";
 import {
   addMinutes, timeToMinutes, minutesToTime, addDaysToDate,
 } from "./appointments.helpers.js";
