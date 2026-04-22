@@ -1,5 +1,5 @@
 import app from "./app";
-import { startScheduler } from "./scheduler.js";
+import { startScheduler } from "./scheduler/index.js";
 import { logger } from "./lib/logger.js";
 
 const PORT = Number(process.env.PORT) || 3000;

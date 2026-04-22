@@ -19,7 +19,7 @@ import {
   useListProcedures,
   useCreateAppointment,
 } from "@workspace/api-client-react";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

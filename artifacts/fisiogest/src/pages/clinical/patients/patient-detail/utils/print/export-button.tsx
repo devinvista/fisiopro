@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { fetchClinicForPrint } from "./_shared";
 import { generateFullProntuarioHTML } from "./full-prontuario";
 

@@ -1,5 +1,5 @@
 import { Building2, ChevronDown, Check, Loader2, LogOut } from "lucide-react";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/utils/api";
 import { Button } from "@/components/ui/button";

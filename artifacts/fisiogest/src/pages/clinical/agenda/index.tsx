@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 
 import { SLOT_HEIGHT } from "./constants";
 import type { BlockedSlot } from "./types";

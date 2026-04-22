@@ -50,7 +50,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, differenceInYears, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { PhotosTab } from "../../photos-tab";

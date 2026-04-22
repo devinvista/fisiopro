@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
 interface FeatureGateProps {

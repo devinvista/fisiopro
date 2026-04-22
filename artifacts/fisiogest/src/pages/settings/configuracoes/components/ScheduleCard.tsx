@@ -6,7 +6,7 @@ import { apiFetch } from "@/utils/api";
 import { maskCpf, maskPhone, maskCnpj, displayCpf } from "@/utils/masks";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useAuth } from "@/utils/use-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
