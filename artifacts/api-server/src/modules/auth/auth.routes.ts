@@ -407,7 +407,7 @@ router.get("/me", authMiddleware, async (req: AuthRequest, res) => {
     const activeClinic = clinics.find((c) => c.id === activeClinicId) ?? null;
 
     // Plano + features da clínica ativa (para feature-gating no frontend)
-    const { getPlanLimits } = await import("../middleware/subscription.js");
+    const { getPlanLimits } = await import("../../middleware/subscription.js");
     const { resolveFeatures } = await import("@workspace/db");
     const subscription = activeClinicId ? await getPlanLimits(activeClinicId) : null;
     const features = subscription
