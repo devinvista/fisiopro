@@ -36,6 +36,27 @@ export function validateBody<T>(
   return result.data;
 }
 
+export function validateQuery<T>(
+  schema: z.ZodType<T>,
+  query: unknown,
+  res: Response
+): T | null {
+  const result = schema.safeParse(query);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => ({
+      field: i.path.join("."),
+      message: i.message,
+    }));
+    res.status(400).json({
+      error: "Bad Request",
+      message: issues[0]?.message ?? "Parâmetros inválidos",
+      issues,
+    });
+    return null;
+  }
+  return result.data;
+}
+
 export const positiveNumber = z
   .union([z.number(), z.string()])
   .transform((v) => Number(v))

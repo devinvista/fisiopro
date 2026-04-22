@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.cache
+coverage
+*.tsbuildinfo
+pnpm-lock.yaml
+lib/api-client-react/src/generated/**
+lib/api-spec/dist/**
+attached_assets
+db/migrations
+.local
+.agents

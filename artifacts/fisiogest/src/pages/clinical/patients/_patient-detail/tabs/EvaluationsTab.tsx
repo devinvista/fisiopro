@@ -78,7 +78,7 @@ import {
   generatePlanHTML,
   generateContractHTML,
 } from "../utils/print-html";
-import { IndicatorsPanel } from "./AnamnesisTab";
+import { IndicatorsPanel } from "./_anamnesis/IndicatorsPanel";
 
 // ─── Extracted from patients/[id].tsx ──────────────────────────────────────
 
