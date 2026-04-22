@@ -53,6 +53,7 @@ import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { useAuth } from "@/hooks/use-auth";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
+import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { PhotosTab } from "./photos-tab";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
@@ -151,18 +152,17 @@ function EditPatientDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Convert empty strings to undefined for optional fields so the generated
-    // API client type (string | undefined) is satisfied. The backend Zod schema
-    // treats undefined as "not provided" and stores null in the database.
-    const payload = {
-      ...form,
-      birthDate: form.birthDate || undefined,
-      email: form.email || undefined,
-      address: form.address || undefined,
-      profession: form.profession || undefined,
-      emergencyContact: form.emergencyContact || undefined,
-      notes: form.notes || undefined,
-    };
+    const parsed = patientFormSchema.safeParse(form);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      toast({
+        variant: "destructive",
+        title: "Dados inválidos",
+        description: first?.message ?? "Verifique os campos do paciente.",
+      });
+      return;
+    }
+    const payload = buildPatientPayload(parsed.data);
     mutation.mutate(
       { id: patient.id, data: payload },
       {

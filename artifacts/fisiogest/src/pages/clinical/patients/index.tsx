@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
+import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { cn } from "@/utils/utils";
 
@@ -483,17 +484,17 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = {
-      name: formData.name,
-      cpf: formData.cpf,
-      phone: formData.phone,
-      email: formData.email || undefined,
-      birthDate: formData.birthDate || undefined,
-      profession: formData.profession || undefined,
-      address: formData.address || undefined,
-      emergencyContact: formData.emergencyContact || undefined,
-      notes: formData.notes || undefined,
-    };
+    const parsed = patientFormSchema.safeParse(formData);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      toast({
+        variant: "destructive",
+        title: "Dados inválidos",
+        description: first?.message ?? "Verifique os campos do paciente.",
+      });
+      return;
+    }
+    const payload = buildPatientPayload(parsed.data);
     mutation.mutate(
       { data: payload },
       {
