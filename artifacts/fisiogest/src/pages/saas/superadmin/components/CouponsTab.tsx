@@ -1,5 +1,11 @@
 import { fetchJSON, ClinicBasic } from "../helpers";
-import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, EMPTY_PLAN, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats, EMPTY_COUPON } from "../constants";
+import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, EMPTY_PLAN, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats } from "../constants";
+import {
+  couponFormSchema,
+  couponFormDefaults,
+  buildCouponPayload,
+  type CouponFormValues,
+} from "@/schemas/coupon.schema";
 import { Plan, PlanStats, SubRow } from "../types";
 import { fmtDate, fmtCurrency, limitLabel } from "../utils";
 import { ClinicsTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, PlansTab, RegisterPaymentDialog, StatusBadge, SubscriptionsTab } from "./";
@@ -120,7 +126,7 @@ export function CouponsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CouponRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CouponRow | null>(null);
-  const [form, setForm] = useState({ ...EMPTY_COUPON });
+  const [form, setForm] = useState<CouponFormValues>({ ...couponFormDefaults });
   const [copying, setCopying] = useState<number | null>(null);
   const [clinicComboOpen, setClinicComboOpen] = useState(false);
 
@@ -154,7 +160,7 @@ export function CouponsTab() {
 
   function openCreate() {
     setEditTarget(null);
-    setForm({ ...EMPTY_COUPON });
+    setForm({ ...couponFormDefaults });
     setDialogOpen(true);
   }
 
@@ -181,22 +187,12 @@ export function CouponsTab() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        code: form.code.toUpperCase().trim(),
-        description: form.description,
-        type: form.type,
-        discountType: form.discountType,
-        discountValue: Number(form.discountValue),
-        maxUses: form.maxUses ? Number(form.maxUses) : null,
-        expiresAt: form.expiresAt || null,
-        isActive: form.isActive,
-        minPlanAmount: form.minPlanAmount ? Number(form.minPlanAmount) : null,
-        applicablePlanNames: form.applicablePlanNames.length > 0 ? form.applicablePlanNames : null,
-        referrerClinicId: form.referrerClinicId ? Number(form.referrerClinicId) : null,
-        referrerBenefitType: form.referrerBenefitType || null,
-        referrerBenefitValue: form.referrerBenefitValue ? Number(form.referrerBenefitValue) : null,
-        notes: form.notes || null,
-      };
+      const parsed = couponFormSchema.safeParse(form);
+      if (!parsed.success) {
+        const first = parsed.error.issues[0];
+        throw new Error(first?.message ?? "Dados do cupom inválidos");
+      }
+      const payload = buildCouponPayload(parsed.data);
       const url = editTarget ? api(`/coupon-codes/${editTarget.id}`) : api("/coupon-codes");
       const method = editTarget ? "PUT" : "POST";
       const res = await apiFetch(url, {
