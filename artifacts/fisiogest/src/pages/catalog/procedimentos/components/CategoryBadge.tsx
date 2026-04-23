@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/lib/toast";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 export function CategoryBadge({ category }: { category: string }) {
   const cfg = CATEGORY_CONFIG[category] ?? { label: category, bg: "bg-slate-100", text: "text-slate-600", dot: "bg-slate-400" };

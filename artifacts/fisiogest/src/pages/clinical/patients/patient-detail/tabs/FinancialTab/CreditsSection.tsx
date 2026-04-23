@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { apiFetchJson } from "@/utils/api";
+import { apiFetchJson } from "@/lib/api";
 
 export function CreditsSection({ patientId }: { patientId: number }) {
   const { data, isLoading } = useQuery<{ credits: any[]; totalAvailable: number }>({

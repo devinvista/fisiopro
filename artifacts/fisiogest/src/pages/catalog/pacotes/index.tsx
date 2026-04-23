@@ -12,9 +12,9 @@ import {
   Plus, Search, Package, Layers, RefreshCw, FileText,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import type { Procedure, PackageItem } from "./types";
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 import {
   packageFormSchema,
   packageFormDefaults,

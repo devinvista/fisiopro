@@ -12,7 +12,7 @@ import { PermissionRoute } from "@/components/guards/permission-route";
 import { SuperAdminRoute } from "@/components/guards/superadmin-route";
 import { queryClient } from "@/lib/query-client";
 import { setUnauthorizedHandler } from "@workspace/api-client-react";
-import { setUnauthorizedHandler as setApiUnauthorizedHandler } from "@/utils/api";
+import { setUnauthorizedHandler as setApiUnauthorizedHandler } from "@/lib/api";
 
 const LandingPage = lazy(() => import("./pages/landing"));
 const Login = lazy(() => import("./pages/auth/login"));

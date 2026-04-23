@@ -1,4 +1,4 @@
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import { CATEGORY_CONFIG } from "./helpers";
 
 export function CategoryBadge({ category }: { category: string }) {

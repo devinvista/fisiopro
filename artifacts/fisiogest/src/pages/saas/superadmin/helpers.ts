@@ -1,4 +1,4 @@
-import { apiFetchJson } from "@/utils/api";
+import { apiFetchJson } from "@/lib/api";
 
 /** Alias para chamadas GET autenticadas — mantido para compat com os componentes existentes. */
 export const fetchJSON = apiFetchJson;

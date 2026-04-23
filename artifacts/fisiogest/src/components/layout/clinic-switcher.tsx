@@ -1,7 +1,7 @@
 import { Building2, ChevronDown, Check, Loader2, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

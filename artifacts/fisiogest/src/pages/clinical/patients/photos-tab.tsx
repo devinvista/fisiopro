@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/toast";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { 
   PatientPhoto, 
   groupBySession 

@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/lib/toast";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 export function ListView({ procedures, onEdit, onDelete, isAdmin, onToggleActive, onConfigCosts }: {
   procedures: Procedure[];

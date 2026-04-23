@@ -1,5 +1,5 @@
 import { LayoutDashboard, Package, CreditCard, Building2, Receipt, Tag, Zap, Sparkles, Crown } from "lucide-react";
-import { API_BASE } from "@/utils/api";
+import { API_BASE } from "@/lib/api";
 
 export const BASE = import.meta.env.BASE_URL ?? "/";
 export { API_BASE };

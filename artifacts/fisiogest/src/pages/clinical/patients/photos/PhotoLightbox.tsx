@@ -42,7 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/lib/toast";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { 
   PatientPhoto, 
   ViewType, 

@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch, apiFetchJson } from "@/utils/api";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,

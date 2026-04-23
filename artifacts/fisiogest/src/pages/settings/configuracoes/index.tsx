@@ -3,7 +3,7 @@ import { BASE, API_BASE, ROLE_COLORS, DAYS_OF_WEEK, PRESET_COLORS, DEFAULT_SCHED
 import { Clinic, SystemUser, Professional, Schedule, ScheduleFormState, SectionConfig } from "./types";
 import { AgendasSection, ClinicaSection, ScheduleCard, UsuariosSection } from "./components";
 import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { maskCpf, maskPhone, maskCnpj, displayCpf } from "@/utils/masks";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";

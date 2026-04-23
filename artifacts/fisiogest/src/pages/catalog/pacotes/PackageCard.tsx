@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Pencil, Trash2, User, CalendarDays, Clock, Layers, AlertCircle, FileText,
 } from "lucide-react";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import { CategoryBadge } from "./CategoryBadge";
 import { MODALIDADE_CONFIG, formatCurrency } from "./helpers";
 import type { PackageItem } from "./types";

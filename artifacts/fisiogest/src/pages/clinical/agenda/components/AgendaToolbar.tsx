@@ -9,7 +9,7 @@ import {
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import type { ScheduleOption, ViewMode } from "../types";
 
 interface ProfessionalOption {

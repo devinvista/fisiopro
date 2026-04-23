@@ -1,4 +1,4 @@
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 import { API_BASE } from "./constants";
 import type { Clinic, SystemUser } from "./types";
 

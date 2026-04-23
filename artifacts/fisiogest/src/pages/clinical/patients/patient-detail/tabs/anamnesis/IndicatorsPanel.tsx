@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 
 type BodyMeasurementPoint = {
   id: number; date: string;

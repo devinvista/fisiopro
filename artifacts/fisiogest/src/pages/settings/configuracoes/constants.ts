@@ -1,6 +1,6 @@
 import type { SectionConfig } from "./types";
 import { Building2, UserCog, CalendarDays, Sparkles } from "lucide-react";
-import { API_BASE } from "@/utils/api";
+import { API_BASE } from "@/lib/api";
 import type { Role } from "@/utils/permissions";
 import type { ScheduleFormState } from "./types";
 

@@ -4,7 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 interface DatePickerPTBRProps {
   value: string;       // ISO yyyy-MM-dd

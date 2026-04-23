@@ -19,7 +19,7 @@ import {
 
 import type { PkgOption, PlanProcedureItem } from "../../types";
 import { fmtCur } from "../../utils/format";
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 
 export function TreatmentPlanItemsSection({
   planId,

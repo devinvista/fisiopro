@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { 
   ViewType, 
   AppointmentOption, 

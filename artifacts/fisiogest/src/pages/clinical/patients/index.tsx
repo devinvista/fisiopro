@@ -30,7 +30,7 @@ import { useToast } from "@/lib/toast";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 type ViewMode = "cards" | "list";
 type SortField = "name" | "birthDate" | "phone" | "email" | "profession";

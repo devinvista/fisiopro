@@ -87,7 +87,7 @@ import {
 import { useToast } from "@/lib/toast";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 

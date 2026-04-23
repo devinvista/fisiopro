@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Printer, TrendingUp } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { apiFetchJson } from "@/utils/api";
+import { apiFetchJson } from "@/lib/api";
 
 import { PatientBasic, ClinicInfo } from "../types";
 import { formatDate, formatDateTime } from "../utils/format";

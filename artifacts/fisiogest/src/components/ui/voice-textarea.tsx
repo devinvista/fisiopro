@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Mic, Square } from "lucide-react";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 interface ISpeechRecognitionErrorEvent {
   readonly error: string;

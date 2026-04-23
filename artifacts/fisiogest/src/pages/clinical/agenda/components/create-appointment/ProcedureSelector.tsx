@@ -1,6 +1,6 @@
 import { CheckCircle, ClipboardList, Clock, History, Sparkles, Stethoscope, Users } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import type { PlanProcedureForAgenda } from "../../types";
 
 interface ProcLite {

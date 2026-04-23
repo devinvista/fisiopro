@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useListAppointments } from "@workspace/api-client-react";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import type { BlockedSlot, ScheduleOption } from "../types";
 
 interface ProfessionalOption {

@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Repeat } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import { DAYS_OF_WEEK } from "../../constants";
 
 export function RecurrenceSection({

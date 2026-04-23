@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Stethoscope, Loader2, ArrowLeft, Building2, UserRound, Check, Package, ChevronRight, Tag, CircleCheckBig, XCircle } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { maskCpf } from "@/utils/masks";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 type ProfileType = "clinica" | "autonomo";
 

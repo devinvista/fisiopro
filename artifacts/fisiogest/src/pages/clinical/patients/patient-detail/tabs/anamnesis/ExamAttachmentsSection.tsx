@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { useToast } from "@/lib/toast";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { formatDateTime } from "../../utils/format";
 import { ExamAttachment } from "./types";
 import { ACCEPTED_MIME } from "./constants";

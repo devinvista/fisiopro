@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Loader2, Pencil, Repeat } from "lucide-react";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";

@@ -1,5 +1,5 @@
 import type { ClinicInfo } from "../../types";
-import { apiFetchJson } from "@/utils/api";
+import { apiFetchJson } from "@/lib/api";
 
 export function escapeHtml(s: string) {
   return String(s ?? "")

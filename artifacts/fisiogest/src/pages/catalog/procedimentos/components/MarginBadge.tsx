@@ -53,7 +53,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/lib/toast";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 
 export function MarginBadge({ margin }: { margin: number }) {
   const color = margin >= 60 ? "text-emerald-600" : margin >= 35 ? "text-amber-600" : "text-red-500";

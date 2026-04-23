@@ -1,5 +1,5 @@
-import { API_BASE, apiFetchJson, apiSendJson } from "@/utils/api";
-import type { Clinic, ClinicUser } from "./types";
+import { API_BASE, apiFetchJson, apiSendJson } from "@/lib/api";
+import type { Clinic, ClinicUser } from "@/pages/saas/clinicas/types";
 
 const url = (path: string) => `${API_BASE}/api${path}`;
 

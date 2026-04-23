@@ -1,7 +1,7 @@
 import { format, isToday, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Ban, Pencil, Loader2, CheckCircle, Globe, Calendar as CalIcon } from "lucide-react";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import type { Appointment } from "@workspace/api-client-react";
 import { CurrentTimeLine } from "./CurrentTimeLine";
 import { STATUS_CONFIG, SLOT_HEIGHT } from "../constants";

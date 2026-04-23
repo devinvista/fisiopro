@@ -13,7 +13,7 @@ import {
   Users,
   ClipboardList,
 } from "lucide-react";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import {
   useListPatients,
   useListProcedures,
@@ -32,7 +32,7 @@ import {
   buildAppointmentPayload,
   buildRecurringAppointmentPayload,
 } from "@/schemas/appointment.schema";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import type { TreatmentPlan, PlanProcedureForAgenda } from "../types";
 import { PatientStep } from "./create-appointment/PatientStep";
 import { ProcedureSelector } from "./create-appointment/ProcedureSelector";

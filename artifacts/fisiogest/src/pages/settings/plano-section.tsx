@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { apiFetch } from "@/utils/api";
+import { apiFetch } from "@/lib/api";
 import type { PlanTier } from "@/utils/plan-features";
 
 const BASE = import.meta.env.BASE_URL ?? "/";

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 import { formatCurrency } from "../../utils/format";
 import { PAYMENT_METHODS, WALLET_TX_LABELS } from "./constants";
 

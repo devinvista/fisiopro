@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
 import { useAuth } from "@/hooks/use-auth";
-import { apiFetchJson, apiSendJson } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/lib/api";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { formatCurrency } from "../../utils/format";
 import { subscriptionStatusStyle } from "../HistoryTab";

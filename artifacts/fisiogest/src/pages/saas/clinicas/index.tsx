@@ -63,7 +63,7 @@ import {
   updateUserInClinic,
   removeUserFromClinic,
   impersonateClinic,
-} from "./api";
+} from "@/lib/clinicas-api";
 import { RoleCheckboxes } from "./components/RoleCheckboxes";
 import { ClinicForm } from "./components/ClinicForm";
 

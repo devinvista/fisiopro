@@ -11,7 +11,7 @@ import {
 import {
   Layers, RefreshCw, FileText, User, Info,
 } from "lucide-react";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import { MODALIDADE_CONFIG, formatCurrency } from "./helpers";
 import type { Procedure, PackageFormData, PackageItem } from "./types";
 

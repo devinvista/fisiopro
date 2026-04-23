@@ -26,7 +26,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/utils";
 import {
   procedureFormSchema,
   procedureFormDefaults,
