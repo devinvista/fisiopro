@@ -8,6 +8,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requireSuperAdmin, requirePermission } from "../../../middleware/rbac.js";
 import bcrypt from "bcryptjs";
 import { generateToken } from "../../../middleware/auth.js";
+import { setAuthCookie } from "../../../middleware/cookies.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
 
 const router = Router();
@@ -372,6 +373,7 @@ router.post("/:id/impersonate", requireSuperAdmin(), async (req: AuthRequest, re
       return;
     }
     const token = generateToken(req.userId!, ["admin"], clinicId, true);
+    setAuthCookie(res, token);
     res.json({ token, clinicId, clinicName: clinic.name });
   } catch (err) {
     console.error(err);

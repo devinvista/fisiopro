@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { logger } from "../lib/logger.js";
 import { captureException } from "../lib/sentry.js";
+import { tryAcquireAdvisoryLock } from "./lock.js";
 
 export const TZ = "America/Sao_Paulo";
 
@@ -20,6 +21,18 @@ export function registerJob({ name, cronExpr, run, silentSuccess }: JobOpts): vo
     cronExpr,
     async () => {
       const startedAt = Date.now();
+      const lock = await tryAcquireAdvisoryLock(name).catch((err) => {
+        logger.error({ job: name, err }, `[scheduler] falha ao adquirir lock de ${name}`);
+        return null;
+      });
+
+      if (!lock) return;
+
+      if (!lock.acquired) {
+        logger.debug({ job: name }, `[scheduler] ${name} já em execução em outra réplica — pulando`);
+        return;
+      }
+
       logger.debug({ job: name }, `[scheduler] iniciando ${name}`);
       try {
         const result = (await run()) as Record<string, unknown>;
@@ -37,6 +50,10 @@ export function registerJob({ name, cronExpr, run, silentSuccess }: JobOpts): vo
         const durationMs = Date.now() - startedAt;
         logger.error({ job: name, durationMs, err }, `[scheduler] falha crítica em ${name}`);
         captureException(err, { job: name, durationMs });
+      } finally {
+        await lock.release().catch((err) => {
+          logger.error({ job: name, err }, `[scheduler] falha ao liberar lock de ${name}`);
+        });
       }
     },
     { timezone: TZ },

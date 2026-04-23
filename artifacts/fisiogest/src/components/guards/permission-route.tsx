@@ -9,14 +9,14 @@ interface PermissionRouteProps {
 }
 
 export function PermissionRoute({ component: Component, permission }: PermissionRouteProps) {
-  const { token, isLoading, hasPermission } = useAuth();
+  const { isAuthenticated, isLoading, hasPermission } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !token) {
+    if (!isLoading && !isAuthenticated) {
       setLocation("/login");
     }
-  }, [token, isLoading, setLocation]);
+  }, [isAuthenticated, isLoading, setLocation]);
 
   if (isLoading) {
     return (
@@ -25,7 +25,7 @@ export function PermissionRoute({ component: Component, permission }: Permission
       </div>
     );
   }
-  if (!token) return null;
+  if (!isAuthenticated) return null;
 
   if (!hasPermission(permission)) {
     return (

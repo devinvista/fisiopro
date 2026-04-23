@@ -25,6 +25,7 @@ import {
   effectiveBillingDay,
   isWithinBillingWindow,
 } from "./billing-date-utils.js";
+import { withSubscriptionBillingLock } from "./billing-lock.js";
 
 export interface ConsolidatedBillingResult {
   processed: number;
@@ -192,8 +193,25 @@ export async function runConsolidatedBilling(options: {
         continue;
       }
 
-      await db.transaction(async (tx) => {
-        // Cria a fatura consolidada
+      const txOutcome = await withSubscriptionBillingLock(sub.id, year, month, async (tx) => {
+        // Re-check dentro do lock: previne race entre réplicas concorrentes.
+        const recheck = await tx
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.subscriptionId, sub.id),
+              eq(financialRecordsTable.transactionType, "faturaConsolidada"),
+              sql`${financialRecordsTable.createdAt} >= ${monthStart}::date`,
+              sql`${financialRecordsTable.createdAt} < (${monthEnd}::date + interval '1 day')`,
+            ),
+          )
+          .limit(1);
+
+        if (recheck.length > 0) {
+          return { duplicate: true as const, existingId: recheck[0].id };
+        }
+
         const [invoiceRecord] = await tx
           .insert(financialRecordsTable)
           .values({
@@ -211,7 +229,6 @@ export async function runConsolidatedBilling(options: {
           })
           .returning();
 
-        // Cancela os lançamentos individuais (já consolidados na fatura)
         await tx
           .update(financialRecordsTable)
           .set({ status: "cancelado" })
@@ -223,26 +240,42 @@ export async function runConsolidatedBilling(options: {
             )
           );
 
-        // Atualiza nextBillingDate
         const nextBillingDate = calcNextBillingDate(sub.billingDay, year, month);
         await tx
           .update(patientSubscriptionsTable)
           .set({ nextBillingDate })
           .where(eq(patientSubscriptionsTable.id, sub.id));
 
-        result.generated++;
+        return { duplicate: false as const, invoiceId: invoiceRecord.id, nextBillingDate };
+      });
+
+      if (txOutcome.duplicate) {
+        result.skipped++;
         result.details.push({
           subscriptionId: sub.id,
           patientName,
           procedureName,
-          totalAmount,
-          sessionCount,
-          action: "generated",
-          reason: `Fatura #${invoiceRecord.id} criada — ${sessionCount} sessões, R$ ${totalAmount.toFixed(2)} — próxima: ${nextBillingDate}`,
+          totalAmount: 0,
+          sessionCount: 0,
+          action: "skipped_already_billed",
+          reason: `Race detectado — fatura #${txOutcome.existingId} já existia para ${monthStr}/${year}`,
         });
+        console.log(`[consolidated-billing] Sub #${sub.id} (${patientName}) — race no lock, fatura #${txOutcome.existingId} já existia`);
+        continue;
+      }
 
-        console.log(`[consolidated-billing] Sub #${sub.id} (${patientName}) — fatura #${invoiceRecord.id} gerada: R$ ${totalAmount.toFixed(2)} (${sessionCount} sessões)`);
+      result.generated++;
+      result.details.push({
+        subscriptionId: sub.id,
+        patientName,
+        procedureName,
+        totalAmount,
+        sessionCount,
+        action: "generated",
+        reason: `Fatura #${txOutcome.invoiceId} criada — ${sessionCount} sessões, R$ ${totalAmount.toFixed(2)} — próxima: ${txOutcome.nextBillingDate}`,
       });
+
+      console.log(`[consolidated-billing] Sub #${sub.id} (${patientName}) — fatura #${txOutcome.invoiceId} gerada: R$ ${totalAmount.toFixed(2)} (${sessionCount} sessões)`);
 
     } catch (err) {
       result.errors++;

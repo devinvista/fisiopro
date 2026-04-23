@@ -298,11 +298,20 @@ export async function customFetch<T = unknown>(
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
-  // Inject JWT auth token from localStorage if present and not already set
-  if (typeof localStorage !== "undefined" && !headers.has("authorization")) {
-    const token = localStorage.getItem("fisiogest_token");
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
+  // CSRF double-submit: lê o cookie `fisiogest_csrf` (não httpOnly) e ecoa
+  // no header em métodos mutadores. JWT vai por cookie httpOnly automaticamente.
+  if (
+    typeof document !== "undefined" &&
+    method !== "GET" && method !== "HEAD" && method !== "OPTIONS" &&
+    !headers.has("x-csrf-token")
+  ) {
+    const target = "fisiogest_csrf=";
+    for (const part of document.cookie.split(";")) {
+      const trimmed = part.trim();
+      if (trimmed.startsWith(target)) {
+        headers.set("x-csrf-token", decodeURIComponent(trimmed.substring(target.length)));
+        break;
+      }
     }
   }
 
@@ -320,7 +329,12 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, {
+    ...init,
+    method,
+    headers,
+    credentials: init.credentials ?? "include",
+  });
 
   if (!response.ok) {
     if (response.status === 401 && _onUnauthorized) {

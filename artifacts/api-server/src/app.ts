@@ -1,11 +1,16 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
+import helmet from "helmet";
+import compression from "compression";
+import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./modules/index.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { requestContextMiddleware } from "./middleware/requestContext.js";
+import { csrfMiddleware } from "./middleware/csrf.js";
+import { PgRateLimitStore, startRateLimitCleanup } from "./middleware/rateLimitStore.js";
 import { logger } from "./lib/logger.js";
 import { initSentry, Sentry } from "./lib/sentry.js";
 
@@ -19,6 +24,33 @@ app.set("trust proxy", 1);
 if (process.env.SENTRY_DSN_BACKEND) {
   Sentry.setupExpressErrorHandler(app);
 }
+
+// Helmet — headers de segurança (CSP, HSTS em prod, etc.)
+const isProd = process.env.NODE_ENV === "production";
+app.use(
+  helmet({
+    contentSecurityPolicy: isProd
+      ? {
+          useDefaults: true,
+          directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'"],
+            "style-src": ["'self'", "'unsafe-inline'"],
+            "img-src": ["'self'", "data:", "https://res.cloudinary.com", "https://*.cloudinary.com"],
+            "font-src": ["'self'", "data:"],
+            "connect-src": ["'self'", "https://*.sentry.io", "https://res.cloudinary.com"],
+            "frame-ancestors": ["'none'"],
+            "object-src": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"],
+          },
+        }
+      : false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+app.use(compression());
 
 app.use(requestContextMiddleware);
 app.use(
@@ -42,44 +74,30 @@ const allowedOrigins = process.env.CORS_ORIGIN
   : true;
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too Many Requests", message: "Muitas requisições. Tente novamente em alguns minutos." },
-  skip: (req) => req.path === "/healthz",
-});
+// CSRF — depois do cookieParser e do parser do body, antes das rotas /api
+app.use(csrfMiddleware);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too Many Requests", message: "Muitas tentativas de login. Tente novamente em 15 minutos." },
-});
+const buildLimiter = (prefix: string, max: number, windowMs = 15 * 60 * 1000) =>
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new PgRateLimitStore(prefix),
+    message: { error: "Too Many Requests", message: "Muitas requisições. Tente novamente em alguns minutos." },
+    skip: (req) => req.path === "/healthz",
+  });
 
-// Rotas públicas (sem auth) — booking, lookup de paciente, planos públicos.
-// Limite mais apertado para evitar abuso/scraping/enumeração.
-const publicLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too Many Requests", message: "Muitas requisições. Tente novamente em alguns minutos." },
-});
+const globalLimiter = buildLimiter("global", 500);
+const authLimiter = buildLimiter("auth", 20);
+const publicLimiter = buildLimiter("public", 60);
+const uploadsLimiter = buildLimiter("uploads", 100);
 
-// Upload de arquivos (autenticado, mas custoso) — limite por IP.
-const uploadsLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too Many Requests", message: "Muitos uploads. Tente novamente em alguns minutos." },
-});
+startRateLimitCleanup();
 
 app.use("/api", globalLimiter);
 app.use("/api/auth/login", authLimiter);

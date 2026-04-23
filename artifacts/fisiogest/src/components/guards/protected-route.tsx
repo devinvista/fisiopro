@@ -7,14 +7,14 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ component: Component }: ProtectedRouteProps) {
-  const { token, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !token) {
+    if (!isLoading && !isAuthenticated) {
       setLocation("/login");
     }
-  }, [token, isLoading, setLocation]);
+  }, [isAuthenticated, isLoading, setLocation]);
 
   if (isLoading) {
     return (
@@ -23,7 +23,7 @@ export function ProtectedRoute({ component: Component }: ProtectedRouteProps) {
       </div>
     );
   }
-  if (!token) return null;
+  if (!isAuthenticated) return null;
 
   return <Component />;
 }

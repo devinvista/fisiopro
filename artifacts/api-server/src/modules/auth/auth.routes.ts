@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
+import { setAuthCookie, clearAuthCookie, clearCsrfCookie } from "../../middleware/cookies.js";
 import { validateBody } from "../../utils/validate.js";
 import { AuthError, authService } from "./auth.service.js";
 import { loginSchema, registerSchema, switchClinicSchema } from "./auth.schemas.js";
@@ -26,7 +27,9 @@ router.post(
   handle(async (req, res) => {
     const body = validateBody(registerSchema, req.body, res);
     if (!body) return;
-    res.status(201).json(await authService.register(body));
+    const result = await authService.register(body);
+    setAuthCookie(res, result.token);
+    res.status(201).json(result);
   }),
 );
 
@@ -35,7 +38,18 @@ router.post(
   handle(async (req, res) => {
     const body = validateBody(loginSchema, req.body, res);
     if (!body) return;
-    res.json(await authService.login(body));
+    const result = await authService.login(body);
+    setAuthCookie(res, result.token);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/logout",
+  handle(async (_req, res) => {
+    clearAuthCookie(res);
+    clearCsrfCookie(res);
+    res.json({ ok: true });
   }),
 );
 
@@ -46,14 +60,14 @@ router.post(
     const authReq = req as AuthRequest;
     const body = validateBody(switchClinicSchema, req.body, res);
     if (!body) return;
-    res.json(
-      await authService.switchClinic({
-        userId: authReq.userId!,
-        userName: authReq.userName,
-        isSuperAdmin: !!authReq.isSuperAdmin,
-        clinicId: body.clinicId ?? null,
-      }),
-    );
+    const result = await authService.switchClinic({
+      userId: authReq.userId!,
+      userName: authReq.userName,
+      isSuperAdmin: !!authReq.isSuperAdmin,
+      clinicId: body.clinicId ?? null,
+    });
+    setAuthCookie(res, result.token);
+    res.json(result);
   }),
 );
 

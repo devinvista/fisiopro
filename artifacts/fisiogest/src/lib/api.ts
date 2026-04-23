@@ -10,28 +10,46 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
   _onUnauthorized = handler;
 }
 
-const TOKEN_KEY = "fisiogest_token";
+const CSRF_COOKIE = "fisiogest_csrf";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 /** Base path para chamadas REST. Ex.: "" em dev/raiz ou "/fisiogest" em deploy. */
 export const API_BASE = BASE.replace(/\/[^/]+$/, "");
 
+/**
+ * Compatibilidade: alguns componentes legados ainda chamam `getAuthToken()`.
+ * Com o JWT em cookie httpOnly, o token não é mais acessível pelo JS — sempre
+ * retornamos `null`. Esses chamadores devem migrar para `apiFetch*`.
+ */
 export function getAuthToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-/** Wrapper de baixo nível: anexa o token de auth e retorna a Response crua. */
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const token = getAuthToken();
-  const headers = new Headers(init?.headers);
-  if (token && !headers.has("authorization")) {
-    headers.set("authorization", `Bearer ${token}`);
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const target = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(target)) {
+      return decodeURIComponent(trimmed.substring(target.length));
+    }
   }
-  return fetch(input, { ...init, headers });
+  return null;
+}
+
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/** Wrapper de baixo nível: anexa CSRF e usa cookies httpOnly de auth. */
+export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (MUTATING_METHODS.has(method)) {
+    const csrf = readCookie(CSRF_COOKIE);
+    if (csrf && !headers.has("x-csrf-token")) {
+      headers.set("x-csrf-token", csrf);
+    }
+  }
+  return fetch(input, { ...init, headers, credentials: init?.credentials ?? "include" });
 }
 
 async function extractError(res: Response): Promise<string> {

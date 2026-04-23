@@ -11,9 +11,8 @@ export function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+import { apiFetch } from "@/lib/api";
+
 export function authFetch(url: string): Promise<Response> {
-  const token = typeof localStorage !== "undefined" ? localStorage.getItem("fisiogest_token") : null;
-  return fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  return apiFetch(url);
 }

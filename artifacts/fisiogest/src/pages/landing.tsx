@@ -38,7 +38,7 @@ function BelowFoldFallback() {
 }
 
 export default function LandingPage() {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -46,10 +46,10 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       setLocation("/dashboard");
     }
-  }, [token, setLocation]);
+  }, [isAuthenticated, setLocation]);
 
   const scrollTo = (href: string) => {
     const el = document.querySelector(href);

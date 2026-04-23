@@ -28,6 +28,7 @@ import {
   effectiveBillingDay,
   isWithinBillingWindow,
 } from "./billing-date-utils.js";
+import { withSubscriptionBillingLock } from "./billing-lock.js";
 
 export interface BillingResult {
   processed: number;
@@ -161,41 +162,76 @@ export async function runBilling(options: {
         continue;
       }
 
-      const [record] = await db
-        .insert(financialRecordsTable)
-        .values({
-          type: "receita",
-          amount: sub.monthlyAmount,
-          description: `Mensalidade ${procedureName} — ${patientName}`,
-          category: row.procedureCategory ?? "Mensalidade",
-          patientId: sub.patientId,
-          procedureId: sub.procedureId,
-          clinicId: sub.clinicId ?? null,
-          transactionType: "creditoAReceber",
-          status: "pendente",
-          dueDate: todayStr,
-          subscriptionId: sub.id,
-        })
-        .returning();
+      const txOutcome = await withSubscriptionBillingLock(sub.id, year, month, async (tx) => {
+        // Re-check dentro do lock: previne race entre réplicas/cron concorrentes.
+        const recheck = await tx
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.subscriptionId, sub.id),
+              sql`${financialRecordsTable.createdAt} >= ${monthStart}::date`,
+              sql`${financialRecordsTable.createdAt} < (${monthEnd}::date + interval '1 day')`,
+            ),
+          )
+          .limit(1);
 
-      const nextBillingDate = calcNextBillingDate(sub.billingDay, year, month);
-      await db
-        .update(patientSubscriptionsTable)
-        .set({ nextBillingDate })
-        .where(eq(patientSubscriptionsTable.id, sub.id));
+        if (recheck.length > 0) {
+          return { duplicate: true as const, existingId: recheck[0].id };
+        }
+
+        const [record] = await tx
+          .insert(financialRecordsTable)
+          .values({
+            type: "receita",
+            amount: sub.monthlyAmount,
+            description: `Mensalidade ${procedureName} — ${patientName}`,
+            category: row.procedureCategory ?? "Mensalidade",
+            patientId: sub.patientId,
+            procedureId: sub.procedureId,
+            clinicId: sub.clinicId ?? null,
+            transactionType: "creditoAReceber",
+            status: "pendente",
+            dueDate: todayStr,
+            subscriptionId: sub.id,
+          })
+          .returning();
+
+        const nextBillingDate = calcNextBillingDate(sub.billingDay, year, month);
+        await tx
+          .update(patientSubscriptionsTable)
+          .set({ nextBillingDate })
+          .where(eq(patientSubscriptionsTable.id, sub.id));
+
+        return { duplicate: false as const, recordId: record.id, nextBillingDate };
+      });
+
+      if (txOutcome.duplicate) {
+        result.skipped++;
+        result.details.push({
+          subscriptionId: sub.id,
+          patientName,
+          procedureName,
+          amount: Number(sub.monthlyAmount),
+          action: "skipped_already_billed",
+          reason: `Race detectado — registro #${txOutcome.existingId} já existia para ${monthStr}/${year}`,
+        });
+        console.log(`[billing] Sub #${sub.id} (${patientName}) — race no lock, registro #${txOutcome.existingId} já existia`);
+        continue;
+      }
 
       result.generated++;
-      result.recordIds.push(record.id);
+      result.recordIds.push(txOutcome.recordId);
       result.details.push({
         subscriptionId: sub.id,
         patientName,
         procedureName,
         amount: Number(sub.monthlyAmount),
         action: "generated",
-        reason: `Registro #${record.id} criado — próxima cobrança: ${nextBillingDate}`,
+        reason: `Registro #${txOutcome.recordId} criado — próxima cobrança: ${txOutcome.nextBillingDate}`,
       });
 
-      console.log(`[billing] Sub #${sub.id} (${patientName}) — cobrança R$ ${Number(sub.monthlyAmount).toFixed(2)} gerada → registro #${record.id} | próxima: ${nextBillingDate}`);
+      console.log(`[billing] Sub #${sub.id} (${patientName}) — cobrança R$ ${Number(sub.monthlyAmount).toFixed(2)} gerada → registro #${txOutcome.recordId} | próxima: ${txOutcome.nextBillingDate}`);
 
     } catch (err) {
       result.errors++;

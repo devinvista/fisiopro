@@ -16,12 +16,14 @@
     "@workspace/shared-constants": "workspace:*",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.9.0",
+    "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
     "google-auth-library": "^10.6.2",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
@@ -29,6 +31,7 @@
     "pino-http": "^11.0.0"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

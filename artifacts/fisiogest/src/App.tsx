@@ -35,9 +35,9 @@ const AUTH_ROUTES = ["/api/auth/login", "/api/auth/register"];
 
 function handleUnauthorized(url: string) {
   const isAuthRoute = AUTH_ROUTES.some((route) => url.includes(route));
-  if (isAuthRoute || !localStorage.getItem("fisiogest_token")) return;
+  if (isAuthRoute || localStorage.getItem("fisiogest_authenticated") !== "1") return;
 
-  localStorage.removeItem("fisiogest_token");
+  localStorage.removeItem("fisiogest_authenticated");
   localStorage.removeItem("fisiogest_clinic_id");
   localStorage.removeItem("fisiogest_clinics");
 

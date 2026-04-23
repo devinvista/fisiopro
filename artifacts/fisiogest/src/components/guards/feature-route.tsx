@@ -14,19 +14,19 @@ interface FeatureRouteProps {
  * mostra uma tela de upgrade.
  */
 export function FeatureRoute({ component: Component, feature }: FeatureRouteProps) {
-  const { token, isLoading, hasFeature, planName } = useAuth();
+  const { isAuthenticated, isLoading, hasFeature, planName } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !token) setLocation("/login");
-  }, [token, isLoading, setLocation]);
+    if (!isLoading && !isAuthenticated) setLocation("/login");
+  }, [isAuthenticated, isLoading, setLocation]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">Carregando...</div>
     );
   }
-  if (!token) return null;
+  if (!isAuthenticated) return null;
 
   if (!hasFeature(feature)) {
     return (

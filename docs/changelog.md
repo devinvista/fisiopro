@@ -1,5 +1,22 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 1 + 3: hardening de segurança e infra
+
+**Itens entregues** (8 do plano de sprints):
+
+- **1.2 Helmet** — `app.ts` aplica `helmet()` com CSP estrita em produção (permite Cloudinary e Sentry; `frame-ancestors 'none'`). Em dev a CSP é desativada para o HMR do Vite.
+- **1.3 Compression** — middleware `compression()` ativo para reduzir payload de respostas JSON e bundles servidos em produção.
+- **1.4 JWT em cookie httpOnly + CSRF** — novos `middleware/cookies.ts` (`AUTH_COOKIE`/`CSRF_COOKIE` + `setAuthCookie/clearAuthCookie`) e `middleware/csrf.ts` (double-submit). `auth.routes.ts` agora emite o cookie em `/login`, `/register`, `/switch-clinic` e a nova rota `POST /logout`. `middleware/auth.ts` aceita cookie OU `Authorization: Bearer` (compat). Rota de impersonate (`/clinics/:id/impersonate`) também passa a setar o cookie.
+- **1.5 Frontend cookie-aware** — `lib/api.ts` reescrito (`apiFetch`/`apiFetchJson`/`apiSendJson` com `credentials: include` + header `x-csrf-token` automático em métodos mutadores). `lib/api-client-react/src/custom-fetch.ts` deixou de injetar `Authorization` do `localStorage` e passou a usar cookies + CSRF. `auth-context.tsx` migrado: usa `isAuthenticated` (boolean) em vez de `token`; chama `POST /api/auth/logout` no logout; flag `fisiogest_authenticated` substitui o token persistido. Guards (`protected-route`, `superadmin-route`, `permission-route`, `feature-route`) e `landing.tsx` atualizados.
+- **3.1 Drizzle migrate em prod** — `scripts/migrate.ts` (modo padrão aplica `migrationsFolder`; modo `--baseline` registra as migrations atuais como aplicadas em DB existente sem rodar SQL). Scripts `db:migrate` e `db:baseline` em `package.json`. `scripts/post-merge.sh` agora roda `pnpm db:migrate` em vez de `db:push`.
+- **3.2 pg_advisory_lock no scheduler** — `scheduler/lock.ts` (`tryAcquireAdvisoryLock` com hash determinístico do nome do job + `pg_try_advisory_lock`). `scheduler/registerJob.ts` envolve cada execução: somente uma réplica executa por vez; libera lock no `finally`.
+- **3.3 Idempotência de billing** — `billing-lock.ts` expõe `withSubscriptionBillingLock(subId, year, month, fn)`: abre transação, faz `pg_advisory_xact_lock(subId, year*100+month)` e re-verifica existência do registro dentro do lock. Aplicado em `billing.service.ts` e `consolidated-billing.service.ts` — defesa em profundidade contra dupla cobrança mesmo se 3.2 falhar.
+- **3.4 Rate limit distribuído** — `middleware/rateLimitStore.ts` implementa `PgRateLimitStore` (express-rate-limit `Store` em Postgres com tabela `rate_limit_counters` criada on-demand; janela rotativa via `INSERT … ON CONFLICT DO UPDATE`). `startRateLimitCleanup` faz GC a cada 15min. Todos os 4 limiters (global, auth, public, uploads) usam o store. Substitui o store em memória, permitindo múltiplas réplicas no autoscale sem free-tier de Redis.
+
+**Pacotes instalados:** `helmet`, `compression`, `cookie-parser`, `@types/compression` em `@workspace/api-server`.
+
+**Validação:** `pnpm typecheck` passa em todos os pacotes; `curl -i /api/auth/me` retorna 401 com headers do helmet (HSTS, X-Frame-Options, etc.), cookie `fisiogest_csrf` setado e headers de rate-limit (`ratelimit-remaining`).
+
 ### Sessão abril/2026 — Bug fix: logger Proxy quebrava serializers do `pino-http`
 
 **Sintoma:** cada request HTTP gerava um log com **centenas de linhas** despejando o objeto `req`/`res` interno do Express (socket, parser, headers, writableState, eventListeners…), apesar de `app.ts` configurar `serializers: { req: ({method,url}), res: ({statusCode}) }` no `pinoHttp(...)`.

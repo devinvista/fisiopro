@@ -1,11 +1,12 @@
 export const formatCurrency = (val: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
+/**
+ * Cabeçalhos para requests JSON. JWT vai por cookie httpOnly automaticamente;
+ * apenas o Content-Type é necessário aqui. CSRF é injetado por `apiFetch`.
+ */
 export function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem("fisiogest_token");
-  return token
-    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-    : { "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 export function todayISO() {

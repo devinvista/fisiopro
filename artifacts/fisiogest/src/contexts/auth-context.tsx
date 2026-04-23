@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { getCurrentUser } from "@workspace/api-client-react";
 import type { User } from "@workspace/api-client-react";
+import { apiSendJson } from "@/lib/api";
 import { resolvePermissions, type Permission } from "@/utils/permissions";
 import { planHasFeature, type Feature, type PlanTier } from "@/utils/plan-features";
 
@@ -26,7 +27,7 @@ export interface ClinicInfo {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   clinicId: number | null;
   clinics: ClinicInfo[];
@@ -34,8 +35,12 @@ interface AuthContextType {
   subscription: SubscriptionInfo | null;
   features: Feature[];
   planName: PlanTier | null;
-  login: (token: string, user: User, clinics?: ClinicInfo[]) => void;
-  logout: () => void;
+  /**
+   * Chamado APÓS o backend ter setado o cookie httpOnly via /api/auth/login
+   * ou /api/auth/register. O argumento `_token` é mantido por compat e ignorado.
+   */
+  login: (_token: string, user: User, clinics?: ClinicInfo[]) => void;
+  logout: () => Promise<void>;
   switchClinic: (clinicId: number) => Promise<void>;
   hasPermission: (permission: Permission) => boolean;
   hasRole: (role: string) => boolean;
@@ -44,21 +49,28 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_CLINIC_ID = "fisiogest_clinic_id";
+const STORAGE_CLINICS = "fisiogest_clinics";
+/** Sinaliza que existe uma sessão ativa (presença booleana). NÃO é o token. */
+const STORAGE_AUTH_HINT = "fisiogest_authenticated";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("fisiogest_token"));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    () => localStorage.getItem(STORAGE_AUTH_HINT) === "1",
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [clinicId, setClinicId] = useState<number | null>(() => {
-    const stored = localStorage.getItem("fisiogest_clinic_id");
+    const stored = localStorage.getItem(STORAGE_CLINIC_ID);
     return stored ? parseInt(stored) : null;
   });
   const [clinics, setClinics] = useState<ClinicInfo[]>(() => {
-    const stored = localStorage.getItem("fisiogest_clinics");
+    const stored = localStorage.getItem(STORAGE_CLINICS);
     if (!stored) return [];
     try {
       return JSON.parse(stored) as ClinicInfo[];
     } catch {
-      localStorage.removeItem("fisiogest_clinics");
+      localStorage.removeItem(STORAGE_CLINICS);
       return [];
     }
   });
@@ -68,59 +80,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    let cancelled = false;
     async function verifyAuth() {
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
       try {
-        const userData = await getCurrentUser() as any;
+        const userData = (await getCurrentUser()) as any;
+        if (cancelled) return;
         setUser(userData);
+        setIsAuthenticated(true);
+        localStorage.setItem(STORAGE_AUTH_HINT, "1");
         setIsSuperAdmin(userData.isSuperAdmin ?? false);
         setSubscription(userData.subscription ?? null);
         setFeatures(userData.features ?? []);
         if (userData.clinicId !== undefined) setClinicId(userData.clinicId);
         if (userData.clinics) {
           setClinics(userData.clinics);
-          localStorage.setItem("fisiogest_clinics", JSON.stringify(userData.clinics));
+          localStorage.setItem(STORAGE_CLINICS, JSON.stringify(userData.clinics));
         }
-      } catch (error) {
-        console.error("Auth verification failed", error);
-        localStorage.removeItem("fisiogest_token");
-        localStorage.removeItem("fisiogest_clinic_id");
-        localStorage.removeItem("fisiogest_clinics");
-        setToken(null);
+      } catch {
+        if (cancelled) return;
         setUser(null);
+        setIsAuthenticated(false);
+        localStorage.removeItem(STORAGE_AUTH_HINT);
+        localStorage.removeItem(STORAGE_CLINIC_ID);
+        localStorage.removeItem(STORAGE_CLINICS);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
     verifyAuth();
-  }, [token]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const login = (newToken: string, newUser: User, newClinics?: ClinicInfo[]) => {
-    localStorage.setItem("fisiogest_token", newToken);
+  const login = (_token: string, newUser: User, newClinics?: ClinicInfo[]) => {
     const userData = newUser as any;
     const clinicIdVal = userData.clinicId ?? null;
     const isSA = userData.isSuperAdmin ?? false;
 
-    if (clinicIdVal) localStorage.setItem("fisiogest_clinic_id", String(clinicIdVal));
-    if (newClinics) localStorage.setItem("fisiogest_clinics", JSON.stringify(newClinics));
+    localStorage.setItem(STORAGE_AUTH_HINT, "1");
+    if (clinicIdVal) localStorage.setItem(STORAGE_CLINIC_ID, String(clinicIdVal));
+    if (newClinics) localStorage.setItem(STORAGE_CLINICS, JSON.stringify(newClinics));
 
-    setToken(newToken);
     setUser(newUser);
+    setIsAuthenticated(true);
     setClinicId(clinicIdVal);
     setIsSuperAdmin(isSA);
     if (newClinics) setClinics(newClinics);
     setLocation(isSA ? "/superadmin" : "/dashboard");
   };
 
-  const logout = () => {
-    localStorage.removeItem("fisiogest_token");
-    localStorage.removeItem("fisiogest_clinic_id");
-    localStorage.removeItem("fisiogest_clinics");
-    setToken(null);
+  const logout = async () => {
+    try {
+      await apiSendJson("/api/auth/logout", "POST");
+    } catch {
+      // ignore — vamos limpar do lado do cliente de qualquer jeito
+    }
+    localStorage.removeItem(STORAGE_AUTH_HINT);
+    localStorage.removeItem(STORAGE_CLINIC_ID);
+    localStorage.removeItem(STORAGE_CLINICS);
     setUser(null);
+    setIsAuthenticated(false);
     setClinicId(null);
     setClinics([]);
     setIsSuperAdmin(false);
@@ -129,28 +149,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchClinic = async (newClinicId: number) => {
     try {
-      const currentToken = localStorage.getItem("fisiogest_token");
-      const res = await fetch(`/api/auth/switch-clinic`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
-        },
-        body: JSON.stringify({ clinicId: newClinicId === 0 ? null : newClinicId }),
-      });
-      if (!res.ok) throw new Error("Failed to switch clinic");
-      const data = await res.json();
+      const data = await apiSendJson<{ clinicId: number | null }>(
+        "/api/auth/switch-clinic",
+        "POST",
+        { clinicId: newClinicId === 0 ? null : newClinicId },
+      );
 
-      localStorage.setItem("fisiogest_token", data.token);
       if (data.clinicId) {
-        localStorage.setItem("fisiogest_clinic_id", String(data.clinicId));
+        localStorage.setItem(STORAGE_CLINIC_ID, String(data.clinicId));
       } else {
-        localStorage.removeItem("fisiogest_clinic_id");
+        localStorage.removeItem(STORAGE_CLINIC_ID);
       }
 
-      setToken(data.token);
       setClinicId(data.clinicId ?? null);
-
       setLocation("/dashboard");
     } catch (err) {
       console.error("Failed to switch clinic", err);
@@ -181,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
-        token,
+        isAuthenticated,
         isLoading,
         clinicId,
         clinics,

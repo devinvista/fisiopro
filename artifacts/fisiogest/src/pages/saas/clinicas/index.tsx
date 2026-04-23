@@ -254,7 +254,9 @@ export default function Clinicas() {
   const handleImpersonate = async (clinic: Clinic) => {
     try {
       const data = await impersonateClinic(clinic.id);
-      localStorage.setItem("fisiogest_token", data.token);
+      // O backend já setou o cookie httpOnly de auth. Mantemos apenas a dica
+      // de sessão e o clinicId para o estado do app.
+      localStorage.setItem("fisiogest_authenticated", "1");
       localStorage.setItem("fisiogest_clinic_id", String(data.clinicId));
       toast({ title: `Acessando clínica: ${clinic.name}` });
       setTimeout(() => { window.location.href = "/"; }, 500);

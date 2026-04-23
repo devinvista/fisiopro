@@ -7,13 +7,13 @@ interface SuperAdminRouteProps {
 }
 
 export function SuperAdminRoute({ component: Component }: SuperAdminRouteProps) {
-  const { token, isLoading, isSuperAdmin } = useAuth();
+  const { isAuthenticated, isLoading, isSuperAdmin } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !token) setLocation("/login");
-    if (!isLoading && token && !isSuperAdmin) setLocation("/dashboard");
-  }, [token, isLoading, isSuperAdmin, setLocation]);
+    if (!isLoading && !isAuthenticated) setLocation("/login");
+    if (!isLoading && isAuthenticated && !isSuperAdmin) setLocation("/dashboard");
+  }, [isAuthenticated, isLoading, isSuperAdmin, setLocation]);
 
   if (isLoading) {
     return (
@@ -22,7 +22,7 @@ export function SuperAdminRoute({ component: Component }: SuperAdminRouteProps) 
       </div>
     );
   }
-  if (!token || !isSuperAdmin) return null;
+  if (!isAuthenticated || !isSuperAdmin) return null;
 
   return <Component />;
 }
