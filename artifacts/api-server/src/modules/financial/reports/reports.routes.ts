@@ -95,42 +95,61 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
     const year = parseInt(req.query.year as string) || brt.year;
     const { startDate, endDate } = monthDateRange(year, month);
 
-    const clinicFilter = req.isSuperAdmin || !req.clinicId ? null : eq(financialRecordsTable.clinicId, req.clinicId);
+    const clinicId = req.isSuperAdmin || !req.clinicId ? null : req.clinicId;
 
-    // Junta financialRecords pelo procedureId (registro próprio) OU appointmentId (registro de agendamento),
-    // usando a data efetiva (paymentDate → dueDate → createdAt) para não excluir pendentes.
-    const results = await db
-      .select({
-        procedureId: proceduresTable.id,
-        procedureName: proceduresTable.name,
-        category: proceduresTable.category,
-        totalRevenue: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
-        totalSessions: sql<number>`COUNT(${financialRecordsTable.id})`,
-      })
-      .from(proceduresTable)
-      .leftJoin(appointmentsTable, sql`${appointmentsTable.procedureId} = ${proceduresTable.id}`)
-      .leftJoin(
-        financialRecordsTable,
-        and(
-          sql`(${financialRecordsTable.procedureId} = ${proceduresTable.id} OR ${financialRecordsTable.appointmentId} = ${appointmentsTable.id})`,
-          revenueSummarySql(),
-          recordDateFilter(startDate, endDate),
-          ...(clinicFilter ? [clinicFilter] : []),
-        ),
+    // Estratégia: resolver o procedure_id de cada financial_record numa subquery
+    // (direto via fr.procedure_id; via fr.appointment_id → appointments.procedure_id como fallback),
+    // depois juntar com procedures. Evita o cross-product que ocorria ao fazer
+    // procedures × appointments × financial_records num único JOIN.
+    const clinicCond = clinicId ? sql`AND fr.clinic_id = ${clinicId}` : sql``;
+    const startCond = sql`${startDate}`;
+    const endCond = sql`${endDate}`;
+
+    const rows = await db.execute<{
+      procedure_id: number;
+      procedure_name: string;
+      category: string | null;
+      total_revenue: string | number;
+      total_sessions: string | number;
+    }>(sql`
+      WITH fr_resolved AS (
+        SELECT fr.id, fr.amount,
+               COALESCE(fr.procedure_id, a.procedure_id) AS resolved_procedure_id
+        FROM financial_records fr
+        LEFT JOIN appointments a ON a.id = fr.appointment_id
+        WHERE fr.type = 'receita'
+          AND fr.status NOT IN ('estornado', 'cancelado')
+          AND (fr.transaction_type IS NULL OR fr.transaction_type NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada'))
+          AND COALESCE(fr.payment_date::date, fr.due_date::date, DATE(fr.created_at))
+              BETWEEN ${startCond}::date AND ${endCond}::date
+          ${clinicCond}
       )
-      .groupBy(proceduresTable.id, proceduresTable.name, proceduresTable.category)
-      .orderBy(sql`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0) DESC`);
+      SELECT p.id AS procedure_id,
+             p.name AS procedure_name,
+             p.category,
+             COALESCE(SUM(fr.amount::numeric), 0) AS total_revenue,
+             COUNT(fr.id) AS total_sessions
+      FROM procedures p
+      LEFT JOIN fr_resolved fr ON fr.resolved_procedure_id = p.id
+      GROUP BY p.id, p.name, p.category
+      ORDER BY COALESCE(SUM(fr.amount::numeric), 0) DESC
+    `);
+
+    const results = (rows as unknown as { rows: any[] }).rows ?? (rows as unknown as any[]);
 
     res.json(
-      results.map((r) => ({
-        ...r,
-        totalRevenue: Number(r.totalRevenue),
-        totalSessions: Number(r.totalSessions),
-        averageTicket:
-          Number(r.totalSessions) > 0
-            ? Number(r.totalRevenue) / Number(r.totalSessions)
-            : 0,
-      }))
+      results.map((r: any) => {
+        const totalRevenue = Number(r.total_revenue ?? r.totalRevenue ?? 0);
+        const totalSessions = Number(r.total_sessions ?? r.totalSessions ?? 0);
+        return {
+          procedureId: r.procedure_id ?? r.procedureId,
+          procedureName: r.procedure_name ?? r.procedureName,
+          category: r.category,
+          totalRevenue,
+          totalSessions,
+          averageTicket: totalSessions > 0 ? totalRevenue / totalSessions : 0,
+        };
+      })
     );
   } catch (err) {
     console.error(err);
