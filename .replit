@@ -42,7 +42,7 @@ args = "pnpm run build:libs && (PORT=8080 pnpm --filter @workspace/api-server ru
 waitForPort = 8080
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
