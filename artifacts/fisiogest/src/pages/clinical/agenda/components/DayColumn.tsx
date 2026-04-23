@@ -249,9 +249,9 @@ export function DayColumn({
                   </>
                 ) : (
                   <>
-                    <div className="flex items-start justify-between gap-1 min-w-0">
-                      <p className="text-[11px] font-bold leading-tight flex-1 min-w-0 line-clamp-2 break-words">
-                        {firstApt.procedure?.name}
+                    <div className="flex items-center justify-between gap-1 min-w-0">
+                      <p className="text-[10px] font-bold leading-tight flex-1 min-w-0 truncate">
+                        {firstApt.procedure?.name} · {startTime}
                       </p>
                       <span
                         className={cn(
@@ -264,26 +264,18 @@ export function DayColumn({
                         {occupancy}/{maxCapacity}
                       </span>
                     </div>
-                    <p className="text-[9px] opacity-70 leading-none">
-                      {startTime} – {endTime}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mt-auto pt-1 min-w-0 content-start">
-                      {grpApts.slice(0, 4).map((a) => (
+                    <div className="flex flex-wrap gap-1 mt-1 min-w-0 content-start overflow-hidden">
+                      {grpApts.map((a) => (
                         <span
                           key={a.id}
-                          className="text-[9px] font-semibold bg-white/20 rounded-full px-1.5 py-0.5 leading-none whitespace-nowrap max-w-full overflow-hidden text-ellipsis"
+                          className="text-[9px] font-semibold bg-white/25 rounded-full px-1.5 py-0.5 leading-none whitespace-nowrap"
                           title={a.patient?.name}
                         >
                           {a.patient?.name?.split(" ")[0]}
                         </span>
                       ))}
-                      {grpApts.length > 4 && (
-                        <span className="text-[9px] font-semibold bg-white/20 rounded-full px-1.5 py-0.5 leading-none whitespace-nowrap shrink-0">
-                          +{grpApts.length - 4}
-                        </span>
-                      )}
                       {spotsLeft > 0 && (
-                        <span className="text-[9px] font-semibold bg-white/10 rounded-full px-1.5 py-0.5 leading-none opacity-70 whitespace-nowrap shrink-0">
+                        <span className="text-[9px] font-semibold bg-white/10 rounded-full px-1.5 py-0.5 leading-none opacity-80 whitespace-nowrap shrink-0">
                           {spotsLeft} livre{spotsLeft > 1 ? "s" : ""}
                         </span>
                       )}
