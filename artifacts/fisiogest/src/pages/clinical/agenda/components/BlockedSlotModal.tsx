@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { DatePickerPTBR, TimeInputPTBR } from "@/components/ui/date-picker-ptbr";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { WEEK_DAYS } from "../constants";
 import type { BlockedSlot, ScheduleOption } from "../types";
 

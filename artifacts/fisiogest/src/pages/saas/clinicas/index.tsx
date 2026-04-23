@@ -49,7 +49,7 @@ import {
   MapPin,
   User2,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { maskCpf, maskCnpj } from "@/utils/masks";
 import type { Clinic, ClinicUser, ClinicFormData, AddUserFormData, EditUserFormData } from "./types";
 import { EMPTY_FORM, EMPTY_ADD_USER, ALL_ROLES, ROLE_COLORS } from "./constants";

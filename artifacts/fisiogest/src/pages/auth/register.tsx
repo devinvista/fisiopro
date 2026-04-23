@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stethoscope, Loader2, ArrowLeft, Building2, UserRound, Check, Package, ChevronRight, Tag, CircleCheckBig, XCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { maskCpf } from "@/utils/masks";
 import { cn } from "@/utils/utils";
 

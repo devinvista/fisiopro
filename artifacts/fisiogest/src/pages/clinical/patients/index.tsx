@@ -26,7 +26,7 @@ import {
   Calendar,
   MapPin,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";

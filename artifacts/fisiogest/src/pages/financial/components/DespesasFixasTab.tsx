@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { authHeaders, formatCurrency } from "../utils";
 import { KpiCard } from "./KpiCard";
 import { RecurringExpenseModal } from "./RecurringExpenseModal";

@@ -91,7 +91,7 @@ import {
   Percent,
   Hash,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { apiFetch } from "@/utils/api";

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { PlanBadge } from "@/components/guards/plan-badge";

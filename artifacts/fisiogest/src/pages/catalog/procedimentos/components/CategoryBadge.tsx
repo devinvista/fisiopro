@@ -52,7 +52,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { cn } from "@/utils/utils";
 
 export function CategoryBadge({ category }: { category: string }) {

@@ -7,7 +7,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { apiFetch } from "@/utils/api";
 import { 
   PatientPhoto, 

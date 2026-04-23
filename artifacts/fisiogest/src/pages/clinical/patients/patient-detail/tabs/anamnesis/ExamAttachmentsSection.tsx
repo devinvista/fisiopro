@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { apiFetch } from "@/utils/api";
 import { formatDateTime } from "../../utils/format";
 import { ExamAttachment } from "./types";

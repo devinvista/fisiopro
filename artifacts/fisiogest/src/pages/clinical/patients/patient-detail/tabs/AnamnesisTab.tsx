@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { formatDateTime } from "../utils/format";
 
 import { AnamnesisForm, AnamTemplate } from "./anamnesis/types";

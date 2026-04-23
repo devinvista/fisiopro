@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { formatCurrency, formatDateTime } from "../utils/format";
 import { statusLabel, txTypeLabel } from "./HistoryTab";

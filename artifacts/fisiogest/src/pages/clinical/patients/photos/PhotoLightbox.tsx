@@ -41,7 +41,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { apiFetch } from "@/utils/api";
 import { 
   PatientPhoto, 

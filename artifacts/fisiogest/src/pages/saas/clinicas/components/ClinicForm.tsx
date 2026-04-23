@@ -15,7 +15,7 @@ import {
   MapPin,
   Globe,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { maskCpf, maskPhone, maskCnpj } from "@/utils/masks";
 import type { ClinicFormData } from "../types";
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useUpdateAppointment, useCompleteAppointment } from "@workspace/api-client-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 
 interface UseAgendaMutationsArgs {
   todayCompareceuIds: number[];

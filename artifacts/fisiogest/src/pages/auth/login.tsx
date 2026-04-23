@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stethoscope, Loader2, ArrowRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { maskCpf } from "@/utils/masks";
 
 function looksLikeCpf(value: string): boolean {

@@ -11,7 +11,7 @@ import {
 import {
   Plus, Search, Package, Layers, RefreshCw, FileText,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { cn } from "@/utils/utils";
 import type { Procedure, PackageItem } from "./types";
 import { apiFetchJson, apiSendJson } from "@/utils/api";

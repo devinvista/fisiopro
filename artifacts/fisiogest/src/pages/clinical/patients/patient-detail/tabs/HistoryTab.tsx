@@ -46,7 +46,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useRef } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { format, differenceInYears, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";

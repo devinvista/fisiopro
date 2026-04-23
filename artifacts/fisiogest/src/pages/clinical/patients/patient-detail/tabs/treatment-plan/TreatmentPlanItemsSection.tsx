@@ -1,7 +1,7 @@
 import { useParams } from "wouter";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import {
   Loader2, Plus, Lock, Package, RefreshCw, Layers, Trash2, Pencil, 
   Info, ArrowUpRight, Check, X, TrendingUp, CheckCircle, Activity

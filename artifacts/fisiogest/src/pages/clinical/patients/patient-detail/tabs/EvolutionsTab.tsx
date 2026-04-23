@@ -9,7 +9,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Printer, TrendingUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { apiFetchJson } from "@/utils/api";
 
 import { PatientBasic, ClinicInfo } from "../types";

@@ -25,7 +25,7 @@ import {
   BookOpen,
   TrendingUp,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { cn } from "@/utils/utils";
 import {
   procedureFormSchema,

@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/lib/toast";
 import { useGetFinancialDashboard, useListFinancialRecords } from "@workspace/api-client-react";
 import { authHeaders, formatCurrency } from "../utils";
 import { MONTH_NAMES, PIE_COLORS } from "../constants";
