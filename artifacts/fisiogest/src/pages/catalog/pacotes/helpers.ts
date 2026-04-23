@@ -26,14 +26,3 @@ export function formatCurrency(value: string | number | null | undefined) {
   if (value === null || value === undefined) return "—";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
 }
-
-export async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
-  const r = await fetch(url, options);
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error((body as { message?: string })?.message || `Erro ${r.status}`);
-  }
-  if (r.status === 204) return undefined as T;
-  return r.json();
-}
-

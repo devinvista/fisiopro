@@ -1,10 +1,7 @@
-import { apiFetch } from "@/utils/api";
+import { apiFetchJson } from "@/utils/api";
 
-export async function fetchJSON(url: string) {
-  const res = await apiFetch(url);
-  if (!res.ok) throw new Error("Erro ao carregar dados");
-  return res.json();
-}
+/** Alias para chamadas GET autenticadas — mantido para compat com os componentes existentes. */
+export const fetchJSON = apiFetchJson;
 
 export type ClinicBasic = {
   id: number;

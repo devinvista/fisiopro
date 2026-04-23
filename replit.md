@@ -251,6 +251,17 @@ controlados (Select/Switch/Combobox shadcn), usar adapter `setForm = (next) => O
 
 Hooks reutilizáveis ficam em `src/hooks/`. Contexts em `src/utils/` (TODO mover para `src/contexts/`).
 
+### Camada de chamadas HTTP
+
+Helpers únicos em `src/utils/api.ts`:
+- `apiFetch(input, init?)` — Response cru, anexa `Authorization: Bearer <token>`
+- `apiFetchJson<T>(input, init?)` — GET tipado, lança `Error` em status != 2xx, retorna `undefined` em 204
+- `apiSendJson<T>(url, method, body?)` — POST/PUT/PATCH/DELETE com JSON (auto `Content-Type` + `JSON.stringify`)
+- `API_BASE` — prefixo derivado de `import.meta.env.BASE_URL` (re-exportado por `pages/saas/superadmin/constants.ts` e `pages/settings/configuracoes/constants.ts` para compat com imports existentes)
+
+Usar sempre esses helpers em vez de `fetch` direto — garante autenticação consistente
+e tratamento de erro padronizado (mensagem do backend via campo `message`).
+
 ### Convenção de imports
 
 - Cliente HTTP: hooks gerados pelo Orval em `@workspace/api-client-react`

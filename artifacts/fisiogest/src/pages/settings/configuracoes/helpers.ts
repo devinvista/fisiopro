@@ -1,27 +1,17 @@
-import { apiFetch } from "@/utils/api";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { API_BASE } from "./constants";
 import type { Clinic, SystemUser } from "./types";
 
-export async function fetchCurrentClinic(): Promise<Clinic> {
-  const res = await apiFetch(`${API_BASE}/api/clinics/current`);
-  if (!res.ok) throw new Error("Erro ao carregar clínica");
-  return res.json();
+export function fetchCurrentClinic(): Promise<Clinic> {
+  return apiFetchJson<Clinic>(`${API_BASE}/api/clinics/current`);
 }
 
-export async function updateCurrentClinic(data: Partial<Clinic>): Promise<Clinic> {
-  const res = await apiFetch(`${API_BASE}/api/clinics/current`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Erro ao salvar clínica");
-  return res.json();
+export function updateCurrentClinic(data: Partial<Clinic>): Promise<Clinic> {
+  return apiSendJson<Clinic>(`${API_BASE}/api/clinics/current`, "PATCH", data);
 }
 
-export async function fetchUsers(): Promise<SystemUser[]> {
-  const res = await apiFetch(`${API_BASE}/api/users`);
-  if (!res.ok) throw new Error("Erro ao carregar usuários");
-  return res.json();
+export function fetchUsers(): Promise<SystemUser[]> {
+  return apiFetchJson<SystemUser[]>(`${API_BASE}/api/users`);
 }
 
 export type Section = "clinica" | "usuarios" | "agendas" | "plano";

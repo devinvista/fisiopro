@@ -14,7 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/utils/utils";
 import type { Procedure, PackageItem } from "./types";
-import { apiFetch } from "./helpers";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 import {
   packageFormSchema,
   packageFormDefaults,
@@ -38,12 +38,12 @@ export default function Pacotes() {
 
   const { data: packages = [], isLoading } = useQuery<PackageItem[]>({
     queryKey: ["packages"],
-    queryFn: () => apiFetch<PackageItem[]>("/api/packages?includeInactive=true"),
+    queryFn: () => apiFetchJson<PackageItem[]>("/api/packages?includeInactive=true"),
   });
 
   const { data: procedures = [] } = useQuery<Procedure[]>({
     queryKey: ["procedures-active"],
-    queryFn: () => apiFetch<Procedure[]>("/api/procedures"),
+    queryFn: () => apiFetchJson<Procedure[]>("/api/procedures"),
   });
 
   const filtered = packages.filter((pkg) => {
@@ -56,11 +56,7 @@ export default function Pacotes() {
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) =>
-      apiFetch<PackageItem>("/api/packages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPackagePayload(data)),
-      }),
+      apiSendJson<PackageItem>("/api/packages", "POST", buildPackagePayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["packages"] });
       toast({ title: "Pacote criado com sucesso!" });
@@ -71,11 +67,7 @@ export default function Pacotes() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: typeof form }) =>
-      apiFetch<PackageItem>(`/api/packages/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPackagePayload(data)),
-      }),
+      apiSendJson<PackageItem>(`/api/packages/${id}`, "PUT", buildPackagePayload(data)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["packages"] });
       toast({ title: "Pacote atualizado com sucesso!" });
@@ -85,7 +77,7 @@ export default function Pacotes() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiFetch(`/api/packages/${id}`, { method: "DELETE" }),
+    mutationFn: (id: number) => apiSendJson(`/api/packages/${id}`, "DELETE"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["packages"] });
       toast({ title: "Pacote removido." });

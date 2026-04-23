@@ -1,15 +1,9 @@
-import { apiFetch } from "@/utils/api";
 import { LayoutDashboard, Package, CreditCard, Building2, Receipt, Tag, Zap, Sparkles, Crown } from "lucide-react";
+import { API_BASE } from "@/utils/api";
 
 export const BASE = import.meta.env.BASE_URL ?? "/";
-export const API_BASE = BASE.replace(/\/$/, "").replace(/\/[^/]+$/, "");
+export { API_BASE };
 export const api = (path: string) => `${API_BASE}/api${path}`;
-
-async function fetchJSON(url: string) {
-  const res = await apiFetch(url);
-  if (!res.ok) throw new Error("Erro ao carregar dados");
-  return res.json();
-}
 
 export const TABS = [
   { id: "painel", label: "Painel", icon: LayoutDashboard },

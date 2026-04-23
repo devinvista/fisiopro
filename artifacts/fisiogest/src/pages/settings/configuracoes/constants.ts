@@ -1,12 +1,11 @@
-import type { SystemUser, SectionConfig } from "./types";
+import type { SectionConfig } from "./types";
 import { Building2, UserCog, CalendarDays, Sparkles } from "lucide-react";
-import { apiFetch } from "@/utils/api";
+import { API_BASE } from "@/utils/api";
 import type { Role } from "@/utils/permissions";
-import type { Clinic } from "./types";
 import type { ScheduleFormState } from "./types";
 
 export const BASE = import.meta.env.BASE_URL ?? "/";
-export const API_BASE = BASE.replace(/\/$/, "").replace(/\/[^/]+$/, "");
+export { API_BASE };
 export const ROLE_COLORS: Record<Role, string> = {
   admin: "bg-red-100 text-red-800 border-red-200",
   profissional: "bg-blue-100 text-blue-800 border-blue-200",
@@ -69,33 +68,6 @@ export function parseDays(workingDays: string): string[] {
 export function formatDaysBadges(workingDays: string) {
   const days = parseDays(workingDays);
   return DAYS_OF_WEEK.filter((d) => days.includes(d.value));
-}
-
-/* ─── API functions ─────────────────────────────────────────── */
-
-async function fetchCurrentClinic(): Promise<Clinic> {
-  const res = await apiFetch(`${API_BASE}/api/clinics/current`);
-  if (!res.ok) throw new Error("Falha ao carregar dados da clínica");
-  return res.json();
-}
-
-async function updateCurrentClinic(data: Partial<Clinic>): Promise<Clinic> {
-  const res = await apiFetch(`${API_BASE}/api/clinics/current`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).message || "Erro ao atualizar clínica");
-  }
-  return res.json();
-}
-
-async function fetchUsers(): Promise<SystemUser[]> {
-  const res = await apiFetch("/api/users");
-  if (!res.ok) throw new Error("Falha ao carregar usuários");
-  return res.json();
 }
 
 /* ─── Section: Minha Clínica ────────────────────────────────── */
