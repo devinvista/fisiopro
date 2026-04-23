@@ -245,9 +245,24 @@ export function AppointmentDetailModal({
                     {appointment.procedure?.name} · {appointment.startTime} – {appointment.endTime}
                   </p>
                 ) : (
-                  <span className={`inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${cfg.badge}`}>
-                    {cfg.label}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${cfg.badge}`}>
+                      {cfg.label}
+                    </span>
+                    {((appointment as any).rescheduleCount ?? 0) > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700"
+                        title={
+                          (appointment as any).originalDate
+                            ? `Originalmente em ${(appointment as any).originalDate} às ${(appointment as any).originalStartTime}`
+                            : undefined
+                        }
+                      >
+                        <Repeat className="w-2.5 h-2.5" />
+                        Remarcado {(appointment as any).rescheduleCount}×
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

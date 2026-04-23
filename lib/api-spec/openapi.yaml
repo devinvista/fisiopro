@@ -1264,9 +1264,23 @@ components:
           type: string
         status:
           type: string
-          enum: [agendado, confirmado, concluido, cancelado, faltou]
+          enum: [agendado, confirmado, concluido, cancelado, faltou, compareceu, remarcado]
         notes:
           type: string
+        originalDate:
+          type: string
+          format: date
+          nullable: true
+        originalStartTime:
+          type: string
+          nullable: true
+        rescheduleCount:
+          type: integer
+          default: 0
+        lastRescheduledAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1279,6 +1293,50 @@ components:
         - endTime
         - status
         - createdAt
+
+    AppointmentReschedule:
+      type: object
+      properties:
+        id:
+          type: integer
+        appointmentId:
+          type: integer
+        fromDate:
+          type: string
+          format: date
+        fromStartTime:
+          type: string
+        fromEndTime:
+          type: string
+        toDate:
+          type: string
+          format: date
+        toStartTime:
+          type: string
+        toEndTime:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        rescheduledByUserId:
+          type: integer
+          nullable: true
+        rescheduledByUserName:
+          type: string
+          nullable: true
+        rescheduledAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - appointmentId
+        - fromDate
+        - fromStartTime
+        - fromEndTime
+        - toDate
+        - toStartTime
+        - toEndTime
+        - rescheduledAt
 
     AppointmentWithDetails:
       allOf:

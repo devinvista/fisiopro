@@ -23,7 +23,9 @@ import {
 import {
   listAppointments, getAvailableSlots, createAppointment, getAppointment,
   updateAppointment, deleteAppointment, rescheduleAppointment,
-  completeAppointment, createRecurringAppointments, type AuthCtx,
+  completeAppointment, createRecurringAppointments,
+  getAppointmentReschedules, getPatientReschedules,
+  type AuthCtx,
 } from "./appointments.service.js";
 import { AppointmentError } from "./appointments.errors.js";
 import type { Role } from "@workspace/db";
@@ -141,7 +143,7 @@ router.delete("/:id", requirePermission("appointments.delete"), async (req, res)
   }
 });
 
-// ─── Reschedule (atomic: mark old as remarcado + create new) ─────────────────
+// ─── Reschedule (in-place: update slot + log to reschedule history) ─────────
 router.post("/:id/reschedule", requirePermission("appointments.create"), async (req: AuthRequest, res) => {
   try {
     const id = parseIntParam(req.params.id, res, "ID do agendamento");
@@ -149,7 +151,31 @@ router.post("/:id/reschedule", requirePermission("appointments.create"), async (
     const body = validateBody(rescheduleSchema, req.body, res);
     if (!body) return;
     const data = await rescheduleAppointment(id, body as any, getCtx(req));
-    res.status(201).json(data);
+    res.json(data);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ─── Reschedule history for a single appointment ────────────────────────────
+router.get("/:id/reschedules", requirePermission("appointments.view"), async (req: AuthRequest, res) => {
+  try {
+    const id = parseIntParam(req.params.id, res, "ID do agendamento");
+    if (id === null) return;
+    const data = await getAppointmentReschedules(id, getCtx(req));
+    res.json(data);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+// ─── Reschedule history by patient ──────────────────────────────────────────
+router.get("/reschedules/by-patient/:patientId", requirePermission("appointments.view"), async (req: AuthRequest, res) => {
+  try {
+    const patientId = parseIntParam(req.params.patientId, res, "ID do paciente");
+    if (patientId === null) return;
+    const data = await getPatientReschedules(patientId, getCtx(req));
+    res.json(data);
   } catch (err) {
     handleError(err, res);
   }

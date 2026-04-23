@@ -2,6 +2,7 @@ import { db } from "@workspace/db";
 import {
   appointmentsTable, patientsTable, proceduresTable, blockedSlotsTable,
   schedulesTable, clinicsTable, financialRecordsTable,
+  appointmentReschedulesTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, sql, lt, or } from "drizzle-orm";
 import { buildPage, clampLimit, decodeCursor, type PaginatedResponse } from "../../../utils/pagination.js";
@@ -437,22 +438,42 @@ export async function rescheduleAppointment(id: number, body: {
     throw conflictErr(describeConflict(reason, currentCount, maxCapacity, undefined, startTime, endTime));
   }
 
-  const result = await db.transaction(async (tx) => {
-    const [newAppt] = await tx.insert(appointmentsTable).values({
-      patientId: original.patientId,
-      procedureId: original.procedureId,
-      professionalId: original.professionalId,
-      date, startTime, endTime,
+  const previousRescheduleCount = (original as any).rescheduleCount ?? 0;
+  const isFirstReschedule = previousRescheduleCount === 0;
+
+  const updated = await db.transaction(async (tx) => {
+    await tx.insert(appointmentReschedulesTable).values({
+      appointmentId: id,
+      fromDate: original.date,
+      fromStartTime: original.startTime,
+      fromEndTime: original.endTime,
+      toDate: date,
+      toStartTime: startTime,
+      toEndTime: endTime,
+      reason: notes ?? null,
+      rescheduledByUserId: ctx.userId,
+      rescheduledByUserName: ctx.userName ?? null,
+    });
+
+    const setFields: Record<string, unknown> = {
+      date,
+      startTime,
+      endTime,
       status: "agendado",
-      notes: notes ?? original.notes,
-      clinicId: original.clinicId,
-      scheduleId: original.scheduleId,
-      source: original.source,
-    }).returning();
-    await tx.update(appointmentsTable)
-      .set({ status: "remarcado", rescheduledToId: newAppt.id })
-      .where(eq(appointmentsTable.id, id));
-    return newAppt;
+      rescheduleCount: previousRescheduleCount + 1,
+      lastRescheduledAt: new Date(),
+    };
+    if (isFirstReschedule) {
+      setFields.originalDate = original.date;
+      setFields.originalStartTime = original.startTime;
+    }
+    if (notes !== undefined) setFields.notes = notes;
+
+    const [row] = await tx.update(appointmentsTable)
+      .set(setFields)
+      .where(eq(appointmentsTable.id, id))
+      .returning();
+    return row;
   });
 
   await db.update(financialRecordsTable)
@@ -467,12 +488,39 @@ export async function rescheduleAppointment(id: number, body: {
   await logAudit({
     userId: ctx.userId, userName: ctx.userName ?? undefined,
     patientId: original.patientId, action: "update", entityType: "appointment", entityId: id,
-    summary: `Remarcado para ${date} às ${startTime} (novo ID: ${result.id}) (por ${actor})`,
+    summary: `Remarcado de ${original.date} ${original.startTime} para ${date} ${startTime} (por ${actor})`,
   });
 
-  const newDetails = await getWithDetails(result.id);
-  const oldDetails = await getWithDetails(id);
-  return { rescheduled: oldDetails, new: newDetails };
+  const details = await getWithDetails(id);
+  return { appointment: details };
+}
+
+// ─── Reschedule history ───────────────────────────────────────────────────────
+export async function getAppointmentReschedules(appointmentId: number, ctx: AuthCtx) {
+  const appt = await getWithDetails(appointmentId, ctx.clinicId);
+  if (!appt) throw notFound();
+  const rows = await db
+    .select()
+    .from(appointmentReschedulesTable)
+    .where(eq(appointmentReschedulesTable.appointmentId, appointmentId))
+    .orderBy(appointmentReschedulesTable.rescheduledAt);
+  return rows;
+}
+
+export async function getPatientReschedules(patientId: number, ctx: AuthCtx) {
+  const rows = await db
+    .select({
+      reschedule: appointmentReschedulesTable,
+      appointment: appointmentsTable,
+    })
+    .from(appointmentReschedulesTable)
+    .innerJoin(appointmentsTable, eq(appointmentReschedulesTable.appointmentId, appointmentsTable.id))
+    .where(and(
+      eq(appointmentsTable.patientId, patientId),
+      ctx.clinicId ? eq(appointmentsTable.clinicId, ctx.clinicId) : undefined,
+    ))
+    .orderBy(appointmentReschedulesTable.rescheduledAt);
+  return rows;
 }
 
 // ─── Complete ────────────────────────────────────────────────────────────────

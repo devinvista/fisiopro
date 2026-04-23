@@ -4,6 +4,7 @@ export * from "./password-reset-tokens";
 export * from "./patients";
 export * from "./procedures";
 export * from "./appointments";
+export * from "./appointment-reschedules";
 export * from "./schedules";
 export * from "./medical-records";
 export * from "./financial";
