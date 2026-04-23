@@ -1,4 +1,8 @@
 import { z } from "zod/v4";
+import {
+  TREATMENT_PLAN_STATUSES,
+  FINANCIAL_RECORD_TYPES,
+} from "@workspace/shared-constants";
 
 // ─── Param type aliases ────────────────────────────────────────────────────────
 export type P = { patientId: string };
@@ -74,7 +78,7 @@ export const evaluationSchema = z.object({
 });
 
 // ─── Treatment Plan ───────────────────────────────────────────────────────────
-export const treatmentPlanStatusEnum = z.enum(["ativo", "concluido", "cancelado"]);
+export const treatmentPlanStatusEnum = z.enum(TREATMENT_PLAN_STATUSES);
 
 export const createTreatmentPlanSchema = z.object({
   objectives: z.string().max(5000).optional().nullable(),
@@ -116,7 +120,7 @@ export const dischargeSummarySchema = z.object({
 
 // ─── Patient Financial (within prontuário context) ────────────────────────────
 export const patientFinancialSchema = z.object({
-  type: z.enum(["receita", "despesa"], { error: "type deve ser 'receita' ou 'despesa'" }),
+  type: z.enum(FINANCIAL_RECORD_TYPES, { error: "type deve ser 'receita' ou 'despesa'" }),
   amount: z.union([z.number(), z.string()]).transform(Number).refine(v => !isNaN(v) && v > 0, { message: "amount deve ser um número maior que zero" }),
   description: z.string().min(1, "description é obrigatória").max(500),
   category: z.string().max(100).optional().nullable(),

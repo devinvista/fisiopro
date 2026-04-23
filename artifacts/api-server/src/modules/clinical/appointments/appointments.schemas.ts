@@ -1,12 +1,11 @@
 import { z } from "zod/v4";
+import { APPOINTMENT_STATUSES, type AppointmentStatus } from "@workspace/shared-constants";
 
-export const appointmentStatusEnum = z.enum([
-  "agendado", "confirmado", "compareceu", "concluido", "cancelado", "faltou", "remarcado",
-]);
+export const appointmentStatusEnum = z.enum(APPOINTMENT_STATUSES);
 
 // ─── State machine: valid transitions ────────────────────────────────────────
 // "admin_override" keys allow any-to-any via the edit form (secretary/admin only)
-export const VALID_TRANSITIONS: Record<string, string[]> = {
+export const VALID_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
   agendado:   ["confirmado", "compareceu", "cancelado", "faltou", "remarcado"],
   confirmado: ["compareceu", "cancelado", "faltou", "remarcado", "agendado"],
   compareceu: ["concluido", "faltou", "cancelado"],
@@ -18,9 +17,9 @@ export const VALID_TRANSITIONS: Record<string, string[]> = {
 
 export function isValidTransition(from: string, to: string, isAdmin: boolean): boolean {
   if (from === to) return true;
-  if (isAdmin && ["concluido", "remarcado"].includes(from)) return true;
-  const allowed = VALID_TRANSITIONS[from] ?? [];
-  return allowed.includes(to);
+  if (isAdmin && (["concluido", "remarcado"] as AppointmentStatus[]).includes(from as AppointmentStatus)) return true;
+  const allowed = VALID_TRANSITIONS[from as AppointmentStatus] ?? [];
+  return allowed.includes(to as AppointmentStatus);
 }
 
 export const rescheduleSchema = z.object({

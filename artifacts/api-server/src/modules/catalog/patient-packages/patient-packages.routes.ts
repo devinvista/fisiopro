@@ -8,8 +8,9 @@ import { requireFeature } from "../../../middleware/plan-features.js";
 import { validateBody } from "../../../utils/validate.js";
 import { postPackageSale } from "../../shared/accounting/accounting.service.js";
 import { z } from "zod/v4";
+import { PACKAGE_PAYMENT_STATUSES } from "@workspace/shared-constants";
 
-const paymentStatusEnum = z.enum(["pendente", "pago", "cancelado"]);
+const paymentStatusEnum = z.enum(PACKAGE_PAYMENT_STATUSES);
 
 const createPatientPackageSchema = z.object({
   patientId: z.union([z.number().int().positive(), z.string().transform(Number)]).optional(),

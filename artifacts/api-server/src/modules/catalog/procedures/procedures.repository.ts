@@ -7,6 +7,7 @@ import {
   schedulesTable,
 } from "@workspace/db";
 import { and, count, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import type { AppointmentStatus } from "@workspace/shared-constants";
 
 /** Filtro de tenant: clinic-specific OR global (clinicId IS NULL). */
 export function tenantScopeCondition(clinicId: number | null | undefined, isSuperAdmin: boolean) {
@@ -268,7 +269,7 @@ export async function procedureUsageInPeriod(opts: {
   startDate: string;
   endDate: string;
 }) {
-  const confirmedStatuses = ["compareceu", "concluido"];
+  const confirmedStatuses: string[] = ["compareceu", "concluido"] satisfies AppointmentStatus[];
   const [row] = await db
     .select({
       apptCount: count(),

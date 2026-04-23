@@ -14,6 +14,7 @@ import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,
 } from "./appointments.repository.js";
 import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
+import type { AppointmentStatus } from "@workspace/shared-constants";
 
 // ─── Billing rules ────────────────────────────────────────────────────────────
 export async function applyBillingRules(
@@ -35,9 +36,10 @@ export async function applyBillingRules(
   const today = todayBRT();
   const appointmentDate: string = (details as any).date ?? today;
 
-  const confirmedStatuses = ["compareceu", "concluido"];
-  const canceledStatuses = ["cancelado"];
-  const absenceCreditStatuses = ["cancelado", "faltou"];
+  // satisfies garante que só valores válidos de AppointmentStatus são usados
+  const confirmedStatuses: string[] = ["compareceu", "concluido"] satisfies AppointmentStatus[];
+  const canceledStatuses: string[] = ["cancelado"] satisfies AppointmentStatus[];
+  const absenceCreditStatuses: string[] = ["cancelado", "faltou"] satisfies AppointmentStatus[];
 
   const resolvedClinicId = clinicId ?? details.clinicId ?? null;
 

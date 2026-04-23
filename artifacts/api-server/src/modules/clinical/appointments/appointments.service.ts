@@ -5,6 +5,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { resolvePermissions, type Role } from "@workspace/db";
+import type { AppointmentStatus } from "@workspace/shared-constants";
 import { addMinutes, timeToMinutes, minutesToTime } from "./appointments.helpers.js";
 import { getWithDetails, checkConflict } from "./appointments.repository.js";
 import { isValidTransition } from "./appointments.schemas.js";
@@ -378,7 +379,7 @@ export async function rescheduleAppointment(id: number, body: {
   const original = await getWithDetails(id, ctx.clinicId);
   if (!original) throw notFound();
 
-  const blockableStatuses = ["agendado", "confirmado", "faltou"];
+  const blockableStatuses: string[] = ["agendado", "confirmado", "faltou"] satisfies AppointmentStatus[];
   if (!blockableStatuses.includes(original.status)) {
     throw unprocessable("InvalidOperation", `Não é possível remarcar um agendamento com status "${original.status}".`);
   }

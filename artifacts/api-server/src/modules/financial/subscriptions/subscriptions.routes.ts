@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod/v4";
+import { PATIENT_SUBSCRIPTION_STATUSES } from "@workspace/shared-constants";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireFeature } from "../../../middleware/plan-features.js";
@@ -25,7 +26,7 @@ const createSubscriptionSchema = z.object({
 });
 
 const updateSubscriptionSchema = z.object({
-  status: z.enum(["ativa", "inativa", "cancelada", "pausada"]).optional(),
+  status: z.enum([...PATIENT_SUBSCRIPTION_STATUSES, "pausada"] as const).optional(),
   billingDay: z.number().int().min(1).max(31).optional(),
   monthlyAmount: z.number().positive().optional(),
   notes: z.string().optional().nullable(),
