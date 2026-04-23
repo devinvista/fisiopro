@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,15 +13,34 @@ import { useAgendaQueries } from "./hooks/useAgendaQueries";
 import { useAgendaNavigation } from "./hooks/useAgendaNavigation";
 import { useAgendaMutations } from "./hooks/useAgendaMutations";
 
-import { MonthGrid } from "./components/MonthGrid";
-import { AppointmentDetailModal } from "./components/AppointmentDetailModal";
-import { CreateAppointmentForm } from "./components/CreateAppointmentForm";
-import { BlockedSlotModal } from "./components/BlockedSlotModal";
-import { BlockEditDialog } from "./components/BlockEditDialog";
 import { AgendaToolbar } from "./components/AgendaToolbar";
 import { AgendaSidebar } from "./components/AgendaSidebar";
 import { WeekHeader } from "./components/WeekHeader";
 import { DayColumn } from "./components/DayColumn";
+
+const MonthGrid = lazy(() =>
+  import("./components/MonthGrid").then((m) => ({ default: m.MonthGrid })),
+);
+const AppointmentDetailModal = lazy(() =>
+  import("./components/AppointmentDetailModal").then((m) => ({ default: m.AppointmentDetailModal })),
+);
+const CreateAppointmentForm = lazy(() =>
+  import("./components/CreateAppointmentForm").then((m) => ({ default: m.CreateAppointmentForm })),
+);
+const BlockedSlotModal = lazy(() =>
+  import("./components/BlockedSlotModal").then((m) => ({ default: m.BlockedSlotModal })),
+);
+const BlockEditDialog = lazy(() =>
+  import("./components/BlockEditDialog").then((m) => ({ default: m.BlockEditDialog })),
+);
+
+function ModalLoader() {
+  return (
+    <div className="flex h-40 items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+}
 
 export default function Agenda() {
   const { hasPermission, hasRole } = useAuth();
@@ -188,21 +207,23 @@ export default function Agenda() {
 
         <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           {nav.view === "month" && (
-            <MonthGrid
-              currentDate={nav.currentDate}
-              appointments={filteredAppointments}
-              blockedSlots={blockedSlots}
-              onDayClick={(day) => {
-                nav.setCurrentDate(day);
-                nav.setMiniCalMonth(day);
-                nav.setView("day");
-              }}
-              onNewAppointment={(dateStr) => {
-                setSelectedSlot({ date: dateStr, time: "" });
-                setIsNewModalOpen(true);
-              }}
-              workingDayNumbers={config.workingDayNumbers}
-            />
+            <Suspense fallback={<ModalLoader />}>
+              <MonthGrid
+                currentDate={nav.currentDate}
+                appointments={filteredAppointments}
+                blockedSlots={blockedSlots}
+                onDayClick={(day) => {
+                  nav.setCurrentDate(day);
+                  nav.setMiniCalMonth(day);
+                  nav.setView("day");
+                }}
+                onNewAppointment={(dateStr) => {
+                  setSelectedSlot({ date: dateStr, time: "" });
+                  setIsNewModalOpen(true);
+                }}
+                workingDayNumbers={config.workingDayNumbers}
+              />
+            </Suspense>
           )}
 
           {nav.view !== "month" && (
@@ -284,56 +305,64 @@ export default function Agenda() {
               {selectedSlot?.procedureId ? "Adicionar Paciente à Sessão" : "Agendar Consulta"}
             </DialogTitle>
           </DialogHeader>
-          <CreateAppointmentForm
-            initialDate={selectedSlot?.date}
-            initialTime={selectedSlot?.time}
-            initialProcedureId={selectedSlot?.procedureId}
-            lockProcedure={!!selectedSlot?.procedureId}
-            scheduleId={selectedScheduleId ?? undefined}
-            clinicStart={String(config.activeHourStart).padStart(2, "0") + ":00"}
-            clinicEnd={String(config.activeHourEnd).padStart(2, "0") + ":00"}
-            onSuccess={() => {
-              setIsNewModalOpen(false);
-              refetchAppointments();
-            }}
-          />
+          <Suspense fallback={<ModalLoader />}>
+            <CreateAppointmentForm
+              initialDate={selectedSlot?.date}
+              initialTime={selectedSlot?.time}
+              initialProcedureId={selectedSlot?.procedureId}
+              lockProcedure={!!selectedSlot?.procedureId}
+              scheduleId={selectedScheduleId ?? undefined}
+              clinicStart={String(config.activeHourStart).padStart(2, "0") + ":00"}
+              clinicEnd={String(config.activeHourEnd).padStart(2, "0") + ":00"}
+              onSuccess={() => {
+                setIsNewModalOpen(false);
+                refetchAppointments();
+              }}
+            />
+          </Suspense>
         </DialogContent>
       </Dialog>
 
       {selectedAppointment && (
-        <AppointmentDetailModal
-          appointment={selectedAppointment}
-          allAppointments={appointments}
-          onClose={() => setSelectedAppointmentId(null)}
-          onRefresh={handleRefreshAll}
-          onAddToSession={(date, time, procedureId) => {
-            setSelectedAppointmentId(null);
-            setSelectedSlot({ date, time, procedureId });
-            setIsNewModalOpen(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AppointmentDetailModal
+            appointment={selectedAppointment}
+            allAppointments={appointments}
+            onClose={() => setSelectedAppointmentId(null)}
+            onRefresh={handleRefreshAll}
+            onAddToSession={(date, time, procedureId) => {
+              setSelectedAppointmentId(null);
+              setSelectedSlot({ date, time, procedureId });
+              setIsNewModalOpen(true);
+            }}
+          />
+        </Suspense>
       )}
 
-      <BlockedSlotModal
-        open={isBlockModalOpen}
-        onOpenChange={setIsBlockModalOpen}
-        onSuccess={() => {
-          setIsBlockModalOpen(false);
-          refetchBlocked();
-        }}
-        activeSchedules={activeSchedules}
-        defaultScheduleId={selectedScheduleId ?? undefined}
-      />
-
-      {editingBlock && (
-        <BlockEditDialog
-          block={editingBlock}
-          onClose={() => setEditingBlock(null)}
+      <Suspense fallback={null}>
+        <BlockedSlotModal
+          open={isBlockModalOpen}
+          onOpenChange={setIsBlockModalOpen}
           onSuccess={() => {
-            setEditingBlock(null);
+            setIsBlockModalOpen(false);
             refetchBlocked();
           }}
+          activeSchedules={activeSchedules}
+          defaultScheduleId={selectedScheduleId ?? undefined}
         />
+      </Suspense>
+
+      {editingBlock && (
+        <Suspense fallback={null}>
+          <BlockEditDialog
+            block={editingBlock}
+            onClose={() => setEditingBlock(null)}
+            onSuccess={() => {
+              setEditingBlock(null);
+              refetchBlocked();
+            }}
+          />
+        </Suspense>
       )}
     </AppLayout>
   );

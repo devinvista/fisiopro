@@ -45,7 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useToast } from "@/lib/toast";
 import { format, differenceInYears, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -54,7 +54,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
-import { PhotosTab } from "./photos-tab";
+const PhotosTab = lazy(() =>
+  import("./photos-tab").then((m) => ({ default: m.PhotosTab })),
+);
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
@@ -80,17 +82,45 @@ import {
   generateContractHTML,
 } from "./patient-detail/utils/print-html";
 
-// ─── Tabs extraídos ────────────────────────────────────────────────────────
-import { AtestadosTab } from "./patient-detail/tabs/AtestadosTab";
-import { DischargeTab } from "./patient-detail/tabs/DischargeTab";
-import { FinancialTab } from "./patient-detail/tabs/FinancialTab";
-import { HistoryTab } from "./patient-detail/tabs/HistoryTab";
-import { AuditLogTab } from "./patient-detail/tabs/AuditLogTab";
-import { JornadaTab } from "./patient-detail/tabs/JornadaTab";
-import { EvolutionsTab } from "./patient-detail/tabs/EvolutionsTab";
-import { TreatmentPlanTab } from "./patient-detail/tabs/TreatmentPlanTab";
-import { EvaluationsTab } from "./patient-detail/tabs/EvaluationsTab";
-import { AnamnesisTab } from "./patient-detail/tabs/AnamnesisTab";
+// ─── Tabs extraídos (lazy-loaded) ──────────────────────────────────────────
+const AtestadosTab = lazy(() =>
+  import("./patient-detail/tabs/AtestadosTab").then((m) => ({ default: m.AtestadosTab })),
+);
+const DischargeTab = lazy(() =>
+  import("./patient-detail/tabs/DischargeTab").then((m) => ({ default: m.DischargeTab })),
+);
+const FinancialTab = lazy(() =>
+  import("./patient-detail/tabs/FinancialTab").then((m) => ({ default: m.FinancialTab })),
+);
+const HistoryTab = lazy(() =>
+  import("./patient-detail/tabs/HistoryTab").then((m) => ({ default: m.HistoryTab })),
+);
+const AuditLogTab = lazy(() =>
+  import("./patient-detail/tabs/AuditLogTab").then((m) => ({ default: m.AuditLogTab })),
+);
+const JornadaTab = lazy(() =>
+  import("./patient-detail/tabs/JornadaTab").then((m) => ({ default: m.JornadaTab })),
+);
+const EvolutionsTab = lazy(() =>
+  import("./patient-detail/tabs/EvolutionsTab").then((m) => ({ default: m.EvolutionsTab })),
+);
+const TreatmentPlanTab = lazy(() =>
+  import("./patient-detail/tabs/TreatmentPlanTab").then((m) => ({ default: m.TreatmentPlanTab })),
+);
+const EvaluationsTab = lazy(() =>
+  import("./patient-detail/tabs/EvaluationsTab").then((m) => ({ default: m.EvaluationsTab })),
+);
+const AnamnesisTab = lazy(() =>
+  import("./patient-detail/tabs/AnamnesisTab").then((m) => ({ default: m.AnamnesisTab })),
+);
+
+function TabLoader() {
+  return (
+    <div className="flex h-48 items-center justify-center">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+}
 
 
 interface PatientData {
@@ -598,25 +628,49 @@ export default function PatientDetail() {
               </TabsList>
             </div>
 
-            <TabsContent value="jornada"><JornadaTab patientId={patientId} onNavigateToTab={setActiveTab} /></TabsContent>
-            <TabsContent value="anamnesis"><AnamnesisTab patientId={patientId} /></TabsContent>
-            <TabsContent value="photos"><PhotosTab patientId={patientId} /></TabsContent>
-            <TabsContent value="evaluations"><EvaluationsTab patientId={patientId} /></TabsContent>
-            <TabsContent value="treatment"><TreatmentPlanTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} /></TabsContent>
-            <TabsContent value="evolutions"><EvolutionsTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} /></TabsContent>
-            <TabsContent value="history">
-              <HistoryTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf || "", birthDate: patient.birthDate } : { name: "", cpf: "" }} />
+            <TabsContent value="jornada">
+              <Suspense fallback={<TabLoader />}><JornadaTab patientId={patientId} onNavigateToTab={setActiveTab} /></Suspense>
             </TabsContent>
-            <TabsContent value="financial"><FinancialTab patientId={patientId} /></TabsContent>
+            <TabsContent value="anamnesis">
+              <Suspense fallback={<TabLoader />}><AnamnesisTab patientId={patientId} /></Suspense>
+            </TabsContent>
+            <TabsContent value="photos">
+              <Suspense fallback={<TabLoader />}><PhotosTab patientId={patientId} /></Suspense>
+            </TabsContent>
+            <TabsContent value="evaluations">
+              <Suspense fallback={<TabLoader />}><EvaluationsTab patientId={patientId} /></Suspense>
+            </TabsContent>
+            <TabsContent value="treatment">
+              <Suspense fallback={<TabLoader />}>
+                <TreatmentPlanTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="evolutions">
+              <Suspense fallback={<TabLoader />}>
+                <EvolutionsTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="history">
+              <Suspense fallback={<TabLoader />}>
+                <HistoryTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf || "", birthDate: patient.birthDate } : { name: "", cpf: "" }} />
+              </Suspense>
+            </TabsContent>
+            <TabsContent value="financial">
+              <Suspense fallback={<TabLoader />}><FinancialTab patientId={patientId} /></Suspense>
+            </TabsContent>
             <TabsContent value="atestados">
-              <AtestadosTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf || "", birthDate: patient.birthDate } : { name: "", cpf: "" }} />
+              <Suspense fallback={<TabLoader />}>
+                <AtestadosTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf || "", birthDate: patient.birthDate } : { name: "", cpf: "" }} />
+              </Suspense>
             </TabsContent>
             <TabsContent value="discharge">
-              <DischargeTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} />
+              <Suspense fallback={<TabLoader />}>
+                <DischargeTab patientId={patientId} patient={patient ? { name: patient.name, cpf: patient.cpf, birthDate: patient.birthDate, phone: patient.phone } : undefined} />
+              </Suspense>
             </TabsContent>
             {isSuperAdmin && (
               <TabsContent value="auditoria">
-                <AuditLogTab patientId={patientId} />
+                <Suspense fallback={<TabLoader />}><AuditLogTab patientId={patientId} /></Suspense>
               </TabsContent>
             )}
           </Tabs>
