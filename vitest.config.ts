@@ -5,6 +5,7 @@ export default defineConfig({
     include: [
       "lib/**/*.test.ts",
       "artifacts/api-server/src/**/*.test.ts",
+      "artifacts/fisiogest/src/**/*.test.ts",
     ],
     environment: "node",
     globals: false,
