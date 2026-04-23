@@ -1,10 +1,21 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { financialRecordsTable, appointmentsTable, proceduresTable } from "@workspace/db";
-import { and, eq, sql, gte, lte, lt } from "drizzle-orm";
+import { and, eq, sql, gte, lte } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { nowBRT } from "../../../utils/dateUtils.js";
+import { recordDateFilter, revenueSummarySql } from "../shared/financial-reports.service.js";
+
+/**
+ * Data efetiva do registro financeiro para fins de relatório:
+ * 1. paymentDate (se pago)
+ * 2. dueDate (se a vencer)
+ * 3. DATE(createdAt) (fallback)
+ *
+ * Espelha a regra usada por `recordDateFilter` no `financial-reports.service`.
+ */
+const effectiveDateSql = sql<string>`COALESCE(${financialRecordsTable.paymentDate}::date, ${financialRecordsTable.dueDate}::date, DATE(${financialRecordsTable.createdAt}))`;
 
 const router = Router();
 router.use(authMiddleware);
@@ -27,42 +38,41 @@ router.get("/monthly-revenue", requirePermission("reports.read"), async (req: Au
   try {
     const year = parseInt(req.query.year as string) || nowBRT().year;
     const yearStartStr = `${year}-01-01`;
-    const yearEndStr = `${year + 1}-01-01`;
+    const yearEndStr = `${year}-12-31`;
 
     const clinicFilter = req.isSuperAdmin || !req.clinicId ? null : eq(financialRecordsTable.clinicId, req.clinicId);
+    const dateInYear = recordDateFilter(yearStartStr, yearEndStr);
+    const monthExpr = sql<number>`EXTRACT(MONTH FROM ${effectiveDateSql})::int`;
 
-    // Revenue: group by paymentDate month using SQL
+    // Receita: usa regra completa (exclui estornado/cancelado e tipos não-competência)
     const revenueRows = await db
       .select({
-        month: sql<number>`EXTRACT(MONTH FROM ${financialRecordsTable.paymentDate}::date)::int`,
+        month: monthExpr,
         total: sql<number>`SUM(${financialRecordsTable.amount}::numeric)`,
       })
       .from(financialRecordsTable)
-      .where(
-        clinicFilter
-          ? and(clinicFilter, sql`${financialRecordsTable.type} = 'receita'`, sql`${financialRecordsTable.status} != 'estornado'`, gte(financialRecordsTable.paymentDate, yearStartStr), lt(financialRecordsTable.paymentDate, yearEndStr))
-          : and(sql`${financialRecordsTable.type} = 'receita'`, sql`${financialRecordsTable.status} != 'estornado'`, gte(financialRecordsTable.paymentDate, yearStartStr), lt(financialRecordsTable.paymentDate, yearEndStr))
-      )
-      .groupBy(sql`EXTRACT(MONTH FROM ${financialRecordsTable.paymentDate}::date)`);
+      .where(and(...[clinicFilter, revenueSummarySql(), dateInYear].filter(Boolean) as any[]))
+      .groupBy(monthExpr);
 
     const revenueByMonth: number[] = new Array(13).fill(0);
     for (const r of revenueRows) {
       if (r.month >= 1 && r.month <= 12) revenueByMonth[r.month] = Number(r.total);
     }
 
-    // Expenses: use paymentDate (preferred) so historical data groups correctly
+    // Despesas: aplica mesma regra de data efetiva
     const expenseRows = await db
       .select({
-        month: sql<number>`EXTRACT(MONTH FROM ${financialRecordsTable.paymentDate}::date)::int`,
+        month: monthExpr,
         total: sql<number>`SUM(${financialRecordsTable.amount}::numeric)`,
       })
       .from(financialRecordsTable)
-      .where(
-        clinicFilter
-          ? and(clinicFilter, sql`${financialRecordsTable.type} = 'despesa'`, gte(financialRecordsTable.paymentDate, yearStartStr), lt(financialRecordsTable.paymentDate, yearEndStr))
-          : and(sql`${financialRecordsTable.type} = 'despesa'`, gte(financialRecordsTable.paymentDate, yearStartStr), lt(financialRecordsTable.paymentDate, yearEndStr))
-      )
-      .groupBy(sql`EXTRACT(MONTH FROM ${financialRecordsTable.paymentDate}::date)`);
+      .where(and(...[
+        clinicFilter,
+        eq(financialRecordsTable.type, "despesa"),
+        sql`${financialRecordsTable.status} NOT IN ('estornado', 'cancelado')`,
+        dateInYear,
+      ].filter(Boolean) as any[]))
+      .groupBy(monthExpr);
 
     const result = [];
     for (let month = 1; month <= 12; month++) {
@@ -87,6 +97,8 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
 
     const clinicFilter = req.isSuperAdmin || !req.clinicId ? null : eq(financialRecordsTable.clinicId, req.clinicId);
 
+    // Junta financialRecords pelo procedureId (registro próprio) OU appointmentId (registro de agendamento),
+    // usando a data efetiva (paymentDate → dueDate → createdAt) para não excluir pendentes.
     const results = await db
       .select({
         procedureId: proceduresTable.id,
@@ -100,12 +112,11 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
       .leftJoin(
         financialRecordsTable,
         and(
-          sql`${financialRecordsTable.appointmentId} = ${appointmentsTable.id}`,
-          sql`${financialRecordsTable.type} = 'receita'`,
-          gte(financialRecordsTable.paymentDate, startDate),
-          lte(financialRecordsTable.paymentDate, endDate),
-          ...(clinicFilter ? [clinicFilter] : [])
-        )
+          sql`(${financialRecordsTable.procedureId} = ${proceduresTable.id} OR ${financialRecordsTable.appointmentId} = ${appointmentsTable.id})`,
+          revenueSummarySql(),
+          recordDateFilter(startDate, endDate),
+          ...(clinicFilter ? [clinicFilter] : []),
+        ),
       )
       .groupBy(proceduresTable.id, proceduresTable.name, proceduresTable.category)
       .orderBy(sql`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0) DESC`);
