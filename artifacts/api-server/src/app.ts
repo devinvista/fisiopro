@@ -69,7 +69,7 @@ app.use(
       req: (req) => ({ method: req.method, url: req.url }),
       res: (res) => ({ statusCode: res.statusCode }),
     },
-    autoLogging: { ignore: (req) => req.url === "/healthz" },
+    autoLogging: { ignore: (req) => req.url === "/api/healthz" || req.url === "/api/health" },
   }),
 );
 
@@ -93,7 +93,7 @@ const buildLimiter = (prefix: string, max: number, windowMs = 15 * 60 * 1000) =>
     legacyHeaders: false,
     store: new PgRateLimitStore(prefix),
     message: { error: "Too Many Requests", message: "Muitas requisições. Tente novamente em alguns minutos." },
-    skip: (req) => req.path === "/healthz",
+    skip: (req) => req.path === "/healthz" || req.path === "/health",
   });
 
 const globalLimiter = buildLimiter("global", 500);
