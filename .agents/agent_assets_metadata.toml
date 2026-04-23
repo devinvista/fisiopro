@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "DD8mhd6FrjrNgPEv2PltG"
+uri = "file://hostinger-deploy.zip"
+type = "unspecified"
+title = "FisioGest Pro — Pacote para Hostinger"
