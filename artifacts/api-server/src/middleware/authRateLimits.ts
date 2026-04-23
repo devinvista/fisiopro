@@ -1,6 +1,8 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request } from "express";
 import { PgRateLimitStore } from "./rateLimitStore.js";
+
+const ipFallback = (req: Request): string => `ip:${ipKeyGenerator(req.ip ?? "")}`;
 
 /**
  * Per-email rate limit for /api/auth/forgot-password.
@@ -17,7 +19,7 @@ export const forgotPasswordEmailLimiter = rateLimit({
     const email = typeof req.body?.email === "string" ? req.body.email : "";
     const normalized = email.trim().toLowerCase();
     // Fall back to IP when the body has no e-mail — let Zod reject the request.
-    return normalized || `ip:${req.ip ?? "unknown"}`;
+    return normalized ? `email:${normalized}` : ipFallback(req);
   },
   // Don't count requests where validation will fail anyway.
   skip: (req) => typeof req.body?.email !== "string" || req.body.email.trim() === "",
@@ -43,7 +45,7 @@ export const resetPasswordTokenLimiter = rateLimit({
   keyGenerator: (req: Request) => {
     const token = typeof req.body?.token === "string" ? req.body.token : "";
     const trimmed = token.slice(0, 64);
-    return trimmed || `ip:${req.ip ?? "unknown"}`;
+    return trimmed ? `token:${trimmed}` : ipFallback(req);
   },
   skip: (req) => typeof req.body?.token !== "string" || req.body.token.length < 10,
   message: {
