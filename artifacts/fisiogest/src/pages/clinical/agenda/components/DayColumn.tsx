@@ -385,33 +385,33 @@ export function DayColumn({
                 </p>
               ) : short ? (
                 <>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 min-w-0">
                     {apt.source === "online" && (
                       <Globe className="w-2.5 h-2.5 shrink-0 opacity-80" />
                     )}
-                    <p className="text-[10px] font-bold truncate leading-tight flex-1">
-                      {apt.patient?.name?.split(" ")[0]}
+                    <p className="text-[10px] font-bold leading-tight flex-1 min-w-0 truncate">
+                      {apt.procedure?.name} · {apt.startTime}
                     </p>
                   </div>
-                  <p className={cn("text-[9px] truncate leading-none", cfg.cardSub)}>
-                    {apt.procedure?.name}
+                  <p className="text-[10px] font-semibold leading-tight truncate">
+                    {apt.patient?.name?.split(" ")[0]}
                   </p>
                 </>
               ) : (
                 <>
                   <div className="flex items-start justify-between gap-1 min-w-0">
-                    <p className="text-[11px] font-bold truncate leading-tight flex-1 min-w-0">
-                      {apt.patient?.name}
+                    <p className="text-[11px] font-bold leading-tight flex-1 min-w-0 truncate">
+                      {apt.procedure?.name}
                     </p>
                     {apt.source === "online" && (
                       <Globe className="w-3 h-3 shrink-0 mt-0.5 opacity-80" />
                     )}
                   </div>
-                  <p className={cn("text-[10px] truncate leading-tight", cfg.cardSub)}>
-                    {apt.procedure?.name}
-                  </p>
-                  <p className={cn("text-[9px] tabular-nums", cfg.cardSub)}>
+                  <p className={cn("text-[9px] tabular-nums leading-tight", cfg.cardSub)}>
                     {apt.startTime} – {apt.endTime}
+                  </p>
+                  <p className="text-[11px] font-semibold leading-tight break-words mt-0.5">
+                    {apt.patient?.name}
                   </p>
                 </>
               )}
