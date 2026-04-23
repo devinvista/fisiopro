@@ -2,7 +2,7 @@
 
 Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
-> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, 6.2 (15 itens). Sprint 6 quase completa (falta só 6.3 virtualização). Detalhes em `docs/changelog.md`.
+> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2 (16 itens). Detalhes em `docs/changelog.md`.
 
 ---
 
@@ -48,7 +48,7 @@ Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 | # | Item | Status | Notas |
 |---|---|---|---|
 | 4.1 | Sentry em produção (DSN backend e frontend, source maps no build) | ⬜ | Estrutura pronta (`lib/sentry.ts`); falta DSN + source maps |
-| 4.2 | Trace ID propagado entre frontend → backend → DB (header `x-request-id`) | ⬜ | Pendente |
+| 4.2 | Trace ID propagado entre frontend → backend (header `x-request-id`) | ✅ | Frontend gera UUID por requisição em `lib/api.ts` e `custom-fetch.ts`; backend (`middleware/requestContext.ts`) herda ou gera, ecoa em `res.setHeader` e injeta em todos os logs pino. Erros do cliente já anexam `[reqId=...]` na mensagem |
 | 4.3 | Logs de auditoria de ações sensíveis (impersonate, billing manual, exclusão) | 🟡 | Parcial via `audit-log`; ampliar |
 | 4.4 | Dashboard de erros + alertas (Sentry → Slack/email) | ⬜ | Pendente |
 
@@ -170,7 +170,7 @@ new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: f
 
 ## Resumo
 
-- **Concluídos:** 15 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 6.1, **6.2**)
+- **Concluídos:** 16 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, **4.2**, 6.1, 6.2)
 - **Em andamento:** 4.3, 5.4
-- **Pendentes ativos:** 19 itens
+- **Pendentes ativos:** 18 itens
 - **Backlog:** 4 itens (1.1, 1.6, 1.7, 6.4)

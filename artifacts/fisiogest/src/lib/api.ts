@@ -39,7 +39,16 @@ function readCookie(name: string): string | null {
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-/** Wrapper de baixo nível: anexa CSRF e usa cookies httpOnly de auth. */
+const REQUEST_ID_HEADER = "x-request-id";
+
+function genRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Wrapper de baixo nível: anexa CSRF + x-request-id e usa cookies httpOnly de auth. */
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
@@ -49,19 +58,24 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
       headers.set("x-csrf-token", csrf);
     }
   }
+  if (!headers.has(REQUEST_ID_HEADER)) {
+    headers.set(REQUEST_ID_HEADER, genRequestId());
+  }
   return fetch(input, { ...init, headers, credentials: init?.credentials ?? "include" });
 }
 
 async function extractError(res: Response): Promise<string> {
+  const reqId = res.headers.get(REQUEST_ID_HEADER);
+  const suffix = reqId ? ` [reqId=${reqId}]` : "";
   try {
     const body = await res.json();
     if (body && typeof body === "object" && "message" in body && body.message) {
-      return String((body as { message: unknown }).message);
+      return `${String((body as { message: unknown }).message)}${suffix}`;
     }
   } catch {
     /* ignore */
   }
-  return `HTTP ${res.status}`;
+  return `HTTP ${res.status}${suffix}`;
 }
 
 /**

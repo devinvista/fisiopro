@@ -21,6 +21,14 @@ export type BodyType<T> = T;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+const REQUEST_ID_HEADER = "x-request-id";
+
+function genRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
@@ -325,6 +333,12 @@ export async function customFetch<T = unknown>(
 
   if (responseType === "json" && !headers.has("accept")) {
     headers.set("accept", DEFAULT_JSON_ACCEPT);
+  }
+
+  // Propagação de x-request-id: gerado no cliente, ecoado pelo backend nos
+  // logs (pino) e na resposta. Permite correlacionar logs frontend↔backend.
+  if (!headers.has(REQUEST_ID_HEADER)) {
+    headers.set(REQUEST_ID_HEADER, genRequestId());
   }
 
   const requestInfo = { method, url: resolveUrl(input) };

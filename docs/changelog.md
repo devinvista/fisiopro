@@ -1,5 +1,27 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 4.2: trace ID frontend → backend
+
+**Estado anterior:** backend já gerava `x-request-id` em `middleware/requestContext.ts` e injetava nos logs pino. Faltava o frontend **enviar** o ID para correlacionar trace de ponta a ponta.
+
+**Implementado:**
+- `artifacts/fisiogest/src/lib/api.ts` (`apiFetch`) — gera UUID via `crypto.randomUUID()` e envia em `x-request-id` se header ausente. Em erros, anexa `[reqId=...]` à mensagem extraída do backend (visível em toasts/console).
+- `lib/api-client-react/src/custom-fetch.ts` (`customFetch` usado por todos os hooks orval) — mesma lógica.
+- Backend já honra: se cliente envia ID válido (`/^[\w-]{8,64}$/`), reusa; senão gera UUID. `res.setHeader("x-request-id", id)` ecoa para o cliente. Logger pino injeta `requestId` em todo log dentro do request.
+
+**Validação end-to-end:**
+```
+curl -H "x-request-id: test-trace-abc-123" /api/health
+→ x-request-id: test-trace-abc-123 (eco)
+
+curl /api/health
+→ x-request-id: 501b7685-2eb9-4126-9e63-6febceeded52 (gerado)
+```
+
+**Benefício prático:** quando um usuário relata "deu erro às 14h32", o reqId na mensagem do toast/console permite achar em segundos a stack completa do backend nos logs pino. Pré-requisito também para integração futura com Sentry (item 4.1).
+
+---
+
 ### Sessão abril/2026 — Sprint 6.2 fechada: prefetch no dashboard
 
 - `pages/dashboard.tsx` ganhou `useEffect` que, em `requestIdleCallback` (com fallback `setTimeout(500)`), faz `queryClient.prefetchQuery` de:
