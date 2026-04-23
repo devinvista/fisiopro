@@ -11,6 +11,10 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { requestContextMiddleware } from "./middleware/requestContext.js";
 import { csrfMiddleware } from "./middleware/csrf.js";
 import { PgRateLimitStore, startRateLimitCleanup } from "./middleware/rateLimitStore.js";
+import {
+  forgotPasswordEmailLimiter,
+  resetPasswordTokenLimiter,
+} from "./middleware/authRateLimits.js";
 import { logger } from "./lib/logger.js";
 import { initSentry, Sentry } from "./lib/sentry.js";
 
@@ -102,8 +106,8 @@ startRateLimitCleanup();
 app.use("/api", globalLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
-app.use("/api/auth/forgot-password", authLimiter);
-app.use("/api/auth/reset-password", authLimiter);
+app.use("/api/auth/forgot-password", authLimiter, forgotPasswordEmailLimiter);
+app.use("/api/auth/reset-password", authLimiter, resetPasswordTokenLimiter);
 app.use("/api/public", publicLimiter);
 app.use("/api/storage/uploads", uploadsLimiter);
 
