@@ -443,6 +443,9 @@ importers:
 
   artifacts/fisiogest:
     dependencies:
+      '@radix-ui/react-hover-card':
+        specifier: ^1.1.15
+        version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@sentry/react':
         specifier: ^10.49.0
         version: 10.49.0(react@19.2.5)

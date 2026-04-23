@@ -59,6 +59,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "@radix-ui/react-hover-card": "^1.1.15",
     "@sentry/react": "^10.49.0",
     "@tanstack/react-virtual": "^3.13.24",
     "browser-image-compression": "^2.0.2"

@@ -7,6 +7,7 @@ import { CurrentTimeLine } from "./CurrentTimeLine";
 import { STATUS_CONFIG, SLOT_HEIGHT } from "../constants";
 import { timeToMinutes, minutesToTop, minutesToHeight, positionAppointments } from "../utils";
 import type { BlockedSlot, ScheduleOption } from "../types";
+import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 
 interface Props {
   day: Date;
@@ -197,8 +198,9 @@ export function DayColumn({
               : "bg-violet-500";
 
           return (
+            <HoverCard key={`group-${item.procedureId}-${startTime}`} openDelay={200} closeDelay={80}>
+              <HoverCardTrigger asChild>
             <div
-              key={`group-${item.procedureId}-${startTime}`}
               className={`absolute rounded-xl overflow-hidden cursor-pointer z-10 transition-all duration-150 hover:brightness-95 hover:shadow-xl hover:z-20 ${grpBg}`}
               style={{
                 top: top + 2,
@@ -284,6 +286,52 @@ export function DayColumn({
                 )}
               </div>
             </div>
+              </HoverCardTrigger>
+              <HoverCardContent
+                side="right"
+                align="start"
+                className="w-64 p-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-2 pb-2 border-b border-slate-100">
+                  <p className="text-sm font-bold text-slate-800 leading-tight">
+                    {firstApt.procedure?.name}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
+                    {startTime} – {endTime} · {occupancy}/{maxCapacity} vagas
+                  </p>
+                </div>
+                <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {grpApts.map((a) => {
+                    const mCfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.agendado;
+                    return (
+                      <li
+                        key={a.id}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="text-slate-700 truncate flex-1 min-w-0" title={a.patient?.name}>
+                          {a.patient?.name}
+                        </span>
+                        <span
+                          className={cn(
+                            "shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                            mCfg.cardBg,
+                            "text-white",
+                          )}
+                        >
+                          {mCfg.label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                  {spotsLeft > 0 && (
+                    <li className="text-xs text-slate-400 italic pt-1">
+                      {spotsLeft} vaga{spotsLeft > 1 ? "s" : ""} disponíve{spotsLeft > 1 ? "is" : "l"}
+                    </li>
+                  )}
+                </ul>
+              </HoverCardContent>
+            </HoverCard>
           );
         }
 
