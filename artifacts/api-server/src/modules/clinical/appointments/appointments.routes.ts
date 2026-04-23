@@ -11,7 +11,10 @@ const listAppointmentsQuerySchema = listQuerySchema.extend({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate deve estar no formato YYYY-MM-DD").optional(),
   patientId: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : String(v))),
   /** Compat: `?status=` aqui aceita string única (não lista). */
-  status: z.string().trim().min(1).optional(),
+  status: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().min(1).optional(),
+  ),
 });
 import {
   createAppointmentSchema, updateAppointmentSchema, rescheduleSchema,

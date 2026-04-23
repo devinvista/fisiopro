@@ -13,7 +13,10 @@ import { z } from "zod/v4";
 
 const listPatientsQuerySchema = listQuerySchema.extend({
   /** Compat: o frontend ainda usa `?search=` no lugar de `?q=`. */
-  search: z.string().trim().min(1).max(200).optional(),
+  search: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().min(1).max(200).optional(),
+  ),
 });
 
 // Accepts a valid YYYY-MM-DD string, an empty string (treated as null), or null/undefined.

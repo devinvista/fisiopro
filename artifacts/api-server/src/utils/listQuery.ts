@@ -13,26 +13,41 @@ import { z } from "zod/v4";
  *
  * Cada rota pode estender este schema com filtros específicos.
  */
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : v;
+
 export const listQuerySchema = z.object({
-  q: z.string().trim().min(1).max(200).optional(),
-  from: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "from deve estar no formato YYYY-MM-DD")
-    .optional(),
-  to: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "to deve estar no formato YYYY-MM-DD")
-    .optional(),
-  status: z
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .transform((v) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined)),
-  sort: z
-    .string()
-    .regex(/^-?[a-zA-Z_][a-zA-Z0-9_]*$/, "sort deve ser um nome de campo opcionalmente prefixado com '-'")
-    .optional(),
+  q: z.preprocess(emptyToUndefined, z.string().trim().min(1).max(200).optional()),
+  from: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "from deve estar no formato YYYY-MM-DD")
+      .optional(),
+  ),
+  to: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "to deve estar no formato YYYY-MM-DD")
+      .optional(),
+  ),
+  status: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .transform((v) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : undefined)),
+  ),
+  sort: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^-?[a-zA-Z_][a-zA-Z0-9_]*$/, "sort deve ser um nome de campo opcionalmente prefixado com '-'")
+      .optional(),
+  ),
   limit: z
     .union([z.string(), z.number()])
     .optional()
@@ -40,7 +55,7 @@ export const listQuerySchema = z.object({
     .refine((v) => v === undefined || (Number.isFinite(v) && v >= 1 && v <= 100), {
       message: "limit deve estar entre 1 e 100",
     }),
-  cursor: z.string().min(1).max(500).optional(),
+  cursor: z.preprocess(emptyToUndefined, z.string().min(1).max(500).optional()),
 });
 
 export type ListQuery = z.infer<typeof listQuerySchema>;
