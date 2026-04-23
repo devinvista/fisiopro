@@ -9,10 +9,6 @@ export {
   PLAN_FEATURES,
   isPlanTier,
   planHasFeature,
-  resolveFeatures,
-} from "@workspace/shared-constants";
-
-export type {
-  PlanTier,
-  Feature,
+  type PlanTier,
+  type Feature,
 } from "@workspace/shared-constants";

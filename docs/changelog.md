@@ -1,5 +1,32 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Auditoria de legados e endpoint de health-check
+
+**Health-check / readiness:**
+- Novo endpoint `GET /api/health` em `modules/health/health.routes.ts` faz `SELECT 1` no banco e retorna `{ status, uptimeSec, timestamp, version, db: { ok, latencyMs } }` (200 saudável, 503 degradado). `GET /api/healthz` mantido como liveness simples. Já no allowlist de auth e CSRF — pronto para UptimeRobot.
+
+**ESLint:** override em `eslint.config.js` desligando `no-unused-vars` e `react-hooks/exhaustive-deps` apenas em `artifacts/*/src/components/ui/**` e `hooks/use-toast.{ts,tsx}` (componentes vendorizados pelo shadcn).
+
+**Arquivos legados removidos:**
+
+| Arquivo | Motivo |
+|---|---|
+| `artifacts/fisiogest/src/utils/auth-context.tsx` | Re-export shim de `@/contexts/auth-context` — 0 importadores |
+| `artifacts/fisiogest/src/utils/utils.ts` | Re-export shim de `@/lib/utils` — 0 importadores |
+| `artifacts/api-server/src/modules/financial/financial.service.ts` | Service órfã, não importada por nenhum router/módulo |
+| `hostinger-deploy.zip` | Artefato temporário do build (já no `.gitignore`) |
+
+**Workflow obsoleto removido:** `Start application` no `.replit` falhava em todo restart por conflito de porta com os workflows por-artifact (`api-server`, `fisiogest`, `mockup-sandbox`). Os workflows por-artifact são auto-iniciados pelos blocos `[[artifacts]]`.
+
+**Mantidos (importadores verificados após falso-positivo do meu primeiro grep):**
+- `utils/api.ts`, `utils/masks.ts`, `utils/permissions.ts`, `utils/plan-features.ts` — esses **são** importados por páginas em `pages/saas`, `pages/settings/configuracoes` e `contexts/auth-context.tsx`. Servem como camada de compatibilidade para imports `@/utils/*` que ainda existem; consolidação futura possível, mas exigiria refatorar dezenas de imports.
+
+**Documentação:** `replit.md` ganhou seções "Deploy em Hostinger" (passo a passo com Setup Node.js App) e "Boas práticas recomendadas" (10 itens priorizados).
+
+**Validação:** `pnpm typecheck` passa em todos os 7 pacotes (0 erros). `GET /api/health` responde 200 com `db.ok: true`.
+
+---
+
 ### Sessão abril/2026 — Sprint 2: paginação, filtros, validação e erros padronizados
 
 **Itens entregues** (4 do plano de sprints) + movidos para backlog (1.1, 1.6, 1.7, 6.4):

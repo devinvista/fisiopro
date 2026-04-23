@@ -10,9 +10,6 @@ export {
   SUPER_ADMIN_PERMISSIONS,
   ROLE_LABELS,
   resolvePermissions,
-} from "@workspace/shared-constants";
-
-export type {
-  Role,
-  Permission,
+  type Role,
+  type Permission,
 } from "@workspace/shared-constants";
