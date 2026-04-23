@@ -2,7 +2,7 @@
 
 Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
-> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2 (16 itens). Detalhes em `docs/changelog.md`.
+> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, 6.3 (17 itens). Detalhes em `docs/changelog.md`.
 
 ---
 
@@ -73,7 +73,7 @@ Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 |---|---|---|---|
 | 6.1 | Code splitting por rota + chunks de vendor + auditoria com `rollup-plugin-visualizer` | ✅ | 16 rotas via `lazy()` em `App.tsx` + `manualChunks` (6 vendor bundles) + `rollup-plugin-visualizer` gera `dist/public/stats.html` a cada build. Maior chunk: `vendor-charts` 113KB gzip |
 | 6.2 | React Query: `staleTime`/`gcTime` global + por endpoint, prefetch em rotas-chave | ✅ | `staleTime: 60s`, `gcTime: 5min` em `lib/query-client.ts` + constante `STALE_TIMES`. Prefetch de `listAppointments(hoje)` e `listPatients({limit:50})` no `dashboard.tsx` via `requestIdleCallback` |
-| 6.3 | Virtualização de listas longas com `@tanstack/react-virtual` | ⬜ | Dependência **não instalada**. Listas candidatas: `patients/index`, `audit-log`, `LancamentosTab`, `ClinicsTab` (>200 linhas potenciais) |
+| 6.3 | Virtualização de listas longas com `@tanstack/react-virtual` | ✅ | Aplicada na `ListView` de `pacientes/index.tsx` (threshold 30, row 64px, overscan 8). `CardView` mantida não-virtualizada (grid responsivo). Demais listas (audit-log, lançamentos, clínicas) já paginadas via cursor — virtualizar quando volume real exigir. |
 
 ---
 
@@ -152,10 +152,13 @@ new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: f
 - `queryClient.prefetchQuery()` em `/dashboard` para warm-up de Agenda e Pacientes.
 - Padronizar invalidação após mutations (já existe ad-hoc, mas inconsistente).
 
-### 6.3 Virtualização — ⬜ 0% pronto
-- `@tanstack/react-virtual` **não instalado**.
-- Após paginação cursor-based (Sprint 2.1, limite 20-100), o risco caiu — mas tabelas que carregam tudo (audit-log antigo, listagens superadmin) ainda renderizam todos os rows no DOM.
-- Recomendação: implementar **só após** profilar com 1.000+ rows reais via React DevTools.
+### 6.3 Virtualização — ✅ aplicada em `pacientes/index.tsx` (ListView)
+- `@tanstack/react-virtual` instalado em `artifacts/fisiogest`.
+- `ListView` virtualiza linhas quando `length > 30` (`VIRTUALIZE_THRESHOLD`), row estimada em 64px, overscan 8, container `max-h: min(70vh, calc(100vh - 320px))`.
+- Componente `PatientRow` extraído para reuso entre branch virtualizado e fallback (`.map` simples) — preserva visual e responsividade idênticos.
+- `sorted` envolto em `useMemo` para evitar reordenar a cada scroll.
+- `CardView` mantida sem virtualização: grid 2D responsivo (1/2/3 col) tem altura variável e o ganho não compensa a complexidade enquanto `limit:50`.
+- Demais listas (audit-log, `LancamentosTab`, `ClinicsTab`) já paginam por cursor (Sprint 2.1) — virtualizar quando dataset real exigir.
 
 ### 6.4 Cloudinary (backlog) — ⬜ 0%
 - Confirmado: nenhum uso de `f_auto`/`q_auto` no frontend. Manter no backlog até houver fotos de pacientes em volume.
@@ -170,7 +173,7 @@ new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: f
 
 ## Resumo
 
-- **Concluídos:** 16 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, **4.2**, 6.1, 6.2)
+- **Concluídos:** 17 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, **6.3**)
 - **Em andamento:** 4.3, 5.4
-- **Pendentes ativos:** 18 itens
+- **Pendentes ativos:** 17 itens
 - **Backlog:** 4 itens (1.1, 1.6, 1.7, 6.4)

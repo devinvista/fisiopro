@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListPatients, useCreatePatient } from "@workspace/api-client-react";
@@ -331,17 +332,102 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
     : <ChevronDown className="w-3 h-3 ml-1 text-primary" />;
 }
 
+const ROW_HEIGHT = 64;
+const VIRTUALIZE_THRESHOLD = 30;
+
+function PatientRow({ patient, isLast }: { patient: Patient; isLast: boolean }) {
+  const age = calcAge(patient.birthDate);
+  const dob = formatDate(patient.birthDate);
+  const initials = patient.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+
+  return (
+    <Link href={`/pacientes/${patient.id}`}>
+      <div
+        className={cn(
+          "grid items-center px-4 py-3 hover:bg-primary/[0.03] transition-colors cursor-pointer group",
+          "grid-cols-[1fr_36px] sm:grid-cols-[1fr_140px_36px] lg:grid-cols-[2fr_110px_140px_160px_120px_36px]",
+          !isLast && "border-b border-slate-100"
+        )}
+      >
+        <div className="flex items-center gap-3 min-w-0 pr-2">
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-110 transition-transform">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-sm text-slate-800 truncate">{patient.name}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              CPF: {displayCpf(patient.cpf)}
+              <span className="sm:hidden ml-2 text-slate-500">{patient.phone}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden lg:block">
+          {dob ? (
+            <div>
+              <p className="text-xs text-slate-700">{dob}</p>
+              {age && <p className="text-[11px] text-slate-400 mt-0.5">{age}</p>}
+            </div>
+          ) : (
+            <span className="text-xs text-slate-300">—</span>
+          )}
+        </div>
+
+        <div className="hidden sm:flex items-center gap-1.5">
+          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+          <span className="text-xs text-slate-600 truncate">{patient.phone}</span>
+        </div>
+
+        <div className="hidden lg:block min-w-0 pr-2">
+          {patient.email ? (
+            <div className="flex items-center gap-1.5">
+              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+              <span className="text-xs text-slate-600 truncate">{patient.email}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-300">—</span>
+          )}
+        </div>
+
+        <div className="hidden lg:block">
+          {patient.profession ? (
+            <span className="text-xs text-slate-500 truncate block">{patient.profession}</span>
+          ) : (
+            <span className="text-xs text-slate-300">—</span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end">
+          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
-  const sorted = [...patients].sort((a, b) => {
-    let va: string = "";
-    let vb: string = "";
-    if (sortField === "name") { va = a.name ?? ""; vb = b.name ?? ""; }
-    else if (sortField === "birthDate") { va = a.birthDate ?? ""; vb = b.birthDate ?? ""; }
-    else if (sortField === "phone") { va = a.phone ?? ""; vb = b.phone ?? ""; }
-    else if (sortField === "email") { va = a.email ?? ""; vb = b.email ?? ""; }
-    else if (sortField === "profession") { va = a.profession ?? ""; vb = b.profession ?? ""; }
-    const cmp = va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
-    return sortDir === "asc" ? cmp : -cmp;
+  const sorted = useMemo(() => {
+    return [...patients].sort((a, b) => {
+      let va: string = "";
+      let vb: string = "";
+      if (sortField === "name") { va = a.name ?? ""; vb = b.name ?? ""; }
+      else if (sortField === "birthDate") { va = a.birthDate ?? ""; vb = b.birthDate ?? ""; }
+      else if (sortField === "phone") { va = a.phone ?? ""; vb = b.phone ?? ""; }
+      else if (sortField === "email") { va = a.email ?? ""; vb = b.email ?? ""; }
+      else if (sortField === "profession") { va = a.profession ?? ""; vb = b.profession ?? ""; }
+      const cmp = va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [patients, sortField, sortDir]);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const shouldVirtualize = sorted.length > VIRTUALIZE_THRESHOLD;
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+    enabled: shouldVirtualize,
   });
 
   function HeaderCell({
@@ -384,83 +470,51 @@ function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
         <span />
       </div>
 
-      {/* Rows */}
-      {sorted.map((patient, idx) => {
-        const age = calcAge(patient.birthDate);
-        const dob = formatDate(patient.birthDate);
-        const initials = patient.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
-
-        return (
-          <Link key={patient.id} href={`/pacientes/${patient.id}`}>
-            <div
-              className={cn(
-                "grid items-center px-4 py-3 hover:bg-primary/[0.03] transition-colors cursor-pointer group",
-                "grid-cols-[1fr_36px] sm:grid-cols-[1fr_140px_36px] lg:grid-cols-[2fr_110px_140px_160px_120px_36px]",
-                idx !== sorted.length - 1 && "border-b border-slate-100"
-              )}
-            >
-              {/* Name + CPF — always visible */}
-              <div className="flex items-center gap-3 min-w-0 pr-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-110 transition-transform">
-                  {initials}
+      {/* Rows — virtualizadas quando > VIRTUALIZE_THRESHOLD */}
+      {shouldVirtualize ? (
+        <div
+          ref={scrollRef}
+          className="overflow-auto"
+          style={{ maxHeight: "min(70vh, calc(100vh - 320px))" }}
+        >
+          <div
+            style={{
+              height: virtualizer.getTotalSize(),
+              position: "relative",
+              width: "100%",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((vRow) => {
+              const patient = sorted[vRow.index];
+              const isLast = vRow.index === sorted.length - 1;
+              return (
+                <div
+                  key={patient.id}
+                  data-index={vRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vRow.start}px)`,
+                  }}
+                >
+                  <PatientRow patient={patient} isLast={isLast} />
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-slate-800 truncate">{patient.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    CPF: {displayCpf(patient.cpf)}
-                    {/* On mobile show phone inline under name */}
-                    <span className="sm:hidden ml-2 text-slate-500">{patient.phone}</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Birth date — lg+ only */}
-              <div className="hidden lg:block">
-                {dob ? (
-                  <div>
-                    <p className="text-xs text-slate-700">{dob}</p>
-                    {age && <p className="text-[11px] text-slate-400 mt-0.5">{age}</p>}
-                  </div>
-                ) : (
-                  <span className="text-xs text-slate-300">—</span>
-                )}
-              </div>
-
-              {/* Phone — sm+ only */}
-              <div className="hidden sm:flex items-center gap-1.5">
-                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                <span className="text-xs text-slate-600 truncate">{patient.phone}</span>
-              </div>
-
-              {/* Email — lg+ only */}
-              <div className="hidden lg:block min-w-0 pr-2">
-                {patient.email ? (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span className="text-xs text-slate-600 truncate">{patient.email}</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-slate-300">—</span>
-                )}
-              </div>
-
-              {/* Profession — lg+ only */}
-              <div className="hidden lg:block">
-                {patient.profession ? (
-                  <span className="text-xs text-slate-500 truncate block">{patient.profession}</span>
-                ) : (
-                  <span className="text-xs text-slate-300">—</span>
-                )}
-              </div>
-
-              {/* Arrow */}
-              <div className="flex items-center justify-end">
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-              </div>
-            </div>
-          </Link>
-        );
-      })}
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        sorted.map((patient, idx) => (
+          <PatientRow
+            key={patient.id}
+            patient={patient}
+            isLast={idx === sorted.length - 1}
+          />
+        ))
+      )}
     </div>
   );
 }

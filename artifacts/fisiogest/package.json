@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@sentry/react": "^10.49.0",
+    "@tanstack/react-virtual": "^3.13.24",
     "browser-image-compression": "^2.0.2"
   }
 }

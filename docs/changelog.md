@@ -1,5 +1,29 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 6.3: virtualização da lista de pacientes
+
+**Contexto:** `pages/clinical/patients/index.tsx` renderizava todas as linhas da `ListView` no DOM (limit padrão 50, mas o componente está pronto para crescer com paginação cursor). Risco de jank ao alcançar centenas/milhares de pacientes por clínica.
+
+**Implementado:**
+- Instalado `@tanstack/react-virtual` em `artifacts/fisiogest`.
+- `ListView` em `pacientes/index.tsx` virtualiza linhas via `useVirtualizer` quando `length > 30` (`VIRTUALIZE_THRESHOLD`):
+  - Row estimada em **64px** (`ROW_HEIGHT`), `overscan: 8`.
+  - Container scrollável com `max-h: min(70vh, calc(100vh - 320px))` para preservar o layout do app.
+  - Branch de fallback (`.map` simples) abaixo do threshold mantém SSR/screenshot test estáveis e evita scroll desnecessário em listas pequenas.
+- Extraído componente `PatientRow` reutilizado entre branch virtualizado e fallback — visual, hover, responsividade (mobile/sm/lg) e link para `/pacientes/:id` idênticos.
+- `sorted = useMemo(...)` evita reordenação a cada scroll/render.
+- `CardView` mantida sem virtualização: grid 2D responsivo (1/2/3 col) com altura variável; o ganho não compensa a complexidade enquanto `limit:50`.
+
+**Listas não tocadas (já mitigadas):**
+- `audit-log`, `LancamentosTab`, `ClinicsTab` — paginação cursor (Sprint 2.1) limita a janela renderizada. Virtualizar quando dataset real exigir.
+
+**Validação:**
+- `pnpm run typecheck` ✅
+- Workflow `artifacts/fisiogest: web` reiniciado, Vite re-otimizou deps por causa do lockfile.
+- Visual e interação preservados na branch ≤ 30 linhas (default atual).
+
+---
+
 ### Sessão abril/2026 — Sprint 4.2: trace ID frontend → backend
 
 **Estado anterior:** backend já gerava `x-request-id` em `middleware/requestContext.ts` e injetava nos logs pino. Faltava o frontend **enviar** o ID para correlacionar trace de ponta a ponta.
