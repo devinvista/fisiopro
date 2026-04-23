@@ -54,9 +54,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { PhotosTab } from "../../photos-tab";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from "recharts";
 
 // ─── Print stack & shared formatters extraídos para patient-detail/ ──────────
 import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "../types";

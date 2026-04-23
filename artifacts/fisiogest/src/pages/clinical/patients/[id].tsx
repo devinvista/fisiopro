@@ -57,9 +57,6 @@ import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema
 const PhotosTab = lazy(() =>
   import("./photos-tab").then((m) => ({ default: m.PhotosTab })),
 );
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
-} from "recharts";
 
 // ─── Print stack & shared formatters extraídos para patient-detail/ ──────────
 import type { PatientBasic, ClinicInfo, PkgOption, PlanProcedureItem } from "./patient-detail/types";

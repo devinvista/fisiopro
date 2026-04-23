@@ -1,5 +1,31 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 6 (parcial): cache global + bundle visualizer + limpeza recharts
+
+**6.2 React Query — staleTime/gcTime global:**
+- `lib/query-client.ts`: adicionado `staleTime: 60s` e `gcTime: 5min` como default global. Exportada constante `STALE_TIMES = { realtime: 0, short: 30s, default: 60s, long: 10min }` para padronizar overrides por hook (substitui valores ad-hoc espalhados).
+- **Impacto esperado:** navegações comuns (Dashboard ↔ Agenda ↔ Pacientes) deixam de refetch toda query a cada mount.
+
+**6.1 Bundle visualizer:**
+- Instalado `rollup-plugin-visualizer` (devDep). Plugado em `vite.config.ts` gerando `dist/public/stats.html` (treemap, gzip + brotli) a cada `pnpm build`. Não abre browser automaticamente.
+- **Snapshot atual** (após este build):
+  - `vendor-charts` (recharts): **421KB / 113KB gzip** — maior chunk
+  - `index-BnURn6CS` (entry app): 286KB / 89KB gzip
+  - `vendor-motion` (framer-motion): 129KB / 42KB gzip
+  - `vendor-ui` (8 Radix): 120KB / 38KB gzip
+  - `vendor-date` (date-fns + react-day-picker): 97KB / 27KB gzip
+  - `vendor-forms` (rhf+zod): 79KB / 22KB gzip
+  - `vendor-query`: 44KB / 14KB gzip
+
+**Limpeza de imports mortos de `recharts`:**
+- Removido `import { LineChart, ... } from "recharts"` de **8 arquivos** que não usavam nenhum componente em JSX: `patients/[id].tsx` + 7 abas em `patient-detail/tabs/` (Atestados, AuditLog, History, Discharge, Jornada, TreatmentPlan, Evaluations).
+- Hashes dos chunks ficaram idênticos → confirmado que o Rollup já tree-shake esses imports. Ganho real: 0 KB de bundle, mas código mais limpo e sem ruído de "12 arquivos importam recharts" que confundia auditoria.
+- Os 4 arquivos que **realmente** usam recharts: `relatorios.tsx`, `LancamentosTab`, `CustosPorProcedimentoTab`, `IndicatorsPanel`.
+
+**Validação:** `pnpm typecheck` 0 erros, `pnpm build` OK em 28s, workflow `fisiogest: web` reiniciado com sucesso.
+
+---
+
 ### Sessão abril/2026 — Auditoria de legados e endpoint de health-check
 
 **Health-check / readiness:**

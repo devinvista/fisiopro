@@ -2,7 +2,7 @@
 
 Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
-> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5 (13 itens). Sprint 6 reavaliada. Detalhes em `docs/changelog.md`.
+> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 6.1 (14 itens). Sprint 6 avançada (6.2 parcial). Detalhes em `docs/changelog.md`.
 
 ---
 
@@ -71,8 +71,8 @@ Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
 | # | Item | Status | Notas |
 |---|---|---|---|
-| 6.1 | Code splitting por rota + chunks de vendor + auditoria com `rollup-plugin-visualizer` | 🟡 | **Code splitting feito**: 16 rotas via `lazy()` em `App.tsx` + `manualChunks` em `vite.config.ts` (vendor-ui/charts/motion/forms/query/date). **Falta**: instalar `rollup-plugin-visualizer` e gerar relatório `stats.html` no `pnpm build` |
-| 6.2 | React Query: `staleTime`/`gcTime` global + por endpoint, prefetch em rotas-chave | 🟡 | **Parcial**: `lib/query-client.ts` só define `retry:1` e `refetchOnWindowFocus:false`. `staleTime` ad-hoc em ~3 lugares (5min, 10min, 30s). **Falta**: padrão global (`staleTime: 60s`, `gcTime: 5min`) + prefetch em `/dashboard` e `/agenda` |
+| 6.1 | Code splitting por rota + chunks de vendor + auditoria com `rollup-plugin-visualizer` | ✅ | 16 rotas via `lazy()` em `App.tsx` + `manualChunks` (6 vendor bundles) + `rollup-plugin-visualizer` gera `dist/public/stats.html` a cada build. Maior chunk: `vendor-charts` 113KB gzip |
+| 6.2 | React Query: `staleTime`/`gcTime` global + por endpoint, prefetch em rotas-chave | 🟡 | **Default global pronto**: `staleTime: 60s`, `gcTime: 5min` em `lib/query-client.ts` + constante `STALE_TIMES`. **Falta**: prefetch em `/dashboard` para warm-up de Agenda/Pacientes |
 | 6.3 | Virtualização de listas longas com `@tanstack/react-virtual` | ⬜ | Dependência **não instalada**. Listas candidatas: `patients/index`, `audit-log`, `LancamentosTab`, `ClinicsTab` (>200 linhas potenciais) |
 
 ---
@@ -170,7 +170,7 @@ new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: f
 
 ## Resumo
 
-- **Concluídos:** 13 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, **3.5**)
-- **Em andamento:** 4.3, 5.4, 6.1, 6.2
-- **Pendentes ativos:** 21 itens
+- **Concluídos:** 14 itens (1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, **6.1**)
+- **Em andamento:** 4.3, 5.4, 6.2
+- **Pendentes ativos:** 20 itens
 - **Backlog:** 4 itens (1.1, 1.6, 1.7, 6.4)

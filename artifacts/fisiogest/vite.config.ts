@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { visualizer } from "rollup-plugin-visualizer";
 import path from "path";
 
 const rawPort = process.env.PORT;
@@ -17,6 +18,13 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    visualizer({
+      filename: path.resolve(import.meta.dirname, "dist/public/stats.html"),
+      template: "treemap",
+      gzipSize: true,
+      brotliSize: true,
+      open: false,
+    }),
   ],
   resolve: {
     alias: {
