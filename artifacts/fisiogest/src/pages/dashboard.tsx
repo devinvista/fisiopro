@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetDashboard, useUpdateAppointment } from "@workspace/api-client-react";
+import {
+  useGetDashboard,
+  useUpdateAppointment,
+  listAppointments,
+  listPatients,
+  getListAppointmentsQueryKey,
+  getListPatientsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { STALE_TIMES } from "@/lib/query-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -178,6 +186,36 @@ export default function Dashboard() {
   const [loadingId, setLoadingId] = useState<number | null>(null);
   const updateMutation = useUpdateAppointment();
   const queryClient = useQueryClient();
+
+  // Prefetch das rotas mais visitadas a partir do dashboard (Agenda + Pacientes).
+  // Roda em idle time para não competir com o render inicial.
+  useEffect(() => {
+    const today = format(new Date(), "yyyy-MM-dd");
+    const apptParams = { startDate: today, endDate: today };
+    const patientsParams = { limit: 50 };
+
+    const runIdle = (cb: () => void) => {
+      const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+      if (typeof w.requestIdleCallback === "function") {
+        w.requestIdleCallback(cb, { timeout: 2000 });
+      } else {
+        setTimeout(cb, 500);
+      }
+    };
+
+    runIdle(() => {
+      void queryClient.prefetchQuery({
+        queryKey: getListAppointmentsQueryKey(apptParams),
+        queryFn: ({ signal }) => listAppointments(apptParams, { signal }),
+        staleTime: STALE_TIMES.short,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: getListPatientsQueryKey(patientsParams),
+        queryFn: ({ signal }) => listPatients(patientsParams, { signal }),
+        staleTime: STALE_TIMES.default,
+      });
+    });
+  }, [queryClient]);
 
   const handleInlineUpdate = (id: number, toStatus: string) => {
     setLoadingId(id);

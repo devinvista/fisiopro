@@ -1,5 +1,15 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 6.2 fechada: prefetch no dashboard
+
+- `pages/dashboard.tsx` ganhou `useEffect` que, em `requestIdleCallback` (com fallback `setTimeout(500)`), faz `queryClient.prefetchQuery` de:
+  - `listAppointments({ startDate: hoje, endDate: hoje })` com `staleTime: STALE_TIMES.short` (30s)
+  - `listPatients({ limit: 50 })` com `staleTime: STALE_TIMES.default` (60s)
+- Resultado: ao clicar em "Agenda" ou "Pacientes" a partir do dashboard, a lista já está em cache — perceptivelmente instantâneo. O prefetch só dispara quando o browser está ocioso, sem competir com o render inicial.
+- **Sprint 6.2 marcada como ✅** em `docs/sprints.md`.
+
+---
+
 ### Sessão abril/2026 — Sprint 6 (parcial): cache global + bundle visualizer + limpeza recharts
 
 **6.2 React Query — staleTime/gcTime global:**
