@@ -27,6 +27,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/utils/utils";
+import {
+  procedureFormSchema,
+  procedureFormDefaults,
+  buildProcedurePayload,
+  procedureCostFormSchema,
+  buildProcedureCostPayload,
+} from "@/schemas/procedure.schema";
 
 import { getCatalogHtml } from "./utils";
 
@@ -86,19 +93,7 @@ export default function Procedimentos() {
       });
   }, [buildIntroText]);
 
-  const [form, setForm] = useState({
-    name: "",
-    category: "Reabilitação",
-    modalidade: "individual" as "individual" | "dupla" | "grupo",
-    durationMinutes: 60,
-    price: "",
-    cost: "",
-    description: "",
-    maxCapacity: 1,
-    onlineBookingEnabled: false,
-    monthlyPrice: "" as string | undefined,
-    billingDay: "" as string | undefined,
-  });
+  const [form, setForm] = useState({ ...procedureFormDefaults });
 
   const baseUrl = isAdmin
     ? (selectedCategory === "all" ? "/api/procedures?includeInactive=true" : `/api/procedures?category=${selectedCategory}&includeInactive=true`)
@@ -217,17 +212,18 @@ export default function Procedimentos() {
 
   const updateCostsMutation = useMutation({
     mutationFn: async (data: { id: number; priceOverride: string; variableCost: string; notes: string }) => {
+      const parsed = procedureCostFormSchema.safeParse({
+        priceOverride: data.priceOverride,
+        variableCost: data.variableCost,
+        notes: data.notes,
+      });
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
+      // fixedCost is intentionally 0 — overhead is always computed dynamically
+      // from clinic expenses / available hours and never stored as a snapshot.
       return apiFetch(`/api/procedures/${data.id}/costs`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          priceOverride: data.priceOverride !== "" ? Number(data.priceOverride) : null,
-          // fixedCost is intentionally 0 — overhead is always computed dynamically
-          // from clinic expenses / available hours and never stored as a snapshot.
-          fixedCost: 0,
-          variableCost: data.variableCost !== "" ? Number(data.variableCost) : 0,
-          notes: data.notes || null,
-        }),
+        body: JSON.stringify(buildProcedureCostPayload(parsed.data)),
       });
     },
     onSuccess: () => {
@@ -250,7 +246,7 @@ export default function Procedimentos() {
   }
 
   function resetForm() {
-    setForm({ name: "", category: "Reabilitação", modalidade: "individual", durationMinutes: 60, price: "", cost: "", description: "", maxCapacity: 1, onlineBookingEnabled: false, monthlyPrice: undefined, billingDay: undefined });
+    setForm({ ...procedureFormDefaults });
   }
 
   function openEdit(proc: Procedure) {
@@ -272,10 +268,16 @@ export default function Procedimentos() {
   }
 
   function handleSubmit() {
+    const parsed = procedureFormSchema.safeParse(form);
+    if (!parsed.success) {
+      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+      return;
+    }
+    const payload = buildProcedurePayload(parsed.data);
     if (editingProcedure) {
-      updateMutation.mutate({ ...form, id: editingProcedure.id });
+      updateMutation.mutate({ ...payload, id: editingProcedure.id } as any);
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(payload as any);
     }
   }
 

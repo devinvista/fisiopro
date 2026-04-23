@@ -239,7 +239,8 @@ Schemas centralizados em `src/schemas/`. Cada schema exporta:
 - `type XxxFormValues = z.infer<typeof xxxFormSchema>`
 
 Schemas existentes: `coupon`, `plan`, `patient`, `appointment` (+ `recurrence`),
-`subscription` (`new` + `edit`), `financial-record` (`new` + `edit`).
+`subscription` (`new` + `edit`), `financial-record` (`new` + `edit`),
+`procedure` (+ `procedureCost`), `package`.
 
 Padrão de uso (sem RHF): `safeParse` no início do `handleSubmit`/`mutationFn`,
 toast com `error.issues[0]?.message` em caso de erro, `buildXxxPayload(parsed.data)` no body.

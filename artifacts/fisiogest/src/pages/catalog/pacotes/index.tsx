@@ -14,7 +14,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/utils/utils";
 import type { Procedure, PackageItem } from "./types";
-import { apiFetch, EMPTY_FORM, buildPackagePayload } from "./helpers";
+import { apiFetch } from "./helpers";
+import {
+  packageFormSchema,
+  packageFormDefaults,
+  buildPackagePayload,
+} from "@/schemas/package.schema";
 import { PackageCard } from "./PackageCard";
 import { PackageFormModal } from "./PackageFormModal";
 
@@ -29,7 +34,7 @@ export default function Pacotes() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<PackageItem | null>(null);
   const [deletingPackage, setDeletingPackage] = useState<PackageItem | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState({ ...packageFormDefaults });
 
   const { data: packages = [], isLoading } = useQuery<PackageItem[]>({
     queryKey: ["packages"],
@@ -91,7 +96,7 @@ export default function Pacotes() {
 
   function openCreate() {
     setEditingPackage(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...packageFormDefaults });
     setIsModalOpen(true);
   }
 
@@ -116,26 +121,19 @@ export default function Pacotes() {
   function closeModal() {
     setIsModalOpen(false);
     setEditingPackage(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...packageFormDefaults });
   }
 
   function handleSubmit() {
-    if (!form.name || !form.procedureId) {
-      toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
-      return;
-    }
-    if (form.packageType === "sessoes" && !form.price) {
-      toast({ title: "Informe o preço total do pacote", variant: "destructive" });
-      return;
-    }
-    if (form.packageType !== "sessoes" && !form.monthlyPrice) {
-      toast({ title: "Informe o valor da cobrança", variant: "destructive" });
+    const parsed = packageFormSchema.safeParse(form);
+    if (!parsed.success) {
+      toast({ title: parsed.error.issues[0]?.message ?? "Dados inválidos", variant: "destructive" });
       return;
     }
     if (editingPackage) {
-      updateMutation.mutate({ id: editingPackage.id, data: form });
+      updateMutation.mutate({ id: editingPackage.id, data: parsed.data });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(parsed.data);
     }
   }
 
