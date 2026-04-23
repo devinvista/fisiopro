@@ -228,8 +228,8 @@ export function DayColumn({
                   </div>
                 ) : short ? (
                   <>
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="text-[10px] font-bold truncate leading-tight flex-1">
+                    <div className="flex items-start justify-between gap-1 min-w-0">
+                      <p className="text-[10px] font-bold truncate leading-tight flex-1 min-w-0">
                         {firstApt.procedure?.name}
                       </p>
                       <span
@@ -249,8 +249,8 @@ export function DayColumn({
                   </>
                 ) : (
                   <>
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="text-[11px] font-bold truncate leading-tight flex-1">
+                    <div className="flex items-start justify-between gap-1 min-w-0">
+                      <p className="text-[11px] font-bold leading-tight flex-1 min-w-0 line-clamp-2 break-words">
                         {firstApt.procedure?.name}
                       </p>
                       <span
@@ -267,17 +267,18 @@ export function DayColumn({
                     <p className="text-[9px] opacity-70 leading-none">
                       {startTime} – {endTime}
                     </p>
-                    <div className="flex flex-wrap gap-1 mt-auto pt-1">
+                    <div className="flex flex-wrap gap-1 mt-auto pt-1 min-w-0">
                       {grpApts.slice(0, 3).map((a) => (
                         <span
                           key={a.id}
-                          className="text-[9px] font-semibold bg-white/20 rounded-full px-2 py-0.5 leading-none whitespace-nowrap"
+                          className="text-[9px] font-semibold bg-white/20 rounded-full px-1.5 py-0.5 leading-none truncate max-w-full"
+                          title={a.patient?.name}
                         >
                           {a.patient?.name?.split(" ")[0]}
                         </span>
                       ))}
                       {spotsLeft > 0 && (
-                        <span className="text-[9px] font-semibold bg-white/10 rounded-full px-2 py-0.5 leading-none opacity-70 whitespace-nowrap">
+                        <span className="text-[9px] font-semibold bg-white/10 rounded-full px-1.5 py-0.5 leading-none opacity-70 shrink-0">
                           +{spotsLeft}
                         </span>
                       )}
@@ -353,8 +354,8 @@ export function DayColumn({
                 </>
               ) : (
                 <>
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="text-[11px] font-bold truncate leading-tight flex-1">
+                  <div className="flex items-start justify-between gap-1 min-w-0">
+                    <p className="text-[11px] font-bold truncate leading-tight flex-1 min-w-0">
                       {apt.patient?.name}
                     </p>
                     {apt.source === "online" && (
