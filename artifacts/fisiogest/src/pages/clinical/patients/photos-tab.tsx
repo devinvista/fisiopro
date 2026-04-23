@@ -59,23 +59,23 @@ export function PhotosTab({ patientId }: { patientId: number }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-            <Camera className="w-4 h-4 text-primary" />
+            <Camera className="w-4 h-4 text-primary shrink-0" />
             Acompanhamento Fotográfico
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Registre a evolução visual do paciente ao longo do tratamento
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 sm:shrink-0">
           {sessions.length >= 2 && (
-            <Button variant="outline" size="sm" onClick={() => setCompareOpen(true)} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setCompareOpen(true)} className="gap-1.5 flex-1 sm:flex-none">
               <SlidersHorizontal className="w-4 h-4" /> Comparar
             </Button>
           )}
-          <Button size="sm" onClick={() => setUploadOpen(true)} className="gap-1.5">
+          <Button size="sm" onClick={() => setUploadOpen(true)} className="gap-1.5 flex-1 sm:flex-none">
             <Upload className="w-4 h-4" /> Adicionar Fotos
           </Button>
         </div>
