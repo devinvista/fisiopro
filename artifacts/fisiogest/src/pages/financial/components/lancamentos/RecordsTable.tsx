@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Edit2, Link2, Plus, Trash2 } from "lucide-react";
+import { DollarSign, PenLine, Link2, Plus, Trash2 } from "lucide-react";
 import { formatCurrency } from "../../utils";
 import { MONTH_NAMES } from "../../constants";
 
@@ -189,7 +189,7 @@ export function RecordsTable({
                             className="p-1.5 rounded-lg hover:bg-blue-100 text-slate-300 hover:text-blue-600 transition-all"
                             title="Editar"
                           >
-                            <Edit2 className="w-3.5 h-3.5" />
+                            <PenLine className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => onDelete({ id: record.id, description: record.description, amount: Number(record.amount) })}

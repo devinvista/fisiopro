@@ -253,7 +253,7 @@ export default function Procedimentos() {
     setEditingProcedure(proc);
     setForm({
       name: proc.name,
-      category: proc.category,
+      category: proc.category as "Pilates" | "Estética" | "Reabilitação",
       modalidade: (proc.modalidade ?? "individual") as "individual" | "dupla" | "grupo",
       durationMinutes: proc.durationMinutes,
       price: String(proc.price),

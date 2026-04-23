@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Stethoscope, Loader2, ArrowLeft, Building2, UserRound, Check, Package, ChevronRight, Tag, CheckCircle2, XCircle } from "lucide-react";
+import { Stethoscope, Loader2, ArrowLeft, Building2, UserRound, Check, Package, ChevronRight, Tag, CircleCheckBig, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { maskCpf } from "@/utils/masks";
 import { cn } from "@/utils/utils";
@@ -263,14 +263,14 @@ export default function Register() {
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   {couponState.status === "loading" && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
-                  {couponState.status === "valid" && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                  {couponState.status === "valid" && <CircleCheckBig className="w-4 h-4 text-emerald-500" />}
                   {couponState.status === "invalid" && <XCircle className="w-4 h-4 text-red-400" />}
                 </div>
               </div>
 
               {couponState.status === "valid" && (
                 <div className="flex items-start gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <CircleCheckBig className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                   <div>
                     <span className="font-semibold">{couponState.discountLabel} aplicado!</span>
                     {couponState.description && (

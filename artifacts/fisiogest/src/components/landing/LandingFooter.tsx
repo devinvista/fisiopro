@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import LogoMark from "@/components/logo-mark";
-import { Mail, Phone, MapPin, Instagram, Linkedin, Facebook } from "lucide-react";
+import { Mail, MapPin } from "lucide-react";
+import { FaInstagram, FaLinkedinIn, FaFacebook } from "react-icons/fa";
 
 const FOOTER_LINKS = {
   Produto: [
@@ -24,17 +25,17 @@ const FOOTER_LINKS = {
 const SOCIAL_LINKS = [
   {
     label: "Instagram do FisioGest Pro",
-    icon: Instagram,
+    icon: FaInstagram,
     href: "https://instagram.com/fisiogestpro",
   },
   {
     label: "LinkedIn do FisioGest Pro",
-    icon: Linkedin,
+    icon: FaLinkedinIn,
     href: "https://linkedin.com/company/fisiogestpro",
   },
   {
     label: "Facebook do FisioGest Pro",
-    icon: Facebook,
+    icon: FaFacebook,
     href: "https://facebook.com/fisiogestpro",
   },
 ];
