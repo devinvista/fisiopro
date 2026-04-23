@@ -399,7 +399,7 @@ export default function Relatorios() {
                   />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Ocupação</p>
-                    <p className={`text-3xl font-extrabold tabular-nums ${scheduleOccupation.occupationRate >= 80 ? "text-emerald-600" : scheduleOccupation.occupationRate >= 60 ? "text-amber-600" : "text-red-600"}`}>
+                    <p className={`text-2xl sm:text-3xl font-extrabold tabular-nums ${scheduleOccupation.occupationRate >= 80 ? "text-emerald-600" : scheduleOccupation.occupationRate >= 60 ? "text-amber-600" : "text-red-600"}`}>
                       {scheduleOccupation.occupationRate.toFixed(0)}%
                     </p>
                     <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -419,7 +419,7 @@ export default function Relatorios() {
                   <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-slate-300" />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Agendamentos</p>
-                    <p className="text-3xl font-extrabold text-slate-800 tabular-nums">{scheduleOccupation.totalSlots}</p>
+                    <p className="text-2xl sm:text-3xl font-extrabold text-slate-800 tabular-nums">{scheduleOccupation.totalSlots}</p>
                     <p className="text-[10px] text-slate-400 mt-1">{scheduleOccupation.occupiedSlots} realizados</p>
                   </div>
                 </div>
@@ -429,7 +429,7 @@ export default function Relatorios() {
                   <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-amber-400" />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Taxa Faltas</p>
-                    <p className="text-3xl font-extrabold text-amber-600 tabular-nums">{scheduleOccupation.noShowRate?.toFixed(0) ?? 0}%</p>
+                    <p className="text-2xl sm:text-3xl font-extrabold text-amber-600 tabular-nums">{scheduleOccupation.noShowRate?.toFixed(0) ?? 0}%</p>
                     <p className="text-[10px] text-slate-400 mt-1">&nbsp;</p>
                   </div>
                 </div>
@@ -439,7 +439,7 @@ export default function Relatorios() {
                   <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-amber-500" />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Faltas</p>
-                    <p className="text-3xl font-extrabold text-amber-600 tabular-nums">{scheduleOccupation.noShowCount}</p>
+                    <p className="text-2xl sm:text-3xl font-extrabold text-amber-600 tabular-nums">{scheduleOccupation.noShowCount}</p>
                     <p className="text-[10px] text-slate-400 mt-1">no-show</p>
                   </div>
                 </div>
@@ -449,7 +449,7 @@ export default function Relatorios() {
                   <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-red-400" />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Cancelados</p>
-                    <p className="text-3xl font-extrabold text-red-600 tabular-nums">{scheduleOccupation.canceledCount}</p>
+                    <p className="text-2xl sm:text-3xl font-extrabold text-red-600 tabular-nums">{scheduleOccupation.canceledCount}</p>
                     <p className="text-[10px] text-slate-400 mt-1">no período</p>
                   </div>
                 </div>
@@ -459,7 +459,7 @@ export default function Relatorios() {
                   <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-sky-400" />
                   <div className="pl-4 pr-3 py-4 text-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Pac. Ativos</p>
-                    <p className="text-3xl font-extrabold text-sky-600 tabular-nums">{scheduleOccupation.activePatients ?? 0}</p>
+                    <p className="text-2xl sm:text-3xl font-extrabold text-sky-600 tabular-nums">{scheduleOccupation.activePatients ?? 0}</p>
                     <p className="text-[10px] text-slate-400 mt-1">pacientes</p>
                   </div>
                 </div>

@@ -127,16 +127,16 @@ function KpiCard({
   loading?: boolean;
 }) {
   return (
-    <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
+    <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow duration-200 min-w-0">
       <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: accentColor }} />
-      <div className="pl-5 pr-4 py-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+      <div className="pl-4 pr-3 py-4 sm:pl-5 sm:pr-4 min-w-0">
+        <div className="flex items-start justify-between gap-2 min-w-0">
+          <p className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest leading-tight min-w-0 break-words">{label}</p>
           <div className="p-2 rounded-xl shrink-0 opacity-80" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>
             {icon}
           </div>
         </div>
-        <div className="mt-2">
+        <div className="mt-2 min-w-0">
           {loading ? (
             <div className="space-y-1.5">
               <div className="h-7 w-28 bg-slate-100 animate-pulse rounded-lg" />
@@ -144,7 +144,7 @@ function KpiCard({
             </div>
           ) : (
             <>
-              <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{value}</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums break-words leading-tight">{value}</p>
               {sub && <div className="mt-1">{sub}</div>}
             </>
           )}
