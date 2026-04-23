@@ -26,6 +26,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { DatePickerPTBR, TimeInputPTBR } from "@/components/ui/date-picker-ptbr";
+import {
+  appointmentFormSchema,
+  recurrenceFormSchema,
+  buildAppointmentPayload,
+  buildRecurringAppointmentPayload,
+} from "@/schemas/appointment.schema";
 import { cn } from "@/utils/utils";
 import type { TreatmentPlan, PlanProcedureForAgenda } from "../types";
 import { PatientStep } from "./create-appointment/PatientStep";
@@ -211,26 +217,23 @@ export function CreateAppointmentForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.startTime) {
-      toast({ variant: "destructive", title: "Selecione um horário." });
+    const parsed = appointmentFormSchema.safeParse(formData);
+    if (!parsed.success) {
+      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
       return;
     }
-    if (canSelectProfessional && professionals.length > 1 && !formData.professionalId) {
+    if (canSelectProfessional && professionals.length > 1 && !parsed.data.professionalId) {
       toast({ variant: "destructive", title: "Selecione o profissional atendente." });
       return;
     }
 
-    const professionalIdPayload = canSelectProfessional && formData.professionalId
-      ? { professionalId: Number(formData.professionalId) }
-      : {};
-
     if (isRecurring) {
-      if (recurDays.length === 0) {
-        toast({ variant: "destructive", title: "Selecione ao menos um dia da semana." });
-        return;
-      }
-      if (recurSessions < 1 || recurSessions > 100) {
-        toast({ variant: "destructive", title: "Número de sessões deve ser entre 1 e 100." });
+      const parsedRecur = recurrenceFormSchema.safeParse({
+        daysOfWeek: recurDays,
+        totalSessions: recurSessions,
+      });
+      if (!parsedRecur.success) {
+        toast({ variant: "destructive", title: parsedRecur.error.issues[0]?.message ?? "Recorrência inválida" });
         return;
       }
       setRecurPending(true);
@@ -239,16 +242,12 @@ export function CreateAppointmentForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            patientId: Number(formData.patientId),
-            procedureId: Number(formData.procedureId),
-            date: formData.date,
-            startTime: formData.startTime,
-            notes: formData.notes || undefined,
-            recurrence: { daysOfWeek: recurDays, totalSessions: recurSessions },
-            ...(scheduleId ? { scheduleId } : {}),
-            ...professionalIdPayload,
-          }),
+          body: JSON.stringify(
+            buildRecurringAppointmentPayload(
+              { values: parsed.data, canSelectProfessional, scheduleId },
+              parsedRecur.data,
+            ),
+          ),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -271,15 +270,11 @@ export function CreateAppointmentForm({
 
     mutation.mutate(
       {
-        data: {
-          patientId: Number(formData.patientId),
-          procedureId: Number(formData.procedureId),
-          date: formData.date,
-          startTime: formData.startTime,
-          notes: formData.notes || undefined,
-          ...(scheduleId ? { scheduleId } : {}),
-          ...professionalIdPayload,
-        } as any,
+        data: buildAppointmentPayload({
+          values: parsed.data,
+          canSelectProfessional,
+          scheduleId,
+        }) as any,
       },
       {
         onSuccess: () => {

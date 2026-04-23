@@ -1,5 +1,5 @@
 import { fetchJSON } from "../helpers";
-import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, EMPTY_PLAN, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats, EMPTY_COUPON } from "../constants";
+import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats } from "../constants";
 import { Plan, PlanStats, SubRow } from "../types";
 import { fmtDate, fmtCurrency, limitLabel } from "../utils";
 import { ClinicsTab, CouponsTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, PlansTab, RegisterPaymentDialog, StatusBadge } from "./";
@@ -9,6 +9,13 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
+import {
+  newSubscriptionFormSchema,
+  subscriptionFormSchema,
+  buildNewSubscriptionPayload,
+  buildSubscriptionPayload,
+  newSubscriptionFormDefaults,
+} from "@/schemas/subscription.schema";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -142,15 +149,10 @@ export function SubscriptionsTab() {
 
   const createSubMutation = useMutation({
     mutationFn: async () => {
-      if (!newSubForm.clinicId || !newSubForm.planId) throw new Error("Selecione clínica e plano");
-      const selectedPlan = plans.find((p) => String(p.id) === newSubForm.planId);
-      const payload = {
-        clinicId: Number(newSubForm.clinicId),
-        planId: Number(newSubForm.planId),
-        status: newSubForm.status,
-        paymentStatus: newSubForm.paymentStatus,
-        amount: newSubForm.amount ? Number(newSubForm.amount) : selectedPlan ? Number(selectedPlan.price) : undefined,
-      };
+      const parsed = newSubscriptionFormSchema.safeParse(newSubForm);
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
+      const selectedPlan = plans.find((p) => String(p.id) === parsed.data.planId);
+      const payload = buildNewSubscriptionPayload(parsed.data, selectedPlan?.price);
       const res = await apiFetch(api("/clinic-subscriptions"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -167,7 +169,7 @@ export function SubscriptionsTab() {
       qc.invalidateQueries({ queryKey: ["plans-stats"] });
       toast({ title: "Assinatura criada com sucesso!" });
       setNewSubOpen(false);
-      setNewSubForm({ clinicId: "", planId: "", status: "trial", paymentStatus: "pending", amount: "" });
+      setNewSubForm({ ...newSubscriptionFormDefaults });
     },
     onError: (err: any) => toast({ variant: "destructive", title: "Erro", description: err.message }),
   });
@@ -175,16 +177,9 @@ export function SubscriptionsTab() {
   const updateMutation = useMutation({
     mutationFn: async () => {
       if (!editSub) return;
-      const payload = {
-        planId: Number(subForm.planId) || undefined,
-        status: subForm.status || undefined,
-        paymentStatus: subForm.paymentStatus || undefined,
-        amount: subForm.amount ? Number(subForm.amount) : undefined,
-        trialEndDate: subForm.trialEndDate || undefined,
-        currentPeriodStart: subForm.currentPeriodStart || undefined,
-        currentPeriodEnd: subForm.currentPeriodEnd || undefined,
-        notes: subForm.notes || undefined,
-      };
+      const parsed = subscriptionFormSchema.safeParse(subForm);
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
+      const payload = buildSubscriptionPayload(parsed.data);
       const res = await apiFetch(api(`/clinic-subscriptions/${editSub.sub.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

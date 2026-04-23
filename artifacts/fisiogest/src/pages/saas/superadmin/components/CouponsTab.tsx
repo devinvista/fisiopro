@@ -1,11 +1,13 @@
 import { fetchJSON, ClinicBasic } from "../helpers";
-import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, EMPTY_PLAN, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats } from "../constants";
+import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats } from "../constants";
 import {
   couponFormSchema,
   couponFormDefaults,
   buildCouponPayload,
   type CouponFormValues,
 } from "@/schemas/coupon.schema";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Plan, PlanStats, SubRow } from "../types";
 import { fmtDate, fmtCurrency, limitLabel } from "../utils";
 import { ClinicsTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, PlansTab, RegisterPaymentDialog, StatusBadge, SubscriptionsTab } from "./";
@@ -127,9 +129,30 @@ export function CouponsTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<CouponRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CouponRow | null>(null);
-  const [form, setForm] = useState<CouponFormValues>({ ...couponFormDefaults });
   const [copying, setCopying] = useState<number | null>(null);
   const [clinicComboOpen, setClinicComboOpen] = useState(false);
+
+  const {
+    watch,
+    setValue,
+    reset,
+    handleSubmit: rhfHandleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<CouponFormValues>({
+    resolver: zodResolver(couponFormSchema),
+    defaultValues: { ...couponFormDefaults },
+    mode: "onSubmit",
+  });
+  const form = watch();
+  // Adapter to preserve the existing setForm({ ...form, field: value }) pattern
+  // by translating shallow merges into per-field RHF setValue calls.
+  const setForm = (next: CouponFormValues) => {
+    (Object.keys(next) as (keyof CouponFormValues)[]).forEach((k) => {
+      if (next[k] !== form[k]) {
+        setValue(k, next[k] as any, { shouldValidate: false, shouldDirty: true });
+      }
+    });
+  };
 
   const { data: coupons = [], isLoading } = useQuery<CouponRow[]>({
     queryKey: ["coupon-codes"],
@@ -161,13 +184,13 @@ export function CouponsTab() {
 
   function openCreate() {
     setEditTarget(null);
-    setForm({ ...couponFormDefaults });
+    reset({ ...couponFormDefaults });
     setDialogOpen(true);
   }
 
   function openEdit(c: CouponRow) {
     setEditTarget(c);
-    setForm({
+    reset({
       code: c.code,
       description: c.description,
       type: c.type,
@@ -187,13 +210,8 @@ export function CouponsTab() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      const parsed = couponFormSchema.safeParse(form);
-      if (!parsed.success) {
-        const first = parsed.error.issues[0];
-        throw new Error(first?.message ?? "Dados do cupom inválidos");
-      }
-      const payload = buildCouponPayload(parsed.data);
+    mutationFn: async (values: CouponFormValues) => {
+      const payload = buildCouponPayload(values);
       const url = editTarget ? api(`/coupon-codes/${editTarget.id}`) : api("/coupon-codes");
       const method = editTarget ? "PUT" : "POST";
       const res = await apiFetch(url, {
@@ -212,6 +230,18 @@ export function CouponsTab() {
     onError: (err: Error) =>
       toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
+
+  const onSubmitValid = rhfHandleSubmit(
+    (values) => saveMutation.mutate(values),
+    (errs) => {
+      const first = Object.values(errs)[0] as { message?: string } | undefined;
+      toast({
+        title: "Verifique os campos",
+        description: first?.message ?? "Há campos inválidos no formulário.",
+        variant: "destructive",
+      });
+    },
+  );
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -687,8 +717,8 @@ export function CouponsTab() {
               Cancelar
             </Button>
             <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending || !form.code || !form.discountValue}
+              onClick={onSubmitValid}
+              disabled={saveMutation.isPending || isSubmitting}
               className="rounded-xl"
             >
               {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editTarget ? "Salvar" : "Criar Cupom"}

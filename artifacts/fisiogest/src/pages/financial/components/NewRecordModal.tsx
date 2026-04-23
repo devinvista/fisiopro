@@ -14,6 +14,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useCreateFinancialRecord, useListProcedures } from "@workspace/api-client-react";
 import { authHeaders, todayISO } from "../utils";
 import {
+  newFinancialRecordSchema,
+  buildNewFinancialRecordPayload,
+} from "@/schemas/financial-record.schema";
+import {
   GENERAL_EXPENSE_CATEGORIES, PROCEDURE_EXPENSE_CATEGORIES,
   REVENUE_CATEGORIES, PAYMENT_METHODS,
 } from "../constants";
@@ -53,23 +57,19 @@ export function NewRecordModal({ open, onClose, onSuccess }: { open: boolean; on
   }, [open]);
 
   const handleSubmit = async () => {
-    if (!amount || !description) {
-      toast({ variant: "destructive", title: "Preencha descrição e valor." }); return;
+    const today = todayISO();
+    const parsed = newFinancialRecordSchema.safeParse({
+      type, expenseSubtype, procedureId, description, amount,
+      category, status, paymentDate, dueDate, paymentMethod,
+    });
+    if (!parsed.success) {
+      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+      return;
     }
     setSaving(true);
     try {
       await createRecord({
-        data: {
-          type,
-          amount: Number(amount),
-          description,
-          category: category || undefined,
-          procedureId: procedureId ? Number(procedureId) : undefined,
-          status,
-          paymentDate: status === "pendente" ? null : (paymentDate || todayISO()),
-          dueDate: dueDate || todayISO(),
-          paymentMethod: paymentMethod || undefined,
-        } as any,
+        data: buildNewFinancialRecordPayload(parsed.data, today) as any,
       });
       toast({ title: "Lançamento criado com sucesso." });
       onSuccess();

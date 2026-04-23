@@ -230,6 +230,24 @@ pages/<dominio>/<feature>/
     <feature>-form.schema.ts
 ```
 
+### Schemas Zod compartilhados
+
+Schemas centralizados em `src/schemas/`. Cada schema exporta:
+- `xxxFormSchema` — validação Zod (com `superRefine` quando há regras cross-field)
+- `xxxFormDefaults` — valores iniciais
+- `buildXxxPayload(values)` — converte form values em payload da API
+- `type XxxFormValues = z.infer<typeof xxxFormSchema>`
+
+Schemas existentes: `coupon`, `plan`, `patient`, `appointment` (+ `recurrence`),
+`subscription` (`new` + `edit`), `financial-record` (`new` + `edit`).
+
+Padrão de uso (sem RHF): `safeParse` no início do `handleSubmit`/`mutationFn`,
+toast com `error.issues[0]?.message` em caso de erro, `buildXxxPayload(parsed.data)` no body.
+
+Padrão de uso (com RHF, ex: `CouponsTab`): `useForm({ resolver: zodResolver(...), defaultValues })`,
+submit via `handleSubmit(onValid, onInvalid)`. Para forms com muitos componentes
+controlados (Select/Switch/Combobox shadcn), usar adapter `setForm = (next) => Object.keys(next).forEach(k => setValue(k, next[k]))` mantendo o padrão `setForm({...form, x: y})` enquanto a infraestrutura RHF roda por baixo.
+
 Hooks reutilizáveis ficam em `src/hooks/`. Contexts em `src/utils/` (TODO mover para `src/contexts/`).
 
 ### Convenção de imports

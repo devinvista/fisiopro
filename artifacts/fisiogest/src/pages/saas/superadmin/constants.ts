@@ -68,21 +68,6 @@ export const PAYMENT_CONFIG: Record<string, { label: string; color: string; bg: 
   overdue: { label: "Vencido",  color: "text-red-700",   bg: "bg-red-50"   },
   free:    { label: "Grátis",   color: "text-slate-700", bg: "bg-slate-100" },
 };
-export const EMPTY_PLAN = {
-  name: "",
-  displayName: "",
-  description: "",
-  price: "0",
-  maxProfessionals: 1 as number | null,
-  maxPatients: null as number | null,
-  maxSchedules: null as number | null,
-  maxUsers: null as number | null,
-  trialDays: 30,
-  features: [] as string[],
-  isActive: true,
-  sortOrder: 0,
-};
-
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   manual: "Manual",
   pix: "PIX",
@@ -117,20 +102,4 @@ export type PaymentStats = {
   referenceMonth: string;
 };
 
-export const EMPTY_COUPON = {
-  code: "",
-  description: "",
-  type: "discount" as "discount" | "referral",
-  discountType: "percent" as "percent" | "fixed",
-  discountValue: "30",
-  maxUses: "" as string,
-  expiresAt: "",
-  isActive: true,
-  minPlanAmount: "",
-  applicablePlanNames: [] as string[],
-  referrerClinicId: "" as string,
-  referrerBenefitType: "" as "percent" | "fixed" | "",
-  referrerBenefitValue: "" as string,
-  notes: "",
-};
 

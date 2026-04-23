@@ -13,6 +13,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { authHeaders } from "../utils";
 import {
+  editFinancialRecordSchema,
+  buildEditFinancialRecordPayload,
+} from "@/schemas/financial-record.schema";
+import {
   GENERAL_EXPENSE_CATEGORIES, PROCEDURE_EXPENSE_CATEGORIES,
   REVENUE_CATEGORIES, PAYMENT_METHODS,
 } from "../constants";
@@ -52,24 +56,20 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
   const categories = type === "receita" ? REVENUE_CATEGORIES : GENERAL_EXPENSE_CATEGORIES;
 
   const handleSubmit = async () => {
-    if (!amount || !description) {
-      toast({ variant: "destructive", title: "Preencha descrição e valor." }); return;
+    const parsed = editFinancialRecordSchema.safeParse({
+      type, description, amount, category, status,
+      paymentDate, dueDate, paymentMethod,
+    });
+    if (!parsed.success) {
+      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+      return;
     }
     setSaving(true);
     try {
       const res = await fetch(`/api/financial/records/${record.id}`, {
         method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify({
-          type,
-          amount: Number(amount),
-          description,
-          category: category || null,
-          status,
-          paymentDate: status === "pendente" ? null : (paymentDate || null),
-          dueDate: dueDate || null,
-          paymentMethod: paymentMethod || null,
-        }),
+        body: JSON.stringify(buildEditFinancialRecordPayload(parsed.data)),
       });
       if (res.ok) {
         toast({ title: "Lançamento atualizado." });
