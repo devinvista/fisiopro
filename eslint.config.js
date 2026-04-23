@@ -69,4 +69,16 @@ export default tseslint.config(
     files: ["**/*.test.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // shadcn/ui components are vendored from the official registry and
+    // intentionally re-export many helpers/types. Don't lint unused vars there.
+    files: [
+      "artifacts/*/src/components/ui/**/*.{ts,tsx}",
+      "artifacts/*/src/hooks/use-toast.{ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "react-hooks/exhaustive-deps": "off",
+    },
+  },
 );

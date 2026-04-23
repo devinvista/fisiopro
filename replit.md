@@ -346,7 +346,7 @@ O projeto pode ser empacotado em um único `.zip` para publicação em hospedage
 Diagnóstico atual: `pnpm typecheck` passa com **0 erros**, `pnpm lint` retorna **0 erros e ~2961 warnings** (predominantemente `no-unused-vars` em componentes shadcn/ui copiados via `npx shadcn add`). Recomendações priorizadas:
 
 1. **Não rodar `lint --fix` em massa nos componentes shadcn** (`artifacts/*/src/components/ui/*`). Esses arquivos seguem a API oficial do shadcn — remover imports "não usados" pode quebrar tipos públicos. Em vez disso, adicionar override no `eslint.config.js` para silenciar `no-unused-vars` apenas em `**/components/ui/**`.
-2. **Health-check e readiness** — expor `GET /api/health` retornando `{ status, db, uptime }` para monitoramento do Hostinger / UptimeRobot.
+2. **Health-check e readiness** — ✅ implementado. `GET /api/healthz` (liveness, sempre 200) e `GET /api/health` (readiness — testa o banco; 200 se ok, 503 se degradado; retorna `{ status, uptimeSec, timestamp, version, db: { ok, latencyMs } }`). Já está no allowlist de auth e CSRF; pronto para UptimeRobot.
 3. **Migrações em produção** — rodar `pnpm db:push` apenas a partir de um pipeline (CI), nunca manualmente em produção. Considerar migrar para `drizzle-kit migrate` (versionado) em vez de `push` (compara schema vivo).
 4. **Segredos** — `JWT_SECRET` e `DATABASE_URL` aparecem em `.replit` (`userenv.shared`). Em produção (Hostinger), defini-los apenas no painel de variáveis do hPanel — nunca commitar.
 5. **Rotação de chaves** — gerar novo `JWT_SECRET` para o ambiente de produção (não reutilizar o do Replit).
