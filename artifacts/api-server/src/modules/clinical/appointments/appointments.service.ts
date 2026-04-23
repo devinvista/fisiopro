@@ -3,7 +3,8 @@ import {
   appointmentsTable, patientsTable, proceduresTable, blockedSlotsTable,
   schedulesTable, clinicsTable, financialRecordsTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, lt, or } from "drizzle-orm";
+import { buildPage, clampLimit, decodeCursor, type PaginatedResponse } from "../../../utils/pagination.js";
 import { resolvePermissions, type Role } from "@workspace/db";
 import type { AppointmentStatus } from "@workspace/shared-constants";
 import { addMinutes, timeToMinutes, minutesToTime } from "./appointments.helpers.js";
@@ -41,12 +42,10 @@ function describeConflict(reason: string | undefined, currentCount: number, maxC
 export async function listAppointments(filters: {
   date?: string; startDate?: string; endDate?: string;
   patientId?: string | number; status?: string;
-}, ctx: AuthCtx) {
-  let query = db
-    .select({ appointment: appointmentsTable, patient: patientsTable, procedure: proceduresTable })
-    .from(appointmentsTable)
-    .leftJoin(patientsTable, eq(appointmentsTable.patientId, patientsTable.id))
-    .leftJoin(proceduresTable, eq(appointmentsTable.procedureId, proceduresTable.id));
+  limit?: number; cursor?: string;
+}, ctx: AuthCtx): Promise<PaginatedResponse<any>> {
+  const limit = clampLimit(filters.limit);
+  const cursor = decodeCursor(filters.cursor);
 
   const conditions: any[] = [];
   if (!ctx.isSuperAdmin && ctx.clinicId) {
@@ -61,10 +60,33 @@ export async function listAppointments(filters: {
   if (filters.patientId !== undefined) conditions.push(eq(appointmentsTable.patientId, parseInt(String(filters.patientId))));
   if (filters.status) conditions.push(eq(appointmentsTable.status, String(filters.status)));
 
+  // Cursor: chave composta (date asc, id asc). `v` carrega `YYYY-MM-DD`.
+  if (cursor) {
+    conditions.push(
+      or(
+        sql`${appointmentsTable.date} > ${String(cursor.v)}`,
+        and(
+          eq(appointmentsTable.date, String(cursor.v)),
+          sql`${appointmentsTable.id} > ${cursor.id}`,
+        ),
+      )!,
+    );
+  }
+
+  let query = db
+    .select({ appointment: appointmentsTable, patient: patientsTable, procedure: proceduresTable })
+    .from(appointmentsTable)
+    .leftJoin(patientsTable, eq(appointmentsTable.patientId, patientsTable.id))
+    .leftJoin(proceduresTable, eq(appointmentsTable.procedureId, proceduresTable.id));
+
   if (conditions.length > 0) query = query.where(and(...conditions)) as any;
 
-  const results = await query.orderBy(appointmentsTable.date, appointmentsTable.startTime);
-  return results.map(({ appointment, patient, procedure }) => ({ ...appointment, patient, procedure }));
+  const results = await query
+    .orderBy(appointmentsTable.date, appointmentsTable.startTime, appointmentsTable.id)
+    .limit(limit + 1);
+
+  const flat = results.map(({ appointment, patient, procedure }) => ({ ...appointment, patient, procedure }));
+  return buildPage(flat, limit, (row) => ({ v: String(row.date), id: row.id }));
 }
 
 // ─── Available slots ─────────────────────────────────────────────────────────

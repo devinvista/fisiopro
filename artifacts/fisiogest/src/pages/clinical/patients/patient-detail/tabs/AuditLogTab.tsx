@@ -103,12 +103,13 @@ const ACTION_STYLES: Record<string, { label: string; bg: string; text: string; d
 
 function AuditLogSection({ patientId }: { patientId: number }) {
   const [open, setOpen] = useState(false);
-  const { data: logs = [], isLoading } = useQuery<any[]>({
+  const { data, isLoading } = useQuery<{ data: any[] } | any[]>({
     queryKey: [`/api/audit-log/patients/${patientId}`],
-    queryFn: () => apiFetchJson<any[]>(`/api/audit-log/patients/${patientId}`),
+    queryFn: () => apiFetchJson<{ data: any[] } | any[]>(`/api/audit-log/patients/${patientId}`),
     enabled: !!patientId,
     staleTime: 30_000,
   });
+  const logs: any[] = Array.isArray(data) ? data : (data?.data ?? []);
 
   const recentCount = logs.length;
 
@@ -189,12 +190,13 @@ function AuditLogSection({ patientId }: { patientId: number }) {
 export function AuditLogTab({ patientId }: { patientId: number }) {
   const [filter, setFilter] = useState<AuditAction>("all");
 
-  const { data: logs = [], isLoading } = useQuery<any[]>({
+  const { data, isLoading } = useQuery<{ data: any[] } | any[]>({
     queryKey: [`/api/audit-log/patients/${patientId}`],
-    queryFn: () => apiFetchJson<any[]>(`/api/audit-log/patients/${patientId}`),
+    queryFn: () => apiFetchJson<{ data: any[] } | any[]>(`/api/audit-log/patients/${patientId}`),
     enabled: !!patientId,
     staleTime: 30_000,
   });
+  const logs: any[] = Array.isArray(data) ? data : (data?.data ?? []);
 
   const filtered = filter === "all" ? logs : logs.filter((l) => l.action === filter);
 

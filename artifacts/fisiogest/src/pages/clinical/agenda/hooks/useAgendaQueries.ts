@@ -53,7 +53,10 @@ export function useAgendaQueries({
   return {
     schedules: schedulesQuery.data ?? [],
     professionals: professionalsQuery.data ?? [],
-    appointments: appointmentsQuery.data ?? [],
+    appointments: (() => {
+      const d: any = appointmentsQuery.data;
+      return (Array.isArray(d) ? d : (d?.data ?? [])) as NonNullable<typeof appointmentsQuery.data>;
+    })(),
     isLoadingAppointments: appointmentsQuery.isLoading,
     refetchAppointments: appointmentsQuery.refetch,
     blockedSlots: blockedSlotsQuery.data ?? [],

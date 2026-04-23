@@ -3,12 +3,21 @@ import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, patientSubscriptionsTable, sessionCreditsTable,
 } from "@workspace/db";
-import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or, lt, desc } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { logAudit } from "../../../utils/auditLog.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
-import { validateBody } from "../../../utils/validate.js";
+import { validateBody, validateQuery } from "../../../utils/validate.js";
+import { listQuerySchema } from "../../../utils/listQuery.js";
+import { buildPage, clampLimit, decodeCursor } from "../../../utils/pagination.js";
+import { z } from "zod/v4";
+
+const listRecordsQuerySchema = listQuerySchema.extend({
+  type: z.enum(["receita", "despesa"]).optional(),
+  month: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
+  year: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
+});
 import {
   allocateReceivable,
   postReceivableRevenue,
@@ -29,17 +38,18 @@ const router = Router();
 
 router.get("/records", requirePermission("financial.read"), async (req: AuthRequest, res) => {
   try {
-    const type = req.query.type as string | undefined;
-    const month = req.query.month ? parseInt(req.query.month as string) : undefined;
-    const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+    const q = validateQuery(listRecordsQuerySchema, req.query, res);
+    if (!q) return;
 
+    const limit = clampLimit(q.limit);
+    const cursor = decodeCursor(q.cursor);
     const conditions: any[] = [];
 
     const cc = clinicCond(req);
     if (cc) conditions.push(cc);
-    if (type) conditions.push(eq(financialRecordsTable.type, type));
-    if (month && year) {
-      const { startDate, endDate } = monthDateRange(year, month);
+    if (q.type) conditions.push(eq(financialRecordsTable.type, q.type));
+    if (q.month && q.year) {
+      const { startDate, endDate } = monthDateRange(q.year, q.month);
       conditions.push(
         or(
           and(isNotNull(financialRecordsTable.paymentDate), gte(financialRecordsTable.paymentDate, startDate), lte(financialRecordsTable.paymentDate, endDate)),
@@ -48,13 +58,25 @@ router.get("/records", requirePermission("financial.read"), async (req: AuthRequ
             isNull(financialRecordsTable.paymentDate),
             isNull(financialRecordsTable.dueDate),
             gte(sql`DATE(${financialRecordsTable.createdAt})`, startDate),
-            lte(sql`DATE(${financialRecordsTable.createdAt})`, endDate)
-          )
-        )!
+            lte(sql`DATE(${financialRecordsTable.createdAt})`, endDate),
+          ),
+        )!,
       );
     }
 
-    const records = await db
+    if (cursor) {
+      conditions.push(
+        or(
+          lt(financialRecordsTable.createdAt, new Date(cursor.v as string)),
+          and(
+            eq(financialRecordsTable.createdAt, new Date(cursor.v as string)),
+            lt(financialRecordsTable.id, cursor.id),
+          ),
+        )!,
+      );
+    }
+
+    const rows = await db
       .select({
         id: financialRecordsTable.id,
         type: financialRecordsTable.type,
@@ -76,9 +98,12 @@ router.get("/records", requirePermission("financial.read"), async (req: AuthRequ
       .from(financialRecordsTable)
       .leftJoin(proceduresTable, eq(financialRecordsTable.procedureId, proceduresTable.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(financialRecordsTable.createdAt);
+      .orderBy(desc(financialRecordsTable.createdAt), desc(financialRecordsTable.id))
+      .limit(limit + 1);
 
-    res.json(records);
+    res.json(
+      buildPage(rows, limit, (row) => ({ v: row.createdAt!.toISOString(), id: row.id })),
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

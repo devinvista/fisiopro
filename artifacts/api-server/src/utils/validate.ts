@@ -15,43 +15,31 @@ export function parseIntParam(value: string | string[] | undefined, res: Respons
   return n;
 }
 
-export function validateBody<T>(
-  schema: z.ZodType<T>,
-  body: unknown,
-  res: Response
-): T | null {
+function respondInvalid(res: Response, error: z.ZodError, fallback: string) {
+  const details = error.issues.map((i) => ({
+    field: i.path.join("."),
+    message: i.message,
+  }));
+  res.status(400).json({
+    error: "Bad Request",
+    message: details[0]?.message ?? fallback,
+    details,
+  });
+}
+
+export function validateBody<T>(schema: z.ZodType<T>, body: unknown, res: Response): T | null {
   const result = schema.safeParse(body);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => ({
-      field: i.path.join("."),
-      message: i.message,
-    }));
-    res.status(400).json({
-      error: "Bad Request",
-      message: issues[0]?.message ?? "Dados inválidos",
-      issues,
-    });
+    respondInvalid(res, result.error, "Dados inválidos");
     return null;
   }
   return result.data;
 }
 
-export function validateQuery<T>(
-  schema: z.ZodType<T>,
-  query: unknown,
-  res: Response
-): T | null {
+export function validateQuery<T>(schema: z.ZodType<T>, query: unknown, res: Response): T | null {
   const result = schema.safeParse(query);
   if (!result.success) {
-    const issues = result.error.issues.map((i) => ({
-      field: i.path.join("."),
-      message: i.message,
-    }));
-    res.status(400).json({
-      error: "Bad Request",
-      message: issues[0]?.message ?? "Parâmetros inválidos",
-      issues,
-    });
+    respondInvalid(res, result.error, "Parâmetros inválidos");
     return null;
   }
   return result.data;

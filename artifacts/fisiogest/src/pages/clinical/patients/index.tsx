@@ -97,7 +97,7 @@ export default function PatientsList() {
   }
 
   const patients = (data?.data ?? []) as Patient[];
-  const total = data?.total ?? 0;
+  const total = (data as any)?.page?.total ?? (data as any)?.total ?? 0;
 
   return (
     <AppLayout title="Pacientes">

@@ -56,8 +56,9 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
   useEffect(() => { fetchBillingStatus(); }, [fetchBillingStatus]);
 
   const records = useMemo(() => {
-    if (!rawRecords) return [];
-    const sorted = [...rawRecords].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const list = ((rawRecords as any)?.data ?? rawRecords ?? []) as any[];
+    if (list.length === 0) return [];
+    const sorted = [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     if (typeFilter === "all") return sorted;
     return sorted.filter((r) => r.type === typeFilter);
   }, [rawRecords, typeFilter]);

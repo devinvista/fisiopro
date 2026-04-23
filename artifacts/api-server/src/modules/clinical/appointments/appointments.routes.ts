@@ -1,7 +1,18 @@
 import { Router, type Response } from "express";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
-import { parseIntParam, validateBody } from "../../../utils/validate.js";
+import { parseIntParam, validateBody, validateQuery } from "../../../utils/validate.js";
+import { listQuerySchema } from "../../../utils/listQuery.js";
+import { z } from "zod/v4";
+
+const listAppointmentsQuerySchema = listQuerySchema.extend({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date deve estar no formato YYYY-MM-DD").optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate deve estar no formato YYYY-MM-DD").optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate deve estar no formato YYYY-MM-DD").optional(),
+  patientId: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : String(v))),
+  /** Compat: `?status=` aqui aceita string única (não lista). */
+  status: z.string().trim().min(1).optional(),
+});
 import {
   createAppointmentSchema, updateAppointmentSchema, rescheduleSchema,
   recurringAppointmentSchema,
@@ -42,14 +53,17 @@ function handleError(err: unknown, res: Response): void {
 
 router.get("/", requirePermission("appointments.read"), async (req: AuthRequest, res) => {
   try {
-    const { date, startDate, endDate, patientId, status } = req.query;
+    const q = validateQuery(listAppointmentsQuerySchema, req.query, res);
+    if (!q) return;
     const data = await listAppointments(
       {
-        date: date as string | undefined,
-        startDate: startDate as string | undefined,
-        endDate: endDate as string | undefined,
-        patientId: patientId as string | undefined,
-        status: status as string | undefined,
+        date: q.date,
+        startDate: q.startDate,
+        endDate: q.endDate,
+        patientId: q.patientId,
+        status: q.status,
+        limit: q.limit,
+        cursor: q.cursor,
       },
       getCtx(req),
     );

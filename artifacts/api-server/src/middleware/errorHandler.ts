@@ -5,13 +5,14 @@ import { logger } from "../lib/logger.js";
 import { captureException } from "../lib/sentry.js";
 
 /**
- * Middleware central de erros.
- * Deve ser registrado APÓS todas as rotas em app.ts.
+ * Middleware central de erros. Registrar APÓS todas as rotas em app.ts.
  *
- * Converte:
- *  - HttpError       → status configurado + JSON { error, message, issues? }
- *  - ZodError        → 400 Bad Request com lista de issues
- *  - qualquer outro  → 500 Internal Server Error (mensagem só em desenvolvimento)
+ * Formato uniforme da resposta:
+ *   { error: string, message: string, details?: unknown }
+ *
+ * - HttpError → status configurado, `details` opcional via `httpError.issues`
+ * - ZodError  → 400 Bad Request com lista de issues em `details`
+ * - resto     → 500 Internal Server Error (mensagem só em dev)
  */
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (res.headersSent) return;
@@ -20,25 +21,24 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     res.status(err.status).json({
       error: err.error,
       message: err.message,
-      ...(err.issues !== undefined ? { issues: err.issues } : {}),
+      ...(err.issues !== undefined ? { details: err.issues } : {}),
     });
     return;
   }
 
   if (err instanceof ZodError) {
-    const issues = err.issues.map((i) => ({
+    const details = err.issues.map((i) => ({
       field: i.path.join("."),
       message: i.message,
     }));
     res.status(400).json({
       error: "Bad Request",
-      message: issues[0]?.message ?? "Dados inválidos",
-      issues,
+      message: details[0]?.message ?? "Dados inválidos",
+      details,
     });
     return;
   }
 
-  // Log apenas erros inesperados — HttpError/ZodError são fluxo normal.
   logger.error(
     { err, method: req.method, url: req.originalUrl },
     `[errorHandler] erro inesperado em ${req.method} ${req.originalUrl}`,

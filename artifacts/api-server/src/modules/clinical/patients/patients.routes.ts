@@ -1,13 +1,20 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { patientsTable, appointmentsTable, financialRecordsTable } from "@workspace/db";
-import { eq, ilike, or, and, sql, desc, isNull, count } from "drizzle-orm";
+import { eq, ilike, or, and, sql, desc, isNull, count, lt } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireActiveSubscription, getPlanLimits } from "../../../middleware/subscription.js";
 import { logAudit } from "../../../utils/auditLog.js";
-import { parseIntParam, validateBody } from "../../../utils/validate.js";
+import { parseIntParam, validateBody, validateQuery } from "../../../utils/validate.js";
+import { listQuerySchema } from "../../../utils/listQuery.js";
+import { buildPage, clampLimit, decodeCursor } from "../../../utils/pagination.js";
 import { z } from "zod/v4";
+
+const listPatientsQuerySchema = listQuerySchema.extend({
+  /** Compat: o frontend ainda usa `?search=` no lugar de `?q=`. */
+  search: z.string().trim().min(1).max(200).optional(),
+});
 
 // Accepts a valid YYYY-MM-DD string, an empty string (treated as null), or null/undefined.
 const birthDateField = z
@@ -78,10 +85,12 @@ function clinicFilter(req: AuthRequest) {
 
 router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res) => {
   try {
-    const search = req.query.search as string | undefined;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = (page - 1) * limit;
+    const q = validateQuery(listPatientsQuerySchema, req.query, res);
+    if (!q) return;
+
+    const search = q.q ?? q.search;
+    const limit = clampLimit(q.limit);
+    const cursor = decodeCursor(q.cursor);
 
     const clinicCondition = clinicFilter(req);
     const normalizedSearch = search ? normalizeCpf(search) : null;
@@ -93,35 +102,48 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
           cpfDiffersFromSearch
             ? ilike(patientsTable.cpf, `%${normalizedSearch}%`)
             : undefined,
-          ilike(patientsTable.phone, `%${search}%`)
+          ilike(patientsTable.phone, `%${search}%`),
         )
       : null;
 
-    const whereCondition =
-      clinicCondition && searchCondition
-        ? and(clinicCondition, searchCondition)
-        : clinicCondition ?? searchCondition ?? undefined;
+    // Paginação cursor: ordenamos por createdAt desc, id desc (desempate).
+    // Cursor carrega o createdAt ISO da última linha + id.
+    const cursorCondition = cursor
+      ? or(
+          lt(patientsTable.createdAt, new Date(cursor.v as string)),
+          and(
+            eq(patientsTable.createdAt, new Date(cursor.v as string)),
+            lt(patientsTable.id, cursor.id),
+          ),
+        )
+      : null;
 
-    const [patients, countResult] = await Promise.all([
+    const filters = [clinicCondition, searchCondition].filter(Boolean) as any[];
+    const whereCondition = and(...filters, ...(cursorCondition ? [cursorCondition] : []));
+    const countWhere = filters.length > 0 ? and(...filters) : undefined;
+
+    const [rows, countResult] = await Promise.all([
       db
         .select()
         .from(patientsTable)
         .where(whereCondition)
-        .orderBy(desc(patientsTable.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(patientsTable)
-        .where(whereCondition),
+        .orderBy(desc(patientsTable.createdAt), desc(patientsTable.id))
+        .limit(limit + 1),
+      // Total só na primeira página (sem cursor) — evita custo em scroll infinito.
+      cursor
+        ? Promise.resolve(null)
+        : db.select({ count: sql<number>`count(*)` }).from(patientsTable).where(countWhere),
     ]);
 
-    res.json({
-      data: patients,
-      total: Number(countResult[0]?.count ?? 0),
-      page,
+    const total = countResult ? Number(countResult[0]?.count ?? 0) : undefined;
+    const result = buildPage(
+      rows,
       limit,
-    });
+      (row) => ({ v: row.createdAt!.toISOString(), id: row.id }),
+      total,
+    );
+
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

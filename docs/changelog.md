@@ -1,5 +1,23 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão abril/2026 — Sprint 2: paginação, filtros, validação e erros padronizados
+
+**Itens entregues** (4 do plano de sprints) + movidos para backlog (1.1, 1.6, 1.7, 6.4):
+
+- **2.1 Paginação cursor-based** — Novo `utils/pagination.ts` com `encodeCursor/decodeCursor` (base64url JSON `{v,id}`), `clampLimit` (1..100, default 20) e `buildPage<T>(rows, limit, cursorOf, total?)` que devolve o envelope `{ data: T[], page: { limit, hasMore, nextCursor, total? } }`. Aplicado em `patients.routes.ts` (cursor por `createdAt desc, id desc`; `total` só na 1ª página), `appointments.service.ts` (cursor por `date asc, id asc`), `financial-records.routes.ts` (cursor por `createdAt desc, id desc`) e `audit-log.routes.ts` (cursor por `createdAt desc, id desc`). Substitui page/offset (patients) e respostas de array bare (appointments, financial-records, audit-log).
+- **2.2 Filtros e ordenação padronizados** — Novo `utils/listQuery.ts` exporta `listQuerySchema` zod com `q?, from?, to?, status?, sort?, limit?, cursor?` + `parseSort()`. Cada rota estende com seus filtros específicos (ex.: `listPatientsQuerySchema` mantém `search` para compat; `listAppointmentsQuerySchema` adiciona `date/startDate/endDate/patientId`).
+- **2.3 Resposta padronizada de erro** — `middleware/errorHandler.ts` e `utils/validate.ts` agora devolvem `{ error, message, details? }` em todos os caminhos (HttpError, ZodError, validateBody/validateQuery). Renomeado `issues` → `details` para alinhar com o contrato. O frontend só consome `message`, então o rename é transparente.
+- **2.4 Validação consistente body+query** — `validateQuery(schema, req.query, res)` aplicado nas 4 rotas refatoradas, eliminando `parseInt(req.query.x as string)` espalhado. `parseIntParam` continua para path params.
+- **Frontend** — Consumidores adaptados ao envelope `{data, page}`:
+  - `patients/index.tsx` lê `data.page.total` (com fallback ao antigo `data.total`).
+  - `agenda/hooks/useAgendaQueries.ts` desempacota `appointmentsQuery.data` (array ou wrapper).
+  - `financial/components/LancamentosTab.tsx` lê `rawRecords.data`.
+  - `clinical/patients/.../AuditLogTab.tsx` (2 ocorrências) lê `data.data`.
+
+**Backlog** — Movidos para a seção `🗄️ Backlog` em `docs/sprints.md`: **1.1** (auditoria de secrets/`.env.example`), **1.6** (política de senha forte/bloqueio progressivo), **1.7** (sanitização PII em `pino-http`), **6.4** (otimização Cloudinary `f_auto,q_auto`).
+
+**Validação:** `tsc --noEmit` passa em `@workspace/api-server` e `@workspace/fisiogest`. Workflow restart OK; rota `/` continua respondendo (404 esperado, sem rota raiz). Nenhum lint diagnóstico aberto nas listagens refatoradas.
+
 ### Sessão abril/2026 — Sprint 1 + 3: hardening de segurança e infra
 
 **Itens entregues** (8 do plano de sprints):
