@@ -19,7 +19,7 @@ export function ProtectedRoute({ component: Component }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        Carregando...
+        Carregando…
       </div>
     );
   }

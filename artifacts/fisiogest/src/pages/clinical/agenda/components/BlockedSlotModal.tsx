@@ -233,7 +233,7 @@ export function BlockedSlotModal({
               <div className="space-y-1.5">
                 <Label>Agenda *</Label>
                 <select
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                   value={form.scheduleId ?? ""}
                   onChange={(e) => setForm(f => ({ ...f, scheduleId: e.target.value ? parseInt(e.target.value) : null }))}
                   required

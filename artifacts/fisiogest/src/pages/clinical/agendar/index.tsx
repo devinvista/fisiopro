@@ -136,7 +136,7 @@ export default function Agendar() {
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {clinicInfo?.logoUrl ? (
-              <img src={clinicInfo.logoUrl} alt={clinicName} className="h-9 w-auto max-w-[120px] object-contain" />
+              <img src={clinicInfo.logoUrl} alt={clinicName} width={120} height={36} fetchPriority="high" className="h-9 w-auto max-w-[120px] object-contain" />
             ) : (
               <div className="w-9 h-9"><LogoMark /></div>
             )}

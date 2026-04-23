@@ -126,9 +126,9 @@ export default function Login() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                <a href="#" className="text-sm text-primary font-medium hover:underline">
+                <Link href="/recuperar-senha" className="text-sm text-primary font-medium hover:underline focus-visible:outline-none focus-visible:underline">
                   Esqueceu a senha?
-                </a>
+                </Link>
               </div>
               <Input
                 id="password"

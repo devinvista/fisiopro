@@ -288,7 +288,7 @@ export function UsuariosSection() {
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                  Carregando...
+                  Carregando…
                 </TableCell>
               </TableRow>
             ) : users.length === 0 ? (

@@ -154,7 +154,7 @@ export function ClinicsTab() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar clínica..."
-              className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+              className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 bg-white"
             />
           </div>
           <Button

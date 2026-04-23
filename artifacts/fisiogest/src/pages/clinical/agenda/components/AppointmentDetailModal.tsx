@@ -47,6 +47,7 @@ import { DatePickerPTBR, TimeInputPTBR } from "@/components/ui/date-picker-ptbr"
 import { cn } from "@/lib/utils";
 import { STATUS_CONFIG } from "../constants";
 import type { Appointment } from "../types";
+import { confirm as confirmDialog } from "@/lib/confirm";
 
 export function AppointmentDetailModal({
   appointment,
@@ -128,7 +129,7 @@ export function AppointmentDetailModal({
               action: (
                 <button
                   onClick={() => setIsRescheduling(true)}
-                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus:outline-none"
+                  className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   Remarcar
                 </button>
@@ -186,8 +187,14 @@ export function AppointmentDetailModal({
     );
   };
 
-  const handleDelete = () => {
-    if (!confirm("Excluir esta consulta?")) return;
+  const handleDelete = async () => {
+    const ok = await confirmDialog({
+      title: "Excluir esta consulta?",
+      description: "Esta ação é permanente e não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteMutation.mutate(
       { id: appointment.id },
       {

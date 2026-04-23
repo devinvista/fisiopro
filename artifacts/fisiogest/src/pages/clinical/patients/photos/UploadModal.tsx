@@ -166,7 +166,7 @@ export function UploadModal({
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {files.map((f, i) => (
                 <div key={i} className="relative group rounded-lg border border-slate-200 overflow-hidden bg-slate-50 aspect-[3/4]">
-                  <img src={f.previewUrl} className="w-full h-full object-cover" alt="Preview" />
+                  <img src={f.previewUrl} width={160} height={160} className="w-full h-full object-cover" alt="Pré-visualização da foto" loading="lazy" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <button
                     onClick={() => removeFile(i)}

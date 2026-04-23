@@ -82,7 +82,7 @@ export function ClinicForm({
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted/30 shrink-0">
             {logoPreview
-              ? <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1" />
+              ? <img src={logoPreview} alt="Logo da clínica" width={120} height={120} className="w-full h-full object-contain p-1" />
               : <ImageIcon className="h-5 w-5 text-muted-foreground/40" />}
           </div>
           <div className="space-y-1">

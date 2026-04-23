@@ -191,7 +191,7 @@ export function StepSeusDados({
             <Label className="text-sm font-medium text-slate-700">CPF *</Label>
             <div className="relative">
               <Input
-                autoFocus
+                autoFocus={typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches}
                 required
                 placeholder="000.000.000-00"
                 value={form.cpf}

@@ -36,6 +36,7 @@ import {
 import { format, addDays, isBefore, startOfToday, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import LogoMark from "@/components/logo-mark";
+import { confirm } from "@/lib/confirm";
 
 // ── Booking Details View (via token) ─────────────────────────────────────────
 
@@ -59,7 +60,14 @@ export function BookingView({ token }: { token: string }) {
   }, [token]);
 
   const handleCancel = async () => {
-    if (!window.confirm("Deseja cancelar este agendamento?")) return;
+    const ok = await confirm({
+      title: "Cancelar agendamento?",
+      description: "Esta ação não pode ser desfeita. O horário ficará disponível novamente.",
+      confirmLabel: "Sim, cancelar",
+      cancelLabel: "Voltar",
+      destructive: true,
+    });
+    if (!ok) return;
     setCanceling(true);
     setCancelError(null);
     try {

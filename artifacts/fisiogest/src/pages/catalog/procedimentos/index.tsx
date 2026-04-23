@@ -406,7 +406,7 @@ export default function Procedimentos() {
           <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <Input
-              placeholder="Buscar procedimento..."
+              placeholder="Buscar procedimento…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-8 h-8 text-sm rounded-lg"
@@ -434,7 +434,7 @@ export default function Procedimentos() {
 
         {/* ── Content ────────────────────────────────────────────────────── */}
         {isLoading ? (
-          <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Carregando...</div>
+          <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Carregando…</div>
         ) : procedures.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3">
             <Stethoscope className="w-10 h-10 text-slate-200" />

@@ -555,7 +555,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 relative">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 relative">
           <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24 lg:pb-8">
             {children}
           </div>

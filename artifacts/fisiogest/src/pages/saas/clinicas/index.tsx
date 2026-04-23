@@ -304,7 +304,7 @@ export default function Clinicas() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
                         {clinic.logoUrl
-                          ? <img src={clinic.logoUrl} alt="Logo" className="h-10 w-10 object-contain p-1" />
+                          ? <img src={clinic.logoUrl} alt={`Logo de ${clinic.name}`} width={40} height={40} loading="lazy" className="h-10 w-10 object-contain p-1" />
                           : clinic.type === "autonomo"
                             ? <User2 className="h-5 w-5 text-primary" />
                             : <Building2 className="h-5 w-5 text-primary" />}

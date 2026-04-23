@@ -44,7 +44,7 @@ export function PatientStep({
           value={patientSearch}
           onChange={(e) => setPatientSearch(e.target.value)}
           className="h-11 rounded-xl"
-          autoFocus
+          autoFocus={typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches}
         />
       </div>
 

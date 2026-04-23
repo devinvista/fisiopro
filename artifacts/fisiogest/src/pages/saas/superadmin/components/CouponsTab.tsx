@@ -630,7 +630,7 @@ export function CouponsTab() {
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        className="flex w-full items-center justify-between rounded-xl border border-input bg-white px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                        className="flex w-full items-center justify-between rounded-xl border border-input bg-white px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <span className={form.referrerClinicId ? "text-foreground" : "text-muted-foreground"}>
                           {form.referrerClinicId

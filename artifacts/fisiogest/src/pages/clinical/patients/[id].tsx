@@ -398,7 +398,7 @@ export default function PatientDetail() {
 
   if (isLoading) {
     return (
-      <AppLayout title="Carregando...">
+      <AppLayout title="Carregando…">
         <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
       </AppLayout>
     );

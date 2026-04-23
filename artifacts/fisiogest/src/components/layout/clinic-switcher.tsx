@@ -79,7 +79,7 @@ export function ClinicSwitcher() {
         <DropdownMenuSeparator />
         {displayClinics.length === 0 && (
           <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-            {isLoading ? "Carregando..." : "Nenhuma clínica encontrada"}
+            {isLoading ? "Carregando…" : "Nenhuma clínica encontrada"}
           </div>
         )}
         {displayClinics.map((clinic) => (

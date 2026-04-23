@@ -68,7 +68,7 @@ export function ProcedureFormModal({
             <Label htmlFor="name">Nome do Procedimento</Label>
             <Input
               id="name"
-              placeholder="Ex: RPG, Pilates Solo, Drenagem..."
+              placeholder="Ex: RPG, Pilates Solo, Drenagem…"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               className="rounded-xl border-slate-200 focus:ring-primary/20"
@@ -164,7 +164,7 @@ export function ProcedureFormModal({
             <Textarea
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Descreva os benefícios, indicações ou detalhes do procedimento..."
+              placeholder="Descreva os benefícios, indicações ou detalhes do procedimento…"
               className="rounded-xl border-slate-200 resize-none"
               rows={3}
             />

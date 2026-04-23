@@ -81,7 +81,7 @@ export function AgendaToolbar({
             <select
               value={selectedScheduleId ?? ""}
               onChange={(e) => onSelectScheduleId(e.target.value ? Number(e.target.value) : null)}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer"
             >
               <option value="">Todas as agendas</option>
               {activeSchedules.map((s) => (
@@ -107,7 +107,7 @@ export function AgendaToolbar({
               onChange={(e) =>
                 onSelectProfessionalId(e.target.value ? Number(e.target.value) : null)
               }
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer"
             >
               <option value="">Todos os profissionais</option>
               {calendarProfessionals.map((p) => (

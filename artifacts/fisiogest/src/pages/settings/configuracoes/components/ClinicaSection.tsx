@@ -273,7 +273,7 @@ export function ClinicaSection() {
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-20 h-20 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
                 {logoPreview ? (
-                  <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1" />
+                  <img src={logoPreview} alt="Logo da clínica" width={120} height={120} className="w-full h-full object-contain p-1" />
                 ) : (
                   <ImageIcon className="h-7 w-7 text-slate-300" />
                 )}

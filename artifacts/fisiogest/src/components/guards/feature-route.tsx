@@ -23,7 +23,7 @@ export function FeatureRoute({ component: Component, feature }: FeatureRouteProp
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">Carregando...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">Carregando…</div>
     );
   }
   if (!isAuthenticated) return null;

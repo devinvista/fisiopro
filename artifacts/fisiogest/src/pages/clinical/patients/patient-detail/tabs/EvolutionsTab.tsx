@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Printer, TrendingUp } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { apiFetchJson } from "@/lib/api";
+import { confirm as confirmDialog } from "@/lib/confirm";
 
 import { PatientBasic, ClinicInfo } from "../types";
 import { formatDate, formatDateTime } from "../utils/format";
@@ -94,8 +95,14 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
     });
   };
 
-  const handleDelete = (id: number) => {
-    if (!window.confirm("Excluir esta evolução permanentemente?")) return;
+  const handleDelete = async (id: number) => {
+    const ok = await confirmDialog({
+      title: "Excluir esta evolução?",
+      description: "Esta ação é permanente e não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteMutation.mutate({ patientId, evolutionId: id }, {
       onSuccess: () => { toast({ title: "Evolução excluída" }); invalidate(); },
       onError: () => toast({ title: "Erro ao excluir", variant: "destructive" }),

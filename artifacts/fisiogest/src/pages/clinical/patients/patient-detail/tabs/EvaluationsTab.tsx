@@ -19,6 +19,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { confirm as confirmDialog } from "@/lib/confirm";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -246,8 +247,14 @@ export function EvaluationsTab({ patientId }: { patientId: number }) {
     });
   };
 
-  const handleDelete = (id: number) => {
-    if (!window.confirm("Excluir esta avaliação permanentemente?")) return;
+  const handleDelete = async (id: number) => {
+    const ok = await confirmDialog({
+      title: "Excluir esta avaliação?",
+      description: "Esta ação é permanente e não pode ser desfeita.",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
     deleteMutation.mutate({ patientId, evaluationId: id }, {
       onSuccess: () => {
         toast({ title: "Avaliação excluída" });

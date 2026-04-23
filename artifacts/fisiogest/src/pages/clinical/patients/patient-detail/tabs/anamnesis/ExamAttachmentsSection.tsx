@@ -177,7 +177,7 @@ export function ExamAttachmentsSection({ patientId }: ExamAttachmentsSectionProp
             onClick={() => { setAddMode(null); fileInputRef.current?.click(); }}
           >
             {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            {uploading ? "Enviando..." : "Anexar arquivo"}
+            {uploading ? "Enviando…" : "Anexar arquivo"}
           </Button>
         </div>
         <input

@@ -18,7 +18,7 @@ export function SuperAdminRoute({ component: Component }: SuperAdminRouteProps) 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        Carregando...
+        Carregando…
       </div>
     );
   }
