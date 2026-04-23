@@ -315,6 +315,7 @@ Para reduzir o tamanho deste arquivo (sempre carregado em contexto), a documenta
 | [`docs/operations.md`](docs/operations.md) | Tratamento centralizado de erros + Testes (vitest) |
 | [`docs/market.md`](docs/market.md) | Análise de mercado e concorrentes |
 | [`docs/changelog.md`](docs/changelog.md) | Histórico de correções e refatorações |
+| [`docs/sprints.md`](docs/sprints.md) | Plano de sprints (status: feito / pendente) |
 
 **Quando atualizar `replit.md` vs `docs/`:**
 - Mudanças em padrões transversais (localização, identidade visual, scripts, convenções) → `replit.md`
