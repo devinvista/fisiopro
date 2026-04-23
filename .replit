@@ -12,6 +12,8 @@ id = "artifacts/fisiogest"
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+run = ["pnpm", "run", "start"]
+build = ["pnpm", "run", "build"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
