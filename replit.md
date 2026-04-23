@@ -321,3 +321,37 @@ Para reduzir o tamanho deste arquivo (sempre carregado em contexto), a documenta
 - Mudanças em padrões transversais (localização, identidade visual, scripts, convenções) → `replit.md`
 - Mudanças em uma área específica (financeiro, clínico, SaaS, schema, etc.) → arquivo correspondente em `docs/`
 - Refatorações arquiteturais e correções relevantes → adicionar entrada em `docs/changelog.md`
+
+---
+
+## Deploy em Hostinger (Node.js)
+
+O projeto pode ser empacotado em um único `.zip` para publicação em hospedagens Node.js (Hostinger Cloud / VPS / Business com "Setup Node.js App"). O backend Express **já serve o frontend estático** em produção (ver `artifacts/api-server/src/app.ts` → `express.static("artifacts/fisiogest/dist/public")`) — apenas **uma porta** precisa ser exposta.
+
+**Como gerar o pacote:**
+1. `pnpm run build` — gera `artifacts/api-server/dist/index.cjs` (bundle esbuild) e `artifacts/fisiogest/dist/public/` (estático Vite).
+2. Empacotar em uma pasta enxuta contendo:
+   - `package.json` somente com **dependências de runtime** (as listadas no `allowlist` de `artifacts/api-server/build.ts` + os `external` que o esbuild marca como não-bundled: `@google-cloud/storage`, `@sentry/node`, `cloudinary`, `compression`, `cookie-parser`, `express-rate-limit`, `google-auth-library`, `helmet`, `multer`, `node-cron`, `pino`, `pino-http`).
+   - `artifacts/api-server/dist/index.cjs`
+   - `artifacts/fisiogest/dist/public/`
+   - `.env.example` documentando `DATABASE_URL`, `JWT_SECRET`, `CLOUDINARY_URL`, `NODE_ENV`, `PORT` (Hostinger injeta `PORT` automaticamente).
+3. No hPanel → **Setup Node.js App** → Node 22.x, startup file `artifacts/api-server/dist/index.cjs`, configurar variáveis, `Run NPM Install`, `Start App`.
+
+> O `.gitignore` já exclui `deploy/`, `*.zip` e `.env*` para evitar vazamento de bundle/segredos.
+
+---
+
+## Boas práticas recomendadas (próximos passos sugeridos)
+
+Diagnóstico atual: `pnpm typecheck` passa com **0 erros**, `pnpm lint` retorna **0 erros e ~2961 warnings** (predominantemente `no-unused-vars` em componentes shadcn/ui copiados via `npx shadcn add`). Recomendações priorizadas:
+
+1. **Não rodar `lint --fix` em massa nos componentes shadcn** (`artifacts/*/src/components/ui/*`). Esses arquivos seguem a API oficial do shadcn — remover imports "não usados" pode quebrar tipos públicos. Em vez disso, adicionar override no `eslint.config.js` para silenciar `no-unused-vars` apenas em `**/components/ui/**`.
+2. **Health-check e readiness** — expor `GET /api/health` retornando `{ status, db, uptime }` para monitoramento do Hostinger / UptimeRobot.
+3. **Migrações em produção** — rodar `pnpm db:push` apenas a partir de um pipeline (CI), nunca manualmente em produção. Considerar migrar para `drizzle-kit migrate` (versionado) em vez de `push` (compara schema vivo).
+4. **Segredos** — `JWT_SECRET` e `DATABASE_URL` aparecem em `.replit` (`userenv.shared`). Em produção (Hostinger), defini-los apenas no painel de variáveis do hPanel — nunca commitar.
+5. **Rotação de chaves** — gerar novo `JWT_SECRET` para o ambiente de produção (não reutilizar o do Replit).
+6. **`lib/api-spec/`** — pacote orval/openapi presente mas não importado por nenhum outro pacote. Decidir entre: (a) mantê-lo apenas como ferramenta manual de codegen, (b) integrá-lo ao `pnpm build:libs`, ou (c) removê-lo se o OpenAPI não estiver mais sendo mantido.
+7. **Headers de segurança** — `helmet` já está instalado no api-server. Confirmar que está ativado em `app.ts` com `contentSecurityPolicy` adequado para servir o frontend estático.
+8. **Rate limiting** — `express-rate-limit` já em uso (`publicLimiter`). Considerar limites mais estritos em `/api/auth/login` para mitigar brute-force.
+9. **Observabilidade** — Sentry está integrado (DSN opcional). Habilitar em produção definindo `SENTRY_DSN`.
+10. **Backups** — agendar dump diário do PostgreSQL (Neon já oferece point-in-time; em outros provedores, criar `pg_dump` cron).
