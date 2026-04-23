@@ -2,6 +2,19 @@ export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
 
+type UnauthorizedHandler = (url: string) => void;
+
+let _onUnauthorized: UnauthorizedHandler | null = null;
+
+/**
+ * Registra um callback chamado sempre que o servidor responder com 401.
+ * Use para implementar logout automático na aplicação sem monkey-patching
+ * do `window.fetch`. O callback recebe a URL da requisição que falhou.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  _onUnauthorized = handler;
+}
+
 export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
@@ -310,6 +323,9 @@ export async function customFetch<T = unknown>(
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {
+    if (response.status === 401 && _onUnauthorized) {
+      _onUnauthorized(requestInfo.url);
+    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }

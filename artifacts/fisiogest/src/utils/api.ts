@@ -1,3 +1,15 @@
+type UnauthorizedHandler = (url: string) => void;
+
+let _onUnauthorized: UnauthorizedHandler | null = null;
+
+/**
+ * Registra um callback chamado quando o servidor responder 401.
+ * Permite logout automático sem monkey-patching do `window.fetch`.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  _onUnauthorized = handler;
+}
+
 const TOKEN_KEY = "fisiogest_token";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
@@ -44,7 +56,13 @@ export async function apiFetchJson<T = unknown>(
   init?: RequestInit,
 ): Promise<T> {
   const res = await apiFetch(input, init);
-  if (!res.ok) throw new Error(await extractError(res));
+  if (!res.ok) {
+    if (res.status === 401 && _onUnauthorized) {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      _onUnauthorized(url);
+    }
+    throw new Error(await extractError(res));
+  }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
