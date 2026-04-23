@@ -3,7 +3,13 @@ import type { Role } from "@workspace/db";
 import { generateToken } from "../../middleware/auth.js";
 import { todayBRT } from "../../utils/dateUtils.js";
 import { authRepository } from "./auth.repository.js";
-import type { LoginInput, RegisterInput } from "./auth.schemas.js";
+import { generateResetToken, hashToken, passwordResetRepository } from "./password-reset.js";
+import type {
+  ForgotPasswordInput,
+  LoginInput,
+  RegisterInput,
+  ResetPasswordInput,
+} from "./auth.schemas.js";
 
 export class AuthError extends Error {
   constructor(
@@ -204,6 +210,42 @@ export const authService = {
 
     const token = generateToken(userId, roles, Number(clinicId), false, userName ?? undefined);
     return { token, clinicId: Number(clinicId), roles };
+  },
+
+  async requestPasswordReset(input: ForgotPasswordInput, appBaseUrl: string) {
+    const email = input.email.toLowerCase().trim();
+    const rows = await authRepository.findUserByEmail(email);
+    const user = rows[0];
+
+    // Always respond the same to prevent email enumeration.
+    if (!user) {
+      return { ok: true as const, devResetUrl: null };
+    }
+
+    const { rawToken, tokenHash } = generateResetToken();
+    await passwordResetRepository.createToken(user.id, tokenHash);
+
+    const resetUrl = `${appBaseUrl.replace(/\/$/, "")}/redefinir-senha?token=${rawToken}`;
+
+    // Dev: log so the developer can click the link without email.
+    console.log(
+      `[auth] Password reset requested for ${email}\n        Reset URL (válido por 1h): ${resetUrl}`,
+    );
+
+    // Only return the URL in non-production to support local testing.
+    const devResetUrl = process.env.NODE_ENV === "production" ? null : resetUrl;
+    return { ok: true as const, devResetUrl };
+  },
+
+  async resetPassword(input: ResetPasswordInput) {
+    const tokenHash = hashToken(input.token);
+    const row = await passwordResetRepository.findActiveByHash(tokenHash);
+    if (!row) {
+      throw badRequest("Token inválido ou expirado. Solicite um novo link.");
+    }
+    await passwordResetRepository.updateUserPassword(row.userId, input.password);
+    await passwordResetRepository.invalidateAllForUser(row.userId);
+    return { ok: true as const };
   },
 
   async getMe(args: {

@@ -18,6 +18,8 @@ import { setUnauthorizedHandler as setApiUnauthorizedHandler } from "@/lib/api";
 const LandingPage = lazy(() => import("./pages/landing"));
 const Login = lazy(() => import("./pages/auth/login"));
 const Register = lazy(() => import("./pages/auth/register"));
+const ForgotPassword = lazy(() => import("./pages/auth/forgot-password"));
+const ResetPassword = lazy(() => import("./pages/auth/reset-password"));
 const Dashboard = lazy(() => import("./pages/dashboard"));
 const Agenda = lazy(() => import("./pages/clinical/agenda"));
 const PatientsList = lazy(() => import("./pages/clinical/patients/index"));
@@ -73,6 +75,8 @@ function Router() {
         <Route path="/" component={LandingPage} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/recuperar-senha" component={ForgotPassword} />
+        <Route path="/redefinir-senha" component={ResetPassword} />
         <Route path="/dashboard">
           {() => <ProtectedRoute component={Dashboard} />}
         </Route>

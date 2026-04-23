@@ -1,5 +1,6 @@
 export * from "./clinics";
 export * from "./users";
+export * from "./password-reset-tokens";
 export * from "./patients";
 export * from "./procedures";
 export * from "./appointments";

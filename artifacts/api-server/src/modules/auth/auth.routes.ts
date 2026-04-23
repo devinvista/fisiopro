@@ -3,7 +3,13 @@ import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
 import { setAuthCookie, clearAuthCookie, clearCsrfCookie } from "../../middleware/cookies.js";
 import { validateBody } from "../../utils/validate.js";
 import { AuthError, authService } from "./auth.service.js";
-import { loginSchema, registerSchema, switchClinicSchema } from "./auth.schemas.js";
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+  switchClinicSchema,
+} from "./auth.schemas.js";
 
 const router = Router();
 
@@ -40,6 +46,29 @@ router.post(
     if (!body) return;
     const result = await authService.login(body);
     setAuthCookie(res, result.token);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/forgot-password",
+  handle(async (req, res) => {
+    const body = validateBody(forgotPasswordSchema, req.body, res);
+    if (!body) return;
+    const origin =
+      (req.headers.origin as string | undefined) ||
+      `${req.protocol}://${req.get("host")}`;
+    const result = await authService.requestPasswordReset(body, origin);
+    res.json(result);
+  }),
+);
+
+router.post(
+  "/reset-password",
+  handle(async (req, res) => {
+    const body = validateBody(resetPasswordSchema, req.body, res);
+    if (!body) return;
+    const result = await authService.resetPassword(body);
     res.json(result);
   }),
 );
