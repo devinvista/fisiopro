@@ -2,7 +2,7 @@ import {
   useGetPatient,
   useCreateAnamnesis,
 } from "@workspace/api-client-react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Loader2, Clock, CheckCircle, Check,
@@ -29,9 +29,7 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
     queryKey: [`/api/patients/${patientId}/anamnesis`],
   });
 
-  const mutation = useMutation({
-    mutationFn: (data: { patientId: number; data: any }) => useCreateAnamnesis().mutateAsync(data),
-  });
+  const mutation = useCreateAnamnesis();
 
   const [template, setTemplate] = useState<AnamTemplate>("reabilitacao");
   const [form, setForm] = useState<AnamnesisForm>(emptyForm);

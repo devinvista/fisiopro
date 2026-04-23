@@ -17,6 +17,22 @@ const dbMock = vi.hoisted(() => {
   }
   const db = new Proxy({} as any, {
     get(_t, prop: string) {
+      // `db.transaction(cb)` — invoca o callback com o próprio proxy como `tx`
+      // sem consumir item da fila (a fila representa apenas as queries reais).
+      if (prop === "transaction") {
+        return async (cb: (tx: any) => any) => {
+          callLog.push("transaction");
+          return cb(db);
+        };
+      }
+      // `tx.execute(sql\`pg_advisory_xact_lock(...)\`)` — não consome fila,
+      // resolve para undefined.
+      if (prop === "execute") {
+        return () => {
+          callLog.push("execute");
+          return makeChain(undefined);
+        };
+      }
       return () => {
         callLog.push(prop);
         if (queue.length === 0) throw new Error(`[dbMock] queue exhausted on db.${prop}() — chamadas: ${callLog.join(",")}`);
@@ -73,9 +89,10 @@ describe("billingService.runBilling", () => {
   it("gera cobrança quando dia está na janela e não há registro do mês", async () => {
     dbMock.enqueue([activeSub()]);                 // 1. select assinaturas
     dbMock.enqueue([]);                            // 2. select existing → vazio
-    dbMock.enqueue([{ id: 555 }]);                 // 3. insert.returning → registro criado
-    dbMock.enqueue(undefined);                     // 4. update nextBillingDate
-    dbMock.enqueue(undefined);                     // 5. insert billing_run_logs
+    dbMock.enqueue([]);                            // 3. tx.select recheck dentro do lock → vazio
+    dbMock.enqueue([{ id: 555 }]);                 // 4. tx.insert.returning → registro criado
+    dbMock.enqueue(undefined);                     // 5. tx.update nextBillingDate
+    dbMock.enqueue(undefined);                     // 6. db.insert billing_run_logs
 
     const result = await runBilling({ triggeredBy: "manual" });
 
@@ -134,6 +151,7 @@ describe("billingService.runBilling", () => {
     }
     dbMock.enqueue([activeSub({ billingDay: todayDay - 1 })]);
     dbMock.enqueue([]);              // existing vazio
+    dbMock.enqueue([]);              // tx.recheck vazio
     dbMock.enqueue([{ id: 777 }]);   // insert
     dbMock.enqueue(undefined);       // update next billing
     dbMock.enqueue(undefined);       // log
@@ -144,10 +162,12 @@ describe("billingService.runBilling", () => {
 
   it("contabiliza erro sem abortar batch quando insert falha", async () => {
     dbMock.enqueue([activeSub({ id: 1 }), activeSub({ id: 2 })]); // 2 assinaturas
-    // Sub #1: existing vazio, insert FALHA
+    // Sub #1: existing vazio, recheck vazio, insert FALHA
+    dbMock.enqueue([]);
     dbMock.enqueue([]);
     dbMock.enqueue(() => { throw new Error("insert violou constraint"); });
-    // Sub #2: existing vazio, gera com sucesso
+    // Sub #2: existing vazio, recheck vazio, gera com sucesso
+    dbMock.enqueue([]);
     dbMock.enqueue([]);
     dbMock.enqueue([{ id: 222 }]);
     dbMock.enqueue(undefined); // update next billing

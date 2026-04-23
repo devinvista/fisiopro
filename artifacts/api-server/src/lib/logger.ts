@@ -61,14 +61,14 @@ export const logger = new Proxy(baseLogger, {
           clinicId: ctx.clinicId,
         });
         const childMethod = (child as unknown as Record<string, unknown>)[prop];
-        return typeof childMethod === "function" ? (childMethod as Function).bind(child) : value;
+        return typeof childMethod === "function" ? (childMethod as (...args: unknown[]) => unknown).bind(child) : value;
       }
     }
     // Para qualquer outro método/prop (notavelmente `child`, usado por pino-http para anexar
     // serializers de req/res), preserva o `this` correto via bind no target original.
     // Sem isso, pino-http cria um child logger sem serializers e o log dump de cada request
     // serializa o objeto req/res inteiro (centenas de linhas).
-    if (typeof value === "function") return (value as Function).bind(target);
+    if (typeof value === "function") return (value as (...args: unknown[]) => unknown).bind(target);
     return value;
   },
 }) as Logger;
