@@ -19,6 +19,7 @@ import {
 
 import type { PkgOption, PlanProcedureItem } from "../../types";
 import { fmtCur } from "../../utils/format";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 
 export function TreatmentPlanItemsSection({
   planId,
@@ -52,16 +53,12 @@ export function TreatmentPlanItemsSection({
 
   const { data: packages = [] } = useQuery<PkgOption[]>({
     queryKey: ["packages"],
-    queryFn: () => fetch("/api/packages", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<PkgOption[]>("/api/packages"),
   });
 
   const { data: procedures = [] } = useQuery<{ id: number; name: string; price: string | number; durationMinutes: number }[]>({
     queryKey: ["procedures-active"],
-    queryFn: () => fetch("/api/procedures", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<{ id: number; name: string; price: string | number; durationMinutes: number }[]>("/api/procedures"),
   });
 
   const selectedPkg = packages.find(p => String(p.id) === selectedPkgId) ?? null;
@@ -74,14 +71,7 @@ export function TreatmentPlanItemsSection({
   }
 
   const addMutation = useMutation({
-    mutationFn: (body: object) => fetch(`/api/treatment-plans/${planId}/procedures`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-      body: JSON.stringify(body),
-    }).then(async r => {
-      if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b?.message || "Erro ao adicionar"); }
-      return r.json();
-    }),
+    mutationFn: (body: object) => apiSendJson<any>(`/api/treatment-plans/${planId}/procedures`, "POST", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
       toast({ title: "Item adicionado ao plano!" });
@@ -93,14 +83,7 @@ export function TreatmentPlanItemsSection({
 
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: number; body: object }) =>
-      fetch(`/api/treatment-plans/${planId}/procedures/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-        body: JSON.stringify(body),
-      }).then(async r => {
-        if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b?.message || "Erro ao atualizar"); }
-        return r.json();
-      }),
+      apiSendJson<any>(`/api/treatment-plans/${planId}/procedures/${id}`, "PUT", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
       toast({ title: "Item atualizado!" });
@@ -110,10 +93,7 @@ export function TreatmentPlanItemsSection({
   });
 
   const removeMutation = useMutation({
-    mutationFn: (itemId: number) => fetch(`/api/treatment-plans/${planId}/procedures/${itemId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => { if (!r.ok) throw new Error("Erro ao remover"); }),
+    mutationFn: (itemId: number) => apiSendJson<void>(`/api/treatment-plans/${planId}/procedures/${itemId}`, "DELETE"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
       toast({ title: "Item removido do plano." });

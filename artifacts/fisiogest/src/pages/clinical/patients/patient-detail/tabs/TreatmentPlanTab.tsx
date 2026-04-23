@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, apiFetchJson, apiSendJson } from "@/utils/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -92,9 +92,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const plansKey = [`/api/patients/${patientId}/treatment-plans`];
   const { data: allPlans = [], isLoading: plansLoading } = useQuery<any[]>({
     queryKey: plansKey,
-    queryFn: () => fetch(`/api/patients/${patientId}/treatment-plans`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/patients/${patientId}/treatment-plans`),
     enabled: !!patientId,
   });
 
@@ -116,17 +114,13 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const planItemsKey = selectedPlanId ? [`/api/treatment-plans/${selectedPlanId}/procedures`] : null;
   const { data: planItems = [] } = useQuery<PlanProcedureItem[]>({
     queryKey: planItemsKey ?? ["plan-items-disabled"],
-    queryFn: () => fetch(`/api/treatment-plans/${selectedPlanId}/procedures`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<PlanProcedureItem[]>(`/api/treatment-plans/${selectedPlanId}/procedures`),
     enabled: !!selectedPlanId,
   });
 
   const { data: appointments = [] } = useQuery<any[]>({
     queryKey: [`/api/patients/${patientId}/appointments`],
-    queryFn: () => fetch(`/api/patients/${patientId}/appointments`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` }
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/patients/${patientId}/appointments`),
     enabled: !!patientId,
   });
 
@@ -134,9 +128,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   const { data: professionals = [] } = useQuery<{ id: number; name: string; roles: string[] }[]>({
     queryKey: ["/api/users/professionals"],
-    queryFn: () => fetch("/api/users/professionals", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<{ id: number; name: string; roles: string[] }[]>("/api/users/professionals"),
   });
 
   // ─── Form state per selected plan ───────────────────────────────────────
@@ -179,15 +171,10 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     if (!selectedPlanId) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/treatment-plans/${selectedPlanId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-        body: JSON.stringify({
-          ...form,
-          estimatedSessions: form.estimatedSessions ? Number(form.estimatedSessions) : null,
-        }),
+      await apiSendJson(`/api/treatment-plans/${selectedPlanId}`, "PUT", {
+        ...form,
+        estimatedSessions: form.estimatedSessions ? Number(form.estimatedSessions) : null,
       });
-      if (!res.ok) throw new Error("Erro ao salvar plano");
       queryClient.invalidateQueries({ queryKey: plansKey });
       toast({ title: "Plano de tratamento salvo!" });
     } catch (err: any) {
@@ -200,16 +187,10 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const handleCreatePlan = async () => {
     setCreatingNew(true);
     try {
-      const res = await fetch(`/api/patients/${patientId}/treatment-plans`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-        body: JSON.stringify({
-          startDate: todayBRTDate(),
-          status: "ativo",
-        }),
+      const newPlan = await apiSendJson<any>(`/api/patients/${patientId}/treatment-plans`, "POST", {
+        startDate: todayBRTDate(),
+        status: "ativo",
       });
-      if (!res.ok) throw new Error("Erro ao criar plano");
-      const newPlan = await res.json();
       queryClient.invalidateQueries({ queryKey: plansKey });
       setSelectedPlanId(newPlan.id);
       toast({ title: "Novo plano de tratamento iniciado!" });
@@ -221,10 +202,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   };
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => fetch(`/api/treatment-plans/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-    }).then(r => { if (!r.ok) throw new Error("Erro ao excluir"); }),
+    mutationFn: (id: number) => apiSendJson(`/api/treatment-plans/${id}`, "DELETE"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: plansKey });
       setSelectedPlanId(null);

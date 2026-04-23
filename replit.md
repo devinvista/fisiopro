@@ -262,6 +262,11 @@ Helpers únicos em `src/utils/api.ts`:
 Usar sempre esses helpers em vez de `fetch` direto — garante autenticação consistente
 e tratamento de erro padronizado (mensagem do backend via campo `message`).
 
+Refatoração concluída em todo `pages/clinical/*` (pacientes, agenda, atestados,
+anamnese, evoluções, plano de tratamento, jornada, histórico, financeiro, auditoria,
+prints) além de `pacotes/`, `clinicas/`, `configuracoes/`, `superadmin/`. Exceções
+intencionais: rotas públicas `agendar/*` (sem auth) e uploads `photos/*` (FormData).
+
 ### Convenção de imports
 
 - Cliente HTTP: hooks gerados pelo Orval em `@workspace/api-client-react`

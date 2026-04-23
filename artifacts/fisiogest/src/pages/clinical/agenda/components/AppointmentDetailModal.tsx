@@ -155,10 +155,9 @@ export function AppointmentDetailModal({
   const handleReschedule = async () => {
     setRescheduleBusy(true);
     try {
-      const token = localStorage.getItem("fisiogest_token");
       const res = await apiFetch(`/api/appointments/${appointment.id}/reschedule`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(rescheduleForm),
       });
       if (!res.ok) {

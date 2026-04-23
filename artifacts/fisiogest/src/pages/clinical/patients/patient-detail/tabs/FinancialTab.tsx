@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { formatCurrency, formatDateTime } from "../utils/format";
 import { statusLabel, txTypeLabel } from "./HistoryTab";
 import { SubscriptionsSection } from "./FinancialTab/SubscriptionsSection";
@@ -21,11 +22,10 @@ import { PAYMENT_METHODS, emptyPaymentForm } from "./FinancialTab/constants";
 export function FinancialTab({ patientId }: { patientId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` });
 
   const { data: records = [], isLoading: recLoading } = useQuery<any[]>({
     queryKey: [`/api/financial/patients/${patientId}/history`],
-    queryFn: () => fetch(`/api/financial/patients/${patientId}/history`, { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/financial/patients/${patientId}/history`),
     enabled: !!patientId,
   });
 
@@ -33,7 +33,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
     totalAReceber: number; totalPago: number; saldo: number; totalSessionCredits: number;
   }>({
     queryKey: [`/api/financial/patients/${patientId}/summary`],
-    queryFn: () => fetch(`/api/financial/patients/${patientId}/summary`, { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson(`/api/financial/patients/${patientId}/summary`),
     enabled: !!patientId,
   });
 
@@ -58,19 +58,11 @@ export function FinancialTab({ patientId }: { patientId: number }) {
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/financial/patients/${patientId}/payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify({
-          amount: Number(payForm.amount),
-          paymentMethod: payForm.paymentMethod || undefined,
-          description: payForm.description || undefined,
-        }),
+      await apiSendJson(`/api/financial/patients/${patientId}/payment`, "POST", {
+        amount: Number(payForm.amount),
+        paymentMethod: payForm.paymentMethod || undefined,
+        description: payForm.description || undefined,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message ?? "Erro");
-      }
       toast({ title: "Pagamento registrado", description: "O saldo do paciente foi atualizado." });
       invalidate();
       setPayForm(emptyPaymentForm);
@@ -86,14 +78,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
     if (!estornoTarget) return;
     setEstorning(true);
     try {
-      const res = await fetch(`/api/financial/records/${estornoTarget.id}/estorno`, {
-        method: "PATCH",
-        headers: authHeader(),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message ?? "Erro");
-      }
+      await apiSendJson(`/api/financial/records/${estornoTarget.id}/estorno`, "PATCH");
       toast({ title: "Estorno aplicado", description: "O registro foi marcado como estornado." });
       invalidate();
       setEstornoTarget(null);

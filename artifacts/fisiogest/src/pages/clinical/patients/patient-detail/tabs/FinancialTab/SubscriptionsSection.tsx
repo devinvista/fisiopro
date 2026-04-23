@@ -11,12 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { PlanBadge } from "@/components/guards/plan-badge";
 import { formatCurrency } from "../../utils/format";
 import { subscriptionStatusStyle } from "../HistoryTab";
 
 export function SubscriptionsSection({ patientId }: { patientId: number }) {
-  const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { hasFeature } = useAuth();
@@ -24,7 +24,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
 
   const { data: subscriptions = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/financial/patients/${patientId}/subscriptions`],
-    queryFn: () => fetch(`/api/financial/patients/${patientId}/subscriptions`, { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/financial/patients/${patientId}/subscriptions`),
     enabled: !!patientId,
   });
 
@@ -34,7 +34,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
 
   const { data: procedures = [] } = useQuery<any[]>({
     queryKey: ["procedures", "all"],
-    queryFn: () => fetch("/api/procedures", { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>("/api/procedures"),
   });
 
   const handleCreate = async () => {
@@ -46,12 +46,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
     try {
       const body: any = { patientId, procedureId: parseInt(form.procedureId), startDate: form.startDate, monthlyAmount: Number(form.monthlyAmount), notes: form.notes || undefined };
       if (form.billingDay) body.billingDay = parseInt(form.billingDay);
-      const res = await fetch("/api/subscriptions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error();
+      await apiSendJson("/api/subscriptions", "POST", body);
       toast({ title: "Assinatura criada com sucesso" });
       queryClient.invalidateQueries({ queryKey: [`/api/financial/patients/${patientId}/subscriptions`] });
       setForm({ procedureId: "", startDate: "", billingDay: "", monthlyAmount: "", notes: "" });
@@ -65,12 +60,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
 
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {
-      const res = await fetch(`/api/subscriptions/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error();
+      await apiSendJson(`/api/subscriptions/${id}`, "PUT", { status: newStatus });
       toast({ title: "Status atualizado" });
       queryClient.invalidateQueries({ queryKey: [`/api/financial/patients/${patientId}/subscriptions`] });
     } catch {

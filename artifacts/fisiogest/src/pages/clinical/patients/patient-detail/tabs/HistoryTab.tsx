@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, apiFetchJson, apiSendJson } from "@/utils/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -87,9 +87,7 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
   const { toast } = useToast();
   const { data: appointments = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/patients/${patientId}/appointments`],
-    queryFn: () => fetch(`/api/patients/${patientId}/appointments`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` }
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/patients/${patientId}/appointments`),
     enabled: !!patientId,
   });
   const [dialogAppt, setDialogAppt] = useState<any | null>(null);
@@ -115,22 +113,12 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
     if (!rescheduleAppt) return;
     setRescheduleBusy(true);
     try {
-      const token = localStorage.getItem("fisiogest_token");
-      const res = await fetch(`/api/appointments/${rescheduleAppt.id}/reschedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(rescheduleForm),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast({ variant: "destructive", title: "Erro ao remarcar", description: err.message || "Verifique o horário e tente novamente." });
-        return;
-      }
+      await apiSendJson(`/api/appointments/${rescheduleAppt.id}/reschedule`, "POST", rescheduleForm);
       toast({ title: "Remarcado com sucesso!", description: `Nova consulta em ${rescheduleForm.date} às ${rescheduleForm.startTime}.` });
       setRescheduleAppt(null);
       queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
-    } catch {
-      toast({ variant: "destructive", title: "Erro ao remarcar." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Erro ao remarcar", description: e.message || "Verifique o horário e tente novamente." });
     } finally {
       setRescheduleBusy(false);
     }

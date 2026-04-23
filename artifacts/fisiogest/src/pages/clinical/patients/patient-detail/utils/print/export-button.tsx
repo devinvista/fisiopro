@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { apiFetchJson } from "@/utils/api";
 import { fetchClinicForPrint } from "./_shared";
 import { generateFullProntuarioHTML } from "./full-prontuario";
 
@@ -9,19 +10,17 @@ export function ExportProntuarioButton({ patientId, patient }: { patientId: numb
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  const token = () => localStorage.getItem("fisiogest_token");
-
   const handleExport = async () => {
     setLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${token()}` };
+      const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
       const [anamnesisRes, evaluationsRes, planRes, evolutionsRes, appointmentsRes, dischargeRes, clinicRes] = await Promise.all([
-        fetch(`/api/patients/${patientId}/anamnesis`, { headers }).then(r => r.ok ? r.json() : null),
-        fetch(`/api/patients/${patientId}/evaluations`, { headers }).then(r => r.ok ? r.json() : []),
-        fetch(`/api/patients/${patientId}/treatment-plan`, { headers }).then(r => r.ok ? r.json() : null),
-        fetch(`/api/patients/${patientId}/evolutions`, { headers }).then(r => r.ok ? r.json() : []),
-        fetch(`/api/patients/${patientId}/appointments`, { headers }).then(r => r.ok ? r.json() : []),
-        fetch(`/api/patients/${patientId}/discharge-summary`, { headers }).then(r => r.ok ? r.json() : null),
+        safe(apiFetchJson<any>(`/api/patients/${patientId}/anamnesis`), null),
+        safe(apiFetchJson<any[]>(`/api/patients/${patientId}/evaluations`), [] as any[]),
+        safe(apiFetchJson<any>(`/api/patients/${patientId}/treatment-plan`), null),
+        safe(apiFetchJson<any[]>(`/api/patients/${patientId}/evolutions`), [] as any[]),
+        safe(apiFetchJson<any[]>(`/api/patients/${patientId}/appointments`), [] as any[]),
+        safe(apiFetchJson<any>(`/api/patients/${patientId}/discharge-summary`), null),
         fetchClinicForPrint(),
       ]);
 

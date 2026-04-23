@@ -1,4 +1,5 @@
 import type { ClinicInfo } from "../../types";
+import { apiFetchJson } from "@/utils/api";
 
 export function escapeHtml(s: string) {
   return String(s ?? "")
@@ -16,12 +17,7 @@ export function fmtCurrency(v: unknown): string {
 
 export async function fetchClinicForPrint(): Promise<ClinicInfo | null> {
   try {
-    const token = localStorage.getItem("fisiogest_token");
-    const r = await fetch("/api/clinics/current", {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!r.ok) return null;
-    return await r.json();
+    return await apiFetchJson<ClinicInfo>("/api/clinics/current");
   } catch {
     return null;
   }

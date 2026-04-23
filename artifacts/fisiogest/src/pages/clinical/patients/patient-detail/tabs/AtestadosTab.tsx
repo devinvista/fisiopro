@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, apiFetchJson, apiSendJson } from "@/utils/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -263,19 +263,13 @@ export function AtestadoDialog({ open, onClose, patientId, patient, onCreated, a
     localStorage.setItem("fisiogest_prof_specialty", profSpecialty);
     localStorage.setItem("fisiogest_prof_council", profCouncil);
     try {
-      const res = await fetch(`/api/patients/${patientId}/atestados`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-        body: JSON.stringify({
-          type, content, cid: cid || null,
-          professionalName: user?.name ?? "Profissional",
-          professionalSpecialty: profSpecialty || null,
-          professionalCouncil: profCouncil || null,
-          daysOff: type === "afastamento" ? (parseInt(daysOff) || null) : null,
-        }),
+      const saved = await apiSendJson<AtestadoRecord>(`/api/patients/${patientId}/atestados`, "POST", {
+        type, content, cid: cid || null,
+        professionalName: user?.name ?? "Profissional",
+        professionalSpecialty: profSpecialty || null,
+        professionalCouncil: profCouncil || null,
+        daysOff: type === "afastamento" ? (parseInt(daysOff) || null) : null,
       });
-      if (!res.ok) throw new Error();
-      const saved: AtestadoRecord = await res.json();
       queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/atestados`] });
       toast({ title: "Atestado emitido com sucesso!" });
       printAtestado(saved, clinic);
@@ -407,22 +401,13 @@ export function AtestadosTab({ patientId, patient }: { patientId: number; patien
 
   const { data: atestados = [], isLoading } = useQuery<AtestadoRecord[]>({
     queryKey: [`/api/patients/${patientId}/atestados`],
-    queryFn: async () => {
-      const res = await fetch(`/api/patients/${patientId}/atestados`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-      });
-      if (!res.ok) throw new Error();
-      return res.json();
-    },
+    queryFn: () => apiFetchJson<AtestadoRecord[]>(`/api/patients/${patientId}/atestados`),
   });
 
   const handleDelete = async (id: number) => {
     setDeletingId(id);
     try {
-      await fetch(`/api/patients/${patientId}/atestados/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` },
-      });
+      await apiSendJson(`/api/patients/${patientId}/atestados/${id}`, "DELETE");
       queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/atestados`] });
       toast({ title: "Atestado excluído" });
     } catch {

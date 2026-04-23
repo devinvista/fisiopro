@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, apiFetchJson } from "@/utils/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -103,12 +103,9 @@ const ACTION_STYLES: Record<string, { label: string; bg: string; text: string; d
 
 function AuditLogSection({ patientId }: { patientId: number }) {
   const [open, setOpen] = useState(false);
-  const token = () => localStorage.getItem("fisiogest_token");
   const { data: logs = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/audit-log/patients/${patientId}`],
-    queryFn: () => fetch(`/api/audit-log/patients/${patientId}`, {
-      headers: { Authorization: `Bearer ${token()}` },
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/audit-log/patients/${patientId}`),
     enabled: !!patientId,
     staleTime: 30_000,
   });
@@ -191,14 +188,10 @@ function AuditLogSection({ patientId }: { patientId: number }) {
 
 export function AuditLogTab({ patientId }: { patientId: number }) {
   const [filter, setFilter] = useState<AuditAction>("all");
-  const token = () => localStorage.getItem("fisiogest_token");
 
   const { data: logs = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/audit-log/patients/${patientId}`],
-    queryFn: () =>
-      fetch(`/api/audit-log/patients/${patientId}`, {
-        headers: { Authorization: `Bearer ${token()}` },
-      }).then((r) => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/audit-log/patients/${patientId}`),
     enabled: !!patientId,
     staleTime: 30_000,
   });

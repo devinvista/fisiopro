@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 
 type BodyMeasurementPoint = {
   id: number; date: string;
@@ -56,8 +57,6 @@ function MeasField({ label, value, unit = "cm", onChange }: { label: string; val
 }
 
 export function IndicatorsPanel({ patientId }: { patientId: number }) {
-  const token = localStorage.getItem("fisiogest_token");
-  const indicatorHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
   const [showAdd, setShowAdd] = useState(false);
   const [measForm, setMeasForm] = useState({ ...emptyMeasForm });
   const [savingMeas, setSavingMeas] = useState(false);
@@ -67,8 +66,8 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
   const { data: indicators, isLoading } = useQuery<IndicatorsResponse>({
     queryKey: [`/api/patients/${patientId}/indicators`],
     queryFn: () =>
-      fetch(`/api/patients/${patientId}/indicators`, { headers: indicatorHeaders })
-        .then(r => r.ok ? r.json() : { eva: [], body: null, reab: null, bodyMeasurements: [] }),
+      apiFetchJson<IndicatorsResponse>(`/api/patients/${patientId}/indicators`)
+        .catch(() => ({ eva: [], body: null, reab: null, bodyMeasurements: [] })),
     enabled: !!patientId,
   });
 
@@ -132,12 +131,7 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
       }
       if (measForm.celluliteGrade) body.celluliteGrade = measForm.celluliteGrade;
       if (measForm.notes) body.notes = measForm.notes;
-      const res = await fetch(`/api/patients/${patientId}/body-measurements`, {
-        method: "POST",
-        headers: { ...(indicatorHeaders as Record<string, string>), "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error();
+      await apiSendJson(`/api/patients/${patientId}/body-measurements`, "POST", body);
       toast({ title: "Medição registrada!", description: "Dados corporais salvos com sucesso." });
       setShowAdd(false);
       setMeasForm({ ...emptyMeasForm, measuredAt: format(new Date(), "yyyy-MM-dd") });

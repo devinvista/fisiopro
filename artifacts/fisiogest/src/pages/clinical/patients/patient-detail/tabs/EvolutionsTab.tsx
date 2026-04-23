@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Plus, Printer, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetchJson } from "@/utils/api";
 
 import { PatientBasic, ClinicInfo } from "../types";
 import { formatDate, formatDateTime } from "../utils/format";
@@ -40,9 +41,7 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
 
   const { data: appointments = [] } = useQuery<any[]>({
     queryKey: [`/api/patients/${patientId}/appointments`],
-    queryFn: () => fetch(`/api/patients/${patientId}/appointments`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` }
-    }).then(r => r.json()),
+    queryFn: () => apiFetchJson<any[]>(`/api/patients/${patientId}/appointments`),
     enabled: !!patientId,
   });
 

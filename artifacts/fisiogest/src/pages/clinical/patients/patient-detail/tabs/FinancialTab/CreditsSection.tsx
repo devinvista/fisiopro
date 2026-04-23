@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { apiFetchJson } from "@/utils/api";
 
 export function CreditsSection({ patientId }: { patientId: number }) {
-  const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` });
   const { data, isLoading } = useQuery<{ credits: any[]; totalAvailable: number }>({
     queryKey: [`/api/financial/patients/${patientId}/credits`],
-    queryFn: () => fetch(`/api/financial/patients/${patientId}/credits`, { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson<{ credits: any[]; totalAvailable: number }>(`/api/financial/patients/${patientId}/credits`),
     enabled: !!patientId,
   });
 

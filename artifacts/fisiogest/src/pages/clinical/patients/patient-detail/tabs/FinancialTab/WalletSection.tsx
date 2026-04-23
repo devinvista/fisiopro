@@ -10,17 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetchJson, apiSendJson } from "@/utils/api";
 import { formatCurrency } from "../../utils/format";
 import { PAYMENT_METHODS, WALLET_TX_LABELS } from "./constants";
 
 export function WalletSection({ patientId }: { patientId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem("fisiogest_token")}` });
 
   const { data, isLoading, refetch } = useQuery<{ wallet: any; transactions: any[] }>({
     queryKey: [`/api/patients/${patientId}/wallet`],
-    queryFn: () => fetch(`/api/patients/${patientId}/wallet`, { headers: authHeader() }).then(r => r.json()),
+    queryFn: () => apiFetchJson<{ wallet: any; transactions: any[] }>(`/api/patients/${patientId}/wallet`),
     enabled: !!patientId,
   });
 
@@ -40,19 +40,11 @@ export function WalletSection({ patientId }: { patientId: number }) {
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/patients/${patientId}/wallet/deposit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify({
-          amount,
-          paymentMethod: depositForm.paymentMethod || undefined,
-          description: depositForm.description || undefined,
-        }),
+      await apiSendJson(`/api/patients/${patientId}/wallet/deposit`, "POST", {
+        amount,
+        paymentMethod: depositForm.paymentMethod || undefined,
+        description: depositForm.description || undefined,
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.message ?? "Erro ao depositar");
-      }
       toast({ title: "Depósito realizado", description: `R$ ${amount.toFixed(2)} adicionados à carteira.` });
       setDepositForm({ amount: "", paymentMethod: "", description: "" });
       setShowDeposit(false);

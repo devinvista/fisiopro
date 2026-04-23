@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/utils/api";
+import { apiFetch, apiFetchJson, apiSendJson } from "@/utils/api";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -156,7 +156,6 @@ const CONNECTOR_COLOR: Record<JourneyStatus, string> = {
 };
 
 export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; onNavigateToTab: (tab: string) => void }) {
-  const token = () => localStorage.getItem("fisiogest_token");
   const { user, isSuperAdmin } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -173,10 +172,7 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
 
   const { data: steps = [], isLoading } = useQuery<JourneyStep[]>({
     queryKey: [`/api/patients/${patientId}/journey`],
-    queryFn: () =>
-      fetch(`/api/patients/${patientId}/journey`, {
-        headers: { Authorization: `Bearer ${token()}` },
-      }).then((r) => r.ok ? r.json() : []),
+    queryFn: () => apiFetchJson<JourneyStep[]>(`/api/patients/${patientId}/journey`).catch(() => []),
     enabled: !!patientId,
     staleTime: 0,
     refetchOnMount: true,
@@ -188,14 +184,7 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
 
   const cancelMutation = useMutation({
     mutationFn: ({ stepId }: { stepId: number }) =>
-      fetch(`/api/patients/${patientId}/journey/${stepId}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cancel" }),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error("Erro ao cancelar");
-        return r.json();
-      }),
+      apiSendJson(`/api/patients/${patientId}/journey/${stepId}`, "PATCH", { action: "cancel" }),
     onSuccess: () => {
       invalidateJourney();
       setCancelConfirmStep(null);
@@ -206,14 +195,7 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
 
   const editMutation = useMutation({
     mutationFn: ({ stepId, notes, responsibleName }: { stepId: number; notes: string; responsibleName: string }) =>
-      fetch(`/api/patients/${patientId}/journey/${stepId}`, {
-        method: "PATCH",
-        headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "edit", notes, responsibleName }),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error("Erro ao salvar");
-        return r.json();
-      }),
+      apiSendJson(`/api/patients/${patientId}/journey/${stepId}`, "PATCH", { action: "edit", notes, responsibleName }),
     onSuccess: () => {
       invalidateJourney();
       setEditingStep(null);
@@ -223,14 +205,7 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
   });
 
   const resetMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/patients/${patientId}/journey/reset`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
-      }).then(async (r) => {
-        if (!r.ok) throw new Error("Erro ao reiniciar");
-        return r.json();
-      }),
+    mutationFn: () => apiSendJson(`/api/patients/${patientId}/journey/reset`, "POST"),
     onSuccess: () => {
       invalidateJourney();
       setResetConfirmOpen(false);
