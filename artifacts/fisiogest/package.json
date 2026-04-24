@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --config vite.config.ts --host ::",
+    "dev": "concurrently -k -n api,web -c blue,green \"pnpm --filter @workspace/api-server run dev:no-prebuild\" \"vite --config vite.config.ts --host ::\"",
     "dev:no-prebuild": "vite --config vite.config.ts --host ::",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host ::",
@@ -38,6 +38,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "cmdk": "^1.1.1",
+    "concurrently": "^9.2.1",
     "date-fns": "^4.1.0",
     "framer-motion": "catalog:",
     "lucide-react": "catalog:",

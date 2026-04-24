@@ -14,7 +14,7 @@ process.on("unhandledRejection", (reason) => {
   logger.error({ err, type: "unhandledRejection" }, "Unhandled promise rejection");
 });
 
-const server = app.listen(PORT, "::", () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   logger.info({ port: PORT }, `Server listening on port ${PORT}`);
   startScheduler();
 });

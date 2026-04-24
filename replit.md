@@ -138,8 +138,10 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 pnpm install
 
 # Iniciar todos os serviços (via workflows do Replit)
-# → artifacts/api-server: API Server  (porta 8080)
-# → artifacts/fisiogest: web          (porta 3000)
+# O workflow `artifacts/fisiogest: web` roda api-server (porta 8080)
+# + Vite frontend (porta 3000) em paralelo via `concurrently`.
+# O workflow `artifacts/mockup-sandbox: Component Preview Server` (porta 8081)
+# pode ser iniciado sob demanda quando o sandbox for usado no canvas.
 
 # Compilar declarações TypeScript das libs compartilhadas (necessário antes do typecheck)
 pnpm run build:libs

@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "dev:host": "vite --host ::",
+    "dev": "PORT=${PORT:-8081} BASE_PATH=${BASE_PATH:-/__mockup} vite",
+    "dev:host": "PORT=${PORT:-8081} BASE_PATH=${BASE_PATH:-/__mockup} vite --host ::",
     "build": "vite build",
     "preview": "vite preview --host ::",
     "typecheck": "tsc -p tsconfig.json --noEmit"
