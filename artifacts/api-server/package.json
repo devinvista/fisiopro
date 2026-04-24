@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "NODE_ENV=development PORT=8080 tsx ./src/index.ts",
-    "dev:no-prebuild": "NODE_ENV=development PORT=8080 tsx ./src/index.ts",
+    "dev": "PORT=8080 bash ./dev-supervisor.sh",
+    "dev:tsx": "NODE_ENV=development PORT=8080 tsx ./src/index.ts",
+    "dev:foreground": "BUILD_MODE=development tsx ./build.ts && NODE_ENV=development PORT=8080 node ./dist/index.cjs",
     "build": "tsx ./build.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

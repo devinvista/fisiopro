@@ -34,16 +34,15 @@ async function buildAll() {
       !(pkg.dependencies?.[dep]?.startsWith("workspace:")),
   );
 
+  const isDev = process.env.BUILD_MODE === "development";
   await esbuild({
     entryPoints: [path.resolve(__dirname, "src/index.ts")],
     platform: "node",
     bundle: true,
     format: "cjs",
     outfile: path.resolve(distDir, "index.cjs"),
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
-    minify: true,
+    minify: !isDev,
+    sourcemap: isDev,
     external: externals,
     logLevel: "info",
   });

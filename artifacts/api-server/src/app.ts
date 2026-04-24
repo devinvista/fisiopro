@@ -82,6 +82,13 @@ app.use(cookieParser());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
+app.get("/", (_req, res) => {
+  res.status(200).json({ ok: true, service: "fisiogest-api" });
+});
+app.get("/api", (_req, res) => {
+  res.status(200).json({ ok: true, service: "fisiogest-api" });
+});
+
 // CSRF — depois do cookieParser e do parser do body, antes das rotas /api
 app.use(csrfMiddleware);
 
