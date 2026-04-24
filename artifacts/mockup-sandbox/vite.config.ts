@@ -44,7 +44,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    host: true,
     port,
+    strictPort: true,
     allowedHosts: true,
     fs: {
       strict: true,
@@ -52,7 +54,9 @@ export default defineConfig({
     },
   },
   preview: {
+    host: true,
     port,
+    strictPort: true,
     allowedHosts: true,
   },
 });

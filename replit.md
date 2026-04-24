@@ -123,11 +123,20 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 
 ## Identidade Visual
 
-- **Logo**: Figura estilizada em pose de reabilitação (braços estendidos + cruz médica) — `components/logo-mark.tsx`
+- **Logo**: Cruz médica + círculo de movimento (mark "Cruz Clínica") — `artifacts/fisiogest/src/components/logo-mark.tsx`
 - **Cor primária**: Teal profundo `hsl(180 100% 25%)` — identidade fisioterapêutica
 - **Sidebar**: Teal escuro `hsl(183 50% 9%)` — coerência com a identidade
-- **Tipografia**: Inter (corpo) + Outfit (títulos)
-- **Ícones**: Lucide React — HeartHandshake (pacientes), Dumbbell (procedimentos), CalendarDays (agenda)
+- **Tipografia**: Inter (corpo) + Outfit (títulos / display)
+- **Ícones**: Lucide React no app + conjunto autoral de 24 ícones clínicos (board IconSystem)
+
+### Brand Book (canvas)
+
+Quatro boards de marca em `artifacts/mockup-sandbox/src/components/mockups/brand-book/`:
+
+- `ColorSystem.tsx` — escalas Teal/Sidebar/Neutral (50→900) em OKLCH, paleta semântica e de gráficos, modo claro/escuro, tokens CSS + Tailwind, padrões de acessibilidade (WCAG 2.2 AA).
+- `LogoSystem.tsx` — 4 conceitos de mark (Cruz Clínica, Pulso, Movimento, Monograma FG), lockups horizontal/vertical/inverso, teste de escala (16→128px), versões monocromáticas, app icon iOS/Android/PWA/favicon, área de respiro.
+- `IconSystem.tsx` — 24 ícones clínicos autorais (24×24, traço 1.8px round) agrupados em Clínica & Pacientes, Sessões & Especialidades, Documentos & Financeiro, Operação & Plataforma — com aplicação em sidebar, botões e cards.
+- `Page.tsx` — brand book mestre (essência, logo, cores, tipografia, ícones, mockups de UI, do's & don'ts, tom de voz).
 
 ---
 
@@ -138,10 +147,12 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 pnpm install
 
 # Iniciar todos os serviços (via workflows do Replit)
-# O workflow `artifacts/fisiogest: web` roda api-server (porta 8080)
-# + Vite frontend (porta 3000) em paralelo via `concurrently`.
-# O workflow `artifacts/mockup-sandbox: Component Preview Server` (porta 8081)
-# pode ser iniciado sob demanda quando o sandbox for usado no canvas.
+# O workflow `artifacts/fisiogest: web` roda em paralelo via `concurrently`:
+#   - api-server (porta 8080)
+#   - Vite frontend (porta 3000)
+#   - mockup-sandbox (porta 8081, base path /__mockup) — boards de marca no canvas
+# Os workflows individuais de api-server e mockup-sandbox não são usados
+# (o framework de workflows não detecta a porta deles isoladamente).
 
 # Compilar declarações TypeScript das libs compartilhadas (necessário antes do typecheck)
 pnpm run build:libs
