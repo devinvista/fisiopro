@@ -1,52 +1,21 @@
 modules = ["web", "bash", "nodejs-22", "postgresql-16"]
-
 [[artifacts]]
 id = "artifacts/api-server"
-
 [[artifacts]]
 id = "artifacts/fisiogest"
-
 [nix]
 channel = "stable-25_05"
-
 [agent]
 stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
-
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
-
-[workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm run dev"
-waitForPort = 3000
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
 run = ["pnpm", "run", "start"]
 build = ["pnpm", "run", "build"]
-
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
