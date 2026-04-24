@@ -102,28 +102,42 @@ export function CreateAppointmentForm({
   const [recurSessions, setRecurSessions] = useState(8);
   const [recurPending, setRecurPending] = useState(false);
 
-  const { data: patients } = useListPatients({ limit: 1000 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(patientSearch.trim()), 250);
+    return () => clearTimeout(t);
+  }, [patientSearch]);
+
+  const { data: patients } = useListPatients({
+    limit: 50,
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+  } as any);
   const { data: procedures } = useListProcedures();
   const mutation = useCreateAppointment();
   const { toast } = useToast();
 
-  const selectedPatient = useMemo(
-    () => patients?.data?.find((p) => p.id === Number(formData.patientId)),
-    [patients, formData.patientId]
-  );
+  // Quando um paciente é selecionado, buscamos individualmente para garantir
+  // que ele apareça em `selectedPatient` mesmo se a lista atual (filtrada/paginada)
+  // não o contiver.
+  const { data: selectedPatientFetched } = useQuery({
+    queryKey: ["patient-detail-min", formData.patientId],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/patients/${formData.patientId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!formData.patientId,
+    staleTime: 60_000,
+  });
+
+  const selectedPatient = useMemo(() => {
+    const fromList = patients?.data?.find((p) => p.id === Number(formData.patientId));
+    return fromList ?? selectedPatientFetched ?? undefined;
+  }, [patients, formData.patientId, selectedPatientFetched]);
 
   const filteredPatients = useMemo(() => {
-    if (!patients?.data) return [];
-    if (!patientSearch.trim()) return patients.data;
-    const q = patientSearch.toLowerCase();
-    const qDigits = q.replace(/\D/g, "");
-    return patients.data.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.phone && p.phone.replace(/\D/g, "").includes(qDigits || q)) ||
-        (p.cpf && qDigits && p.cpf.replace(/\D/g, "").includes(qDigits))
-    );
-  }, [patients, patientSearch]);
+    return patients?.data ?? [];
+  }, [patients]);
 
   const { data: treatmentPlan } = useQuery<TreatmentPlan | null>({
     queryKey: ["treatment-plan", formData.patientId],
