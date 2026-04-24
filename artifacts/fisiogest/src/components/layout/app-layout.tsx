@@ -5,27 +5,30 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import {
   LayoutDashboard,
-  CalendarDays,
-  Users,
-  Activity,
-  Wallet,
-  BarChart3,
   LogOut,
   Menu,
-  Stethoscope,
-  Building2,
-  Settings2,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronRight,
   MoreHorizontal,
-  ShieldCheck,
   AlertTriangle,
   XCircle,
   Clock,
   X,
+  Lock,
 } from "lucide-react";
+import {
+  CalendarIcon,
+  ClinicIcon,
+  PatientIcon,
+  ReportsIcon,
+  SettingsIcon,
+  ShieldIcon,
+  StethoscopeIcon,
+  WalletIcon,
+} from "@/components/icons";
+import LogoMark, { LogoWordmark } from "@/components/logo-mark";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,7 +37,6 @@ import { ROLE_LABELS } from "@/utils/permissions";
 import type { Permission, Role } from "@/utils/permissions";
 import type { Feature } from "@/utils/plan-features";
 import { PlanBadge } from "@/components/guards/plan-badge";
-import { Lock } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL ?? "/";
@@ -156,30 +158,30 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: null },
-  { href: "/agenda", label: "Agenda", icon: CalendarDays, permission: "appointments.read" },
-  { href: "/pacientes", label: "Pacientes", icon: Users, permission: "patients.read" },
-  { href: "/procedimentos", label: "Procedimentos", icon: Activity, permission: "procedures.manage" },
+  { href: "/agenda", label: "Agenda", icon: CalendarIcon, permission: "appointments.read" },
+  { href: "/pacientes", label: "Pacientes", icon: PatientIcon, permission: "patients.read" },
+  { href: "/procedimentos", label: "Procedimentos", icon: StethoscopeIcon, permission: "procedures.manage" },
   { href: "/pacotes", label: "Pacotes", icon: Package, permission: "procedures.manage", feature: "module.patient_packages" },
-  { href: "/financeiro", label: "Financeiro", icon: Wallet, permission: "financial.read" },
-  { href: "/relatorios", label: "Relatórios", icon: BarChart3, permission: "reports.read" },
+  { href: "/financeiro", label: "Financeiro", icon: WalletIcon, permission: "financial.read" },
+  { href: "/relatorios", label: "Relatórios", icon: ReportsIcon, permission: "reports.read" },
   {
     href: "/configuracoes",
     label: "Configurações",
-    icon: Settings2,
+    icon: SettingsIcon,
     permission: null,
     anyPermission: ["settings.manage", "users.manage"],
   },
-  { href: "/clinicas", label: "Clínicas", icon: Building2, permission: "clinics.manage", feature: "module.multi_clinic" },
-  { href: "/superadmin", label: "SuperAdmin", icon: ShieldCheck, permission: null, superAdminOnly: true },
+  { href: "/clinicas", label: "Clínicas", icon: ClinicIcon, permission: "clinics.manage", feature: "module.multi_clinic" },
+  { href: "/superadmin", label: "SuperAdmin", icon: ShieldIcon, permission: null, superAdminOnly: true },
 ];
 
 const SIDEBAR_STORAGE_KEY = "fisiogest-sidebar-collapsed";
 
 const BOTTOM_NAV_PRIORITY: NavItem[] = [
   { href: "/dashboard",    label: "Início",     icon: LayoutDashboard, permission: null },
-  { href: "/agenda",       label: "Agenda",     icon: CalendarDays,    permission: "appointments.read" },
-  { href: "/pacientes",    label: "Pacientes",  icon: Users,           permission: "patients.read" },
-  { href: "/financeiro",   label: "Financeiro", icon: Wallet,          permission: "financial.read" },
+  { href: "/agenda",       label: "Agenda",     icon: CalendarIcon,    permission: "appointments.read" },
+  { href: "/pacientes",    label: "Pacientes",  icon: PatientIcon,     permission: "patients.read" },
+  { href: "/financeiro",   label: "Financeiro", icon: WalletIcon,      permission: "financial.read" },
 ];
 
 interface SidebarContentProps {
@@ -234,16 +236,12 @@ function SidebarContent({
       <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground relative">
         <div
           className={`flex h-16 shrink-0 items-center bg-black/10 transition-all duration-300 ${
-            isCollapsed ? "justify-center px-3" : "gap-3 px-6"
+            isCollapsed ? "justify-center px-3" : "gap-3 px-5"
           }`}
         >
-          <div className="bg-primary/20 p-2 rounded-lg shrink-0">
-            <Stethoscope className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <LogoMark size={isCollapsed ? 36 : 40} tone="primary" stroke="white" className="shrink-0" />
           {!isCollapsed && (
-            <span className="font-display font-bold text-xl tracking-tight whitespace-nowrap overflow-hidden">
-              FisioGest <span className="text-primary-foreground/70">Pro</span>
-            </span>
+            <LogoWordmark inverted className="text-xl whitespace-nowrap overflow-hidden" />
           )}
         </div>
 
@@ -258,7 +256,7 @@ function SidebarContent({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button className="h-8 w-8 rounded-md bg-white/10 flex items-center justify-center text-sidebar-foreground/70 hover:bg-white/15 hover:text-white transition-colors">
-                  <Building2 className="h-4 w-4" />
+                  <ClinicIcon className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">Trocar clínica</TooltipContent>
@@ -544,7 +542,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
 
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground bg-secondary/50 px-4 py-2 rounded-full whitespace-nowrap">
-              <CalendarDays className="h-4 w-4 shrink-0" />
+              <CalendarIcon className="h-4 w-4 shrink-0" />
               {new Date().toLocaleDateString("pt-BR", {
                 weekday: "long",
                 day: "numeric",

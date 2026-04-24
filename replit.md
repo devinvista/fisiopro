@@ -123,11 +123,13 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 
 ## Identidade Visual
 
-- **Logo**: Cruz médica + círculo de movimento (mark "Cruz Clínica") — `artifacts/fisiogest/src/components/logo-mark.tsx`
+- **Logo**: mark "Cruz Clínica" + wordmark "FisioGest Pro" — `artifacts/fisiogest/src/components/logo-mark.tsx`
+  - exporta `LogoMark` (default), `LogoWordmark` e `LogoLockup` com props `tone` e `inverted` para fundos claros/escuros.
 - **Cor primária**: Teal profundo `hsl(180 100% 25%)` — identidade fisioterapêutica
-- **Sidebar**: Teal escuro `hsl(183 50% 9%)` — coerência com a identidade
+- **Sidebar**: Teal escuro `hsl(222 47% 11%)` — coerência com a identidade
 - **Tipografia**: Inter (corpo) + Outfit (títulos / display)
-- **Ícones**: Lucide React no app + conjunto autoral de 24 ícones clínicos (board IconSystem)
+- **Paleta semântica** (tokens em `index.css`): `--success` (`150 60% 35%`), `--warning` (`38 92% 50%`), `--info` (`210 90% 50%`), `--destructive` (`0 84% 60%`) — todas com `-foreground` e expostas no `@theme` como classes Tailwind (`bg-success`, `text-warning`, etc).
+- **Ícones autorais**: 24 ícones clínicos em `artifacts/fisiogest/src/components/icons.tsx` (export individual + objeto `Icons.*`). API compatível com Lucide (`className`, `size`, `strokeWidth`). Usados na sidebar, bottom nav e header — Lucide ainda é usado para ícones genéricos de UI (close/menu/chevron).
 
 ### Brand Book (canvas)
 
