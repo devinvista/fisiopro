@@ -247,26 +247,33 @@ export default function Dashboard() {
       <div className="space-y-6">
 
         {/* ── Greeting + Quick Actions ── */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">
               {getGreeting()}{d?.user?.name ? `, ${d.user.name.split(" ")[0]}` : ""}!
             </h1>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
               {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })} · Aqui está o resumo da sua clínica
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/agenda">
-              <Button className="h-9 px-4 rounded-xl shadow-sm gap-1.5 text-sm" size="sm">
+          <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto sm:items-center">
+            <Link href="/agenda" className="w-full sm:w-auto">
+              <Button
+                size="sm"
+                className="w-full h-10 px-3 sm:px-4 rounded-xl shadow-sm gap-1.5 text-sm font-semibold"
+              >
                 <CalendarPlus className="w-4 h-4" />
-                Novo Agendamento
+                <span className="truncate">Novo Agendamento</span>
               </Button>
             </Link>
-            <Link href="/pacientes">
-              <Button variant="outline" className="h-9 px-4 rounded-xl text-sm gap-1.5" size="sm">
+            <Link href="/pacientes" className="w-full sm:w-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-10 px-3 sm:px-4 rounded-xl text-sm gap-1.5 font-semibold border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
                 <Plus className="w-4 h-4" />
-                Novo Paciente
+                <span className="truncate">Novo Paciente</span>
               </Button>
             </Link>
           </div>
