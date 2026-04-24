@@ -114,5 +114,14 @@ Todas as rotas exigem `Authorization: Bearer <token>`, exceto `/api/auth/*` e `/
 | GET | `/api/reports` | Relatórios por período |
 | GET | `/api/audit-log` | Log de auditoria |
 
+### Saúde e Versão (públicas, sem auth)
+| Método | Caminho | Descrição |
+|---|---|---|
+| GET | `/api/healthz` | Liveness probe — sempre 200 com `{ status: "ok" }` |
+| GET | `/api/health` | Readiness — testa conexão DB; 200 se ok, 503 se degradado |
+| GET | `/api/version` | `{ name, version, commit, builtAt, startedAt, uptimeSec, nodeVersion, env }` — útil para confirmar qual build está rodando em produção |
+
+> `/api/version` lê `version` do `package.json` raiz e tenta resolver o `commit` na ordem: env `GIT_COMMIT` → `REPL_COMMIT_SHA` → `SOURCE_COMMIT` → leitura de `.git/HEAD`. `builtAt` vem de `BUILD_TIME` (env injetada no build) ou cai no instante de start do servidor.
+
 ---
 
