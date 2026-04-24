@@ -60,6 +60,8 @@ export function UploadModal({
   const [sessionLabel, setSessionLabel] = useState("");
   const [appointmentId, setAppointmentId] = useState<string>("none");
   const [uploading, setUploading] = useState(false);
+  type UploadStatus = "pending" | "compressing" | "uploading" | "saving" | "done" | "error";
+  const [progress, setProgress] = useState<Record<number, { status: UploadStatus; percent: number; error?: string }>>({});
 
   const { data: appointments = [] } = useQuery<AppointmentOption[]>({
     queryKey: ["patient-appointments-for-photos", patientId],
@@ -115,31 +117,77 @@ export function UploadModal({
     setFiles((prev) => prev.map((f, i) => (i === idx ? { ...f, viewType } : f)));
   };
 
+  const setFileProgress = (idx: number, status: UploadStatus, percent: number, error?: string) => {
+    setProgress((prev) => ({ ...prev, [idx]: { status, percent, error } }));
+  };
+
+  const uploadWithProgress = (
+    url: string,
+    formData: FormData,
+    onProgress: (percent: number) => void,
+  ): Promise<{ secure_url: string; bytes: number; format: string }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.withCredentials = true;
+      const csrf = document.cookie
+        .split(";")
+        .map((c) => c.trim())
+        .find((c) => c.startsWith("fisiogest_csrf="));
+      if (csrf) xhr.setRequestHeader("x-csrf-token", decodeURIComponent(csrf.split("=")[1] ?? ""));
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error("Resposta inválida do servidor"));
+          }
+        } else {
+          let message = `HTTP ${xhr.status}`;
+          try {
+            const body = JSON.parse(xhr.responseText);
+            message = body?.error || body?.message || message;
+          } catch {
+            /* ignore */
+          }
+          reject(new Error(message));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Falha de rede no envio"));
+      xhr.send(formData);
+    });
+  };
+
   const handleUpload = async () => {
     if (files.length === 0) return;
     setUploading(true);
-    try {
-      for (const entry of files) {
+    setProgress(Object.fromEntries(files.map((_, i) => [i, { status: "pending" as UploadStatus, percent: 0 }])));
+
+    let successCount = 0;
+    let firstErrorMessage: string | null = null;
+
+    for (let i = 0; i < files.length; i++) {
+      const entry = files[i];
+      try {
+        setFileProgress(i, "compressing", 0);
         const compressed = await imageCompression(entry.file, COMPRESSION_OPTIONS);
 
         const uploadForm = new FormData();
         uploadForm.append("file", compressed, entry.file.name);
         uploadForm.append("folder", `fisiogest/patients/${patientId}/photos`);
 
-        const uploadRes = await apiFetch(`/api/uploads/proxy`, {
-          method: "POST",
-          body: uploadForm,
+        setFileProgress(i, "uploading", 0);
+        const uploaded = await uploadWithProgress(`/api/uploads/proxy`, uploadForm, (percent) => {
+          setFileProgress(i, "uploading", percent);
         });
-        if (!uploadRes.ok) {
-          const errBody = await uploadRes.json().catch(() => ({}));
-          throw new Error(errBody?.error || "Falha no envio do arquivo");
-        }
-        const uploaded = (await uploadRes.json()) as {
-          secure_url: string;
-          bytes: number;
-          format: string;
-        };
 
+        setFileProgress(i, "saving", 100);
         const contentType = compressed.type === "image/jpg" ? "image/jpeg" : compressed.type;
         const payload: Record<string, unknown> = {
           objectPath: uploaded.secure_url,
@@ -160,19 +208,39 @@ export function UploadModal({
           const errBody = await res.json().catch(() => ({}));
           throw new Error(errBody?.error || errBody?.message || "Falha ao salvar foto");
         }
-      }
 
-      toast({ title: `${files.length} foto(s) enviada(s) com sucesso.` });
+        setFileProgress(i, "done", 100);
+        successCount++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Erro ao enviar foto";
+        setFileProgress(i, "error", 0, message);
+        if (!firstErrorMessage) firstErrorMessage = message;
+      }
+    }
+
+    setUploading(false);
+
+    if (successCount === files.length) {
+      toast({ title: `${successCount} foto(s) enviada(s) com sucesso.` });
       onSuccess();
       onClose();
       setFiles([]);
+      setProgress({});
       setSessionLabel("");
       setAppointmentId("none");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao enviar fotos.";
-      toast({ title: message, variant: "destructive" });
-    } finally {
-      setUploading(false);
+    } else if (successCount > 0) {
+      toast({
+        title: `${successCount} de ${files.length} foto(s) enviada(s).`,
+        description: firstErrorMessage ?? undefined,
+        variant: "destructive",
+      });
+      onSuccess();
+    } else {
+      toast({
+        title: "Erro ao enviar fotos.",
+        description: firstErrorMessage ?? undefined,
+        variant: "destructive",
+      });
     }
   };
 
@@ -193,18 +261,56 @@ export function UploadModal({
           <div className="space-y-3">
             <Label>Fotos selecionadas ({files.length})</Label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {files.map((f, i) => (
+              {files.map((f, i) => {
+                const p = progress[i];
+                const isActive = p && p.status !== "pending" && p.status !== "done" && p.status !== "error";
+                const statusLabel: Record<UploadStatus, string> = {
+                  pending: "Aguardando",
+                  compressing: "Comprimindo…",
+                  uploading: `Enviando ${p?.percent ?? 0}%`,
+                  saving: "Salvando…",
+                  done: "Enviada",
+                  error: "Falhou",
+                };
+                return (
                 <div key={i} className="relative group rounded-lg border border-slate-200 overflow-hidden bg-slate-50 aspect-[3/4]">
                   <img src={f.previewUrl} width={160} height={160} className="w-full h-full object-cover" alt="Pré-visualização da foto" loading="lazy" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-md bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {!uploading && (
+                    <button
+                      onClick={() => removeFile(i)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-md bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {p?.status === "done" && (
+                    <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[9px] font-semibold">OK</div>
+                  )}
+                  {p?.status === "error" && (
+                    <div
+                      className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[9px] font-semibold"
+                      title={p.error}
+                    >ERRO</div>
+                  )}
+                  {isActive && (
+                    <div className="absolute inset-0 bg-black/55 flex flex-col items-center justify-center gap-2 px-3">
+                      <Loader2 className="w-5 h-5 text-white animate-spin" />
+                      <span className="text-[10px] font-medium text-white text-center">{statusLabel[p.status]}</span>
+                      <div className="w-full h-1.5 rounded-full bg-white/30 overflow-hidden">
+                        <div
+                          className="h-full bg-white transition-all duration-200"
+                          style={{ width: `${p.status === "saving" ? 100 : p.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-white/90 backdrop-blur-sm border-t">
-                    <Select value={f.viewType} onValueChange={(v) => updateFileView(i, v as ViewType)}>
+                    <Select
+                      value={f.viewType}
+                      onValueChange={(v) => updateFileView(i, v as ViewType)}
+                      disabled={uploading}
+                    >
                       <SelectTrigger className="h-7 text-[10px] px-2">
                         <SelectValue />
                       </SelectTrigger>
@@ -218,7 +324,8 @@ export function UploadModal({
                     </Select>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-primary/30 transition-colors aspect-[3/4]"
