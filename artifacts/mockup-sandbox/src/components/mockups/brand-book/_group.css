@@ -1,0 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap");
+
+:root {
+  --brand-primary: 180 100% 25%;
+  --brand-sidebar: 183 50% 9%;
+  --brand-background: 210 40% 98%;
+  --brand-foreground: 222 47% 11%;
+  --brand-accent: 180 40% 91%;
+  --brand-muted: 214 32% 91%;
+
+  --brand-chart-1: 180 100% 25%;
+  --brand-chart-2: 210 100% 45%;
+  --brand-chart-3: 150 60% 40%;
+  --brand-chart-4: 43 100% 50%;
+  --brand-chart-5: 0 84% 60%;
+}

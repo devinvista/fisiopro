@@ -1,0 +1,15 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap");
+
+.tech-docs-container {
+  font-family: 'Inter', sans-serif;
+  color: hsl(222 47% 11%);
+  background-color: hsl(210 40% 98%);
+}
+
+.tech-docs-heading {
+  font-family: 'Outfit', sans-serif;
+}
+
+.code-block {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+}

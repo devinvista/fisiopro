@@ -1,0 +1,38 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap");
+
+:root {
+  --pitch-primary: 180 100% 25%;
+  --pitch-sidebar: 183 50% 9%;
+  --pitch-background: 210 40% 98%;
+  --pitch-foreground: 222 47% 11%;
+  --pitch-accent: 180 40% 91%;
+  --pitch-muted: 214 32% 91%;
+  
+  --pitch-chart-1: 180 100% 25%;
+  --pitch-chart-2: 210 100% 45%;
+  --pitch-chart-3: 150 60% 40%;
+  --pitch-chart-4: 43 100% 50%;
+  --pitch-chart-5: 0 84% 60%;
+}
+
+.pitch-container {
+  font-family: 'Inter', sans-serif;
+  color: hsl(var(--pitch-foreground));
+  background-color: hsl(var(--pitch-background));
+}
+
+.pitch-heading {
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Hide scrollbar for clean presentation look */
+.pitch-container::-webkit-scrollbar {
+  width: 8px;
+}
+.pitch-container::-webkit-scrollbar-track {
+  background: hsl(var(--pitch-background));
+}
+.pitch-container::-webkit-scrollbar-thumb {
+  background: hsl(var(--pitch-muted));
+  border-radius: 4px;
+}
