@@ -155,6 +155,9 @@ pnpm install
 #   - mockup-sandbox (porta 8081, base path /__mockup) — boards de marca no canvas
 # Os workflows individuais de api-server e mockup-sandbox não são usados
 # (o framework de workflows não detecta a porta deles isoladamente).
+#
+# ⚠️ NÃO regredir as portas (3000/8080/8081) nem adicionar [[ports]] duplicado em .replit.
+# Configuração canônica + diagnóstico de 502: docs/operations.md → "Workflows e Portas".
 
 # Compilar declarações TypeScript das libs compartilhadas (necessário antes do typecheck)
 pnpm run build:libs
