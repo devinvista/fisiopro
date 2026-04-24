@@ -183,7 +183,7 @@ export function UploadModal({
         uploadForm.append("folder", `fisiogest/patients/${patientId}/photos`);
 
         setFileProgress(i, "uploading", 0);
-        const uploaded = await uploadWithProgress(`/api/uploads/proxy`, uploadForm, (percent) => {
+        const uploaded = await uploadWithProgress(`/api/storage/uploads/proxy`, uploadForm, (percent) => {
           setFileProgress(i, "uploading", percent);
         });
 
