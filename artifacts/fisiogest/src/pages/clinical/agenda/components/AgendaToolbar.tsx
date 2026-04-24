@@ -70,18 +70,19 @@ export function AgendaToolbar({
   onOpenNew,
 }: Props) {
   return (
-    <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-      <div className="flex items-center gap-3 flex-wrap">
+    <div className="mb-4 space-y-3 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-3 lg:flex-wrap">
+      {/* ── Title + filters ── */}
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <CalIcon className="w-5 h-5 text-primary" />
-          <span className="text-lg font-bold font-display text-slate-800">Calendário</span>
+          <span className="text-base sm:text-lg font-bold font-display text-slate-800">Calendário</span>
         </div>
         {activeSchedules.length >= 2 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <select
               value={selectedScheduleId ?? ""}
               onChange={(e) => onSelectScheduleId(e.target.value ? Number(e.target.value) : null)}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer"
+              className="h-9 max-w-[60vw] sm:max-w-none rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer truncate"
             >
               <option value="">Todas as agendas</option>
               {activeSchedules.map((s) => (
@@ -100,14 +101,14 @@ export function AgendaToolbar({
           </div>
         )}
         {canFilterByProfessional && calendarProfessionals.length >= 2 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={selectedProfessionalId ?? ""}
               onChange={(e) =>
                 onSelectProfessionalId(e.target.value ? Number(e.target.value) : null)
               }
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer"
+              className="h-9 max-w-[55vw] sm:max-w-none rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 cursor-pointer truncate"
             >
               <option value="">Todos os profissionais</option>
               {calendarProfessionals.map((p) => (
@@ -120,40 +121,44 @@ export function AgendaToolbar({
         )}
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* ── Date navigation + label (mobile: own row) ── */}
+      <div className="flex items-center gap-2 lg:gap-2">
         <Button
           variant="outline"
           size="sm"
-          className="rounded-lg h-9 px-3 text-sm"
+          className="rounded-lg h-9 px-3 text-sm shrink-0"
           onClick={goToday}
         >
           Hoje
         </Button>
 
-        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-          <button className="p-2 hover:bg-slate-100 transition-colors" onClick={goPrev}>
+        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden shrink-0">
+          <button className="p-2 hover:bg-slate-100 transition-colors" onClick={goPrev} aria-label="Anterior">
             <ChevronLeft className="w-4 h-4 text-slate-600" />
           </button>
-          <button className="p-2 hover:bg-slate-100 transition-colors" onClick={goNext}>
+          <button className="p-2 hover:bg-slate-100 transition-colors" onClick={goNext} aria-label="Próximo">
             <ChevronRight className="w-4 h-4 text-slate-600" />
           </button>
         </div>
 
         <span
           className={cn(
-            "text-sm font-semibold text-slate-700",
-            view === "day" ? "capitalize min-w-[260px]" : "min-w-[200px]",
+            "text-xs sm:text-sm font-semibold text-slate-700 truncate flex-1 lg:flex-none",
+            view === "day" ? "capitalize lg:min-w-[260px]" : "lg:min-w-[200px]",
           )}
         >
           {weekLabel}
         </span>
+      </div>
 
-        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs font-medium">
+      {/* ── View toggle + actions (mobile: stack rows) ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs font-medium flex-1 sm:flex-none">
           {(["day", "fullweek", "month"] as ViewMode[]).map((v, idx) => (
             <button
               key={v}
               className={cn(
-                "px-3 h-9 transition-colors",
+                "flex-1 sm:flex-none px-3 h-9 transition-colors",
                 idx > 0 && "border-l border-slate-200",
                 view === v ? "bg-primary text-white" : "hover:bg-slate-100 text-slate-600",
               )}
@@ -168,7 +173,7 @@ export function AgendaToolbar({
           <Button
             size="sm"
             variant="outline"
-            className="h-9 px-3 rounded-lg border-teal-300 text-teal-700 hover:bg-teal-50 gap-1.5"
+            className="h-9 px-3 rounded-lg border-teal-300 text-teal-700 hover:bg-teal-50 gap-1.5 text-xs"
             onClick={onBatchComplete}
             disabled={batchCompleting}
           >
@@ -177,13 +182,14 @@ export function AgendaToolbar({
             ) : (
               <CheckCircle className="w-3.5 h-3.5" />
             )}
-            Concluir todos ({todayCompareceuCount})
+            <span className="hidden sm:inline">Concluir todos </span>
+            <span>({todayCompareceuCount})</span>
           </Button>
         )}
 
         <button
           className={cn(
-            "h-9 px-3 rounded-lg text-xs font-medium border transition-colors",
+            "h-9 px-3 rounded-lg text-xs font-medium border transition-colors shrink-0",
             showRemarcado
               ? "border-purple-300 bg-purple-50 text-purple-700"
               : "border-slate-200 text-slate-400 hover:bg-slate-50",
@@ -196,22 +202,27 @@ export function AgendaToolbar({
             Remarcados
           </span>
         </button>
+      </div>
 
+      {/* ── Primary actions (always full-width pair on mobile) ── */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
         <Button
           size="sm"
           variant="outline"
-          className="h-9 px-3 rounded-lg border-slate-300 text-slate-600 hover:bg-slate-100"
+          className="w-full sm:w-auto h-10 sm:h-9 px-3 sm:px-3 rounded-xl sm:rounded-lg border-slate-300 text-slate-600 hover:bg-slate-100 text-sm font-semibold gap-1.5"
           onClick={onOpenBlock}
         >
-          <Lock className="w-3.5 h-3.5 mr-1.5" /> Bloquear
+          <Lock className="w-4 h-4 shrink-0" /> Bloquear
         </Button>
 
         <Button
           size="sm"
-          className="h-9 px-4 rounded-lg shadow-md shadow-primary/20"
+          className="w-full sm:w-auto h-10 sm:h-9 px-3 sm:px-4 rounded-xl sm:rounded-lg shadow-md shadow-primary/20 text-sm font-semibold gap-1.5"
           onClick={onOpenNew}
         >
-          <Plus className="w-4 h-4 mr-1.5" /> Novo
+          <Plus className="w-4 h-4 shrink-0" />
+          <span className="sm:hidden">Agendar</span>
+          <span className="hidden sm:inline">Novo</span>
         </Button>
       </div>
     </div>

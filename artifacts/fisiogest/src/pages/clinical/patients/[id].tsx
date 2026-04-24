@@ -310,7 +310,7 @@ function EditPatientDialog({
               <Input
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="Rua, número - Bairro - Cidade"
+                placeholder="Rua e número"
                 className="h-10"
               />
             </div>
@@ -327,7 +327,7 @@ function EditPatientDialog({
                 <Input
                   value={form.emergencyContact}
                   onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
-                  placeholder="Nome — Telefone — Parentesco"
+                  placeholder="Nome — Telefone"
                   className="h-10"
                 />
               </div>
@@ -336,7 +336,7 @@ function EditPatientDialog({
                 <Textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Observações clínicas ou administrativas relevantes..."
+                  placeholder="Histórico, alergias, restrições…"
                   className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none"
                 />
               </div>

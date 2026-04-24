@@ -41,19 +41,19 @@ export function RecordsTable({
 }) {
   return (
     <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
-      <CardHeader className="pb-0 px-5 pt-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <CardHeader className="pb-0 px-4 sm:px-5 pt-4 sm:pt-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <CardTitle className="text-base font-bold text-slate-800">Lançamentos</CardTitle>
             <p className="text-xs text-slate-400 mt-0.5">{records.length} registro(s) · {MONTH_NAMES[month - 1]} {year}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex bg-slate-100 rounded-xl p-0.5 gap-0.5">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex bg-slate-100 rounded-xl p-0.5 gap-0.5 flex-1 sm:flex-none">
               {(["all", "receita", "despesa"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${typeFilter === t
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${typeFilter === t
                     ? "bg-white shadow-sm text-slate-900"
                     : "text-slate-500 hover:text-slate-700"
                     }`}
@@ -65,9 +65,9 @@ export function RecordsTable({
             <Button
               onClick={onNew}
               size="sm"
-              className="rounded-xl h-8 px-3 text-xs shadow-sm"
+              className="rounded-xl h-9 sm:h-8 px-3 text-xs font-semibold shadow-sm shrink-0 gap-1"
             >
-              <Plus className="w-3.5 h-3.5 mr-1" /> Novo
+              <Plus className="w-3.5 h-3.5 shrink-0" /> Novo
             </Button>
           </div>
         </div>

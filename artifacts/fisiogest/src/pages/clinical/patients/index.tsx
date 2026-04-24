@@ -105,16 +105,16 @@ export default function PatientsList() {
       <div className="space-y-5">
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold font-display text-slate-800">Pacientes</h1>
-            <p className="text-sm text-slate-500">Gerencie o cadastro e prontuários dos pacientes</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">Pacientes</h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Gerencie o cadastro e prontuários dos pacientes</p>
           </div>
           {canCreate && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="h-9 px-4 rounded-lg shadow-md shadow-primary/20">
-                  <Plus className="w-4 h-4 mr-1.5" />
+                <Button className="w-full sm:w-auto h-10 px-4 rounded-xl shadow-md shadow-primary/20 text-sm font-semibold gap-1.5">
+                  <Plus className="w-4 h-4 shrink-0" />
                   Novo Paciente
                 </Button>
               </DialogTrigger>
@@ -580,7 +580,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             className="h-11"
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="space-y-2">
             <Label>CPF *</Label>
             <Input
@@ -602,13 +602,14 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="space-y-2">
             <Label>E-mail</Label>
             <Input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="nome@exemplo.com"
               className="h-11"
             />
           </div>
@@ -621,7 +622,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className="space-y-2">
             <Label>Profissão</Label>
             <Input
@@ -636,7 +637,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             <Input
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="Rua, número - Cidade"
+              placeholder="Rua e número"
               className="h-11"
             />
           </div>
@@ -646,7 +647,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
           <Input
             value={formData.emergencyContact}
             onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-            placeholder="Nome e telefone do contato de emergência"
+            placeholder="Nome — Telefone"
             className="h-11"
           />
         </div>
@@ -655,12 +656,16 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
           <Textarea
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="Anotações gerais sobre o paciente, histórico, alergias..."
+            placeholder="Histórico, alergias, restrições…"
             className="resize-none min-h-[80px]"
           />
         </div>
-        <div className="pt-4 flex justify-end gap-3">
-          <Button type="submit" className="h-11 px-8 rounded-xl" disabled={mutation.isPending}>
+        <div className="pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+          <Button
+            type="submit"
+            className="w-full sm:w-auto h-11 px-8 rounded-xl text-sm font-semibold"
+            disabled={mutation.isPending}
+          >
             {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
           </Button>
         </div>

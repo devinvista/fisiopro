@@ -262,8 +262,9 @@ export default function Dashboard() {
                 size="sm"
                 className="w-full h-10 px-3 sm:px-4 rounded-xl shadow-sm gap-1.5 text-sm font-semibold"
               >
-                <CalendarPlus className="w-4 h-4" />
-                <span className="truncate">Novo Agendamento</span>
+                <CalendarPlus className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">Agendar</span>
+                <span className="hidden sm:inline">Novo Agendamento</span>
               </Button>
             </Link>
             <Link href="/pacientes" className="w-full sm:w-auto">
@@ -272,8 +273,9 @@ export default function Dashboard() {
                 size="sm"
                 className="w-full h-10 px-3 sm:px-4 rounded-xl text-sm gap-1.5 font-semibold border-slate-300 text-slate-700 hover:bg-slate-50"
               >
-                <Plus className="w-4 h-4" />
-                <span className="truncate">Novo Paciente</span>
+                <Plus className="w-4 h-4 shrink-0" />
+                <span className="sm:hidden">Paciente</span>
+                <span className="hidden sm:inline">Novo Paciente</span>
               </Button>
             </Link>
           </div>

@@ -21,16 +21,16 @@ export default function Financial() {
     <AppLayout title="Controle Financeiro">
       {/* ── Page Header ── */}
       <div className="mb-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Controle Financeiro</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Controle Financeiro</h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
               Acompanhamento de receitas, despesas e resultado
             </p>
           </div>
 
           {/* Period selector */}
-          <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 w-full sm:w-auto">
             <CalendarDays className="w-4 h-4 text-slate-400" />
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
               <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
