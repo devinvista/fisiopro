@@ -96,20 +96,21 @@ export default function SuperAdmin() {
 
   return (
     <AppLayout title="Painel SuperAdmin">
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         {/* Page Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
             <Activity className="w-5 h-5 text-indigo-600" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Painel SuperAdmin</h1>
-            <p className="text-sm text-slate-500">Gestão de planos de adesão e assinaturas das clínicas</p>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Painel SuperAdmin</h1>
+            <p className="text-xs sm:text-sm text-slate-500 truncate">Gestão de planos de adesão e assinaturas das clínicas</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
+        <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-auto">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-max sm:w-fit">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -120,10 +121,11 @@ export default function SuperAdmin() {
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              <Icon className="w-4 h-4" />
-              {label}
+              <Icon className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{label}</span>
             </button>
           ))}
+          </div>
         </div>
 
         {/* Tab Content */}

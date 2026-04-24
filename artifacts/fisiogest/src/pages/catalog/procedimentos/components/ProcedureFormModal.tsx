@@ -50,21 +50,21 @@ export function ProcedureFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl rounded-3xl border-none shadow-2xl overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border-none shadow-2xl">
         <DialogHeader className="px-1">
-          <DialogTitle className="font-display text-2xl flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-xl">
+          <DialogTitle className="font-display text-xl sm:text-2xl flex items-center gap-2">
+            <div className="p-2 bg-primary/10 rounded-xl shrink-0">
               {editingProcedure ? <Pencil className="w-5 h-5 text-primary" /> : <Plus className="w-5 h-5 text-primary" />}
             </div>
-            {editingProcedure ? "Editar Procedimento" : "Novo Procedimento"}
+            <span className="truncate">{editingProcedure ? "Editar Procedimento" : "Novo Procedimento"}</span>
           </DialogTitle>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             {editingProcedure ? "Atualize as informações do serviço." : "Cadastre um novo serviço ou modalidade de atendimento."}
           </p>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4 py-2">
-          <div className="col-span-2 space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label htmlFor="name">Nome do Procedimento</Label>
             <Input
               id="name"
@@ -159,7 +159,7 @@ export function ProcedureFormModal({
             />
           </div>
 
-          <div className="col-span-2 space-y-1.5">
+          <div className="sm:col-span-2 space-y-1.5">
             <Label>Descrição</Label>
             <Textarea
               value={form.description}
@@ -170,7 +170,7 @@ export function ProcedureFormModal({
             />
           </div>
 
-          <div className="col-span-2 flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 mt-2">
+          <div className="sm:col-span-2 flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 mt-2">
             <div className="space-y-0.5">
               <Label className="text-sm font-medium">Agendamento Online</Label>
               <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">Permitir que pacientes agendem via link público</p>
@@ -182,11 +182,11 @@ export function ProcedureFormModal({
           </div>
         </div>
 
-        <DialogFooter className="bg-slate-50/50 p-4 -mx-6 -mb-6 border-t border-slate-100">
-          <Button variant="outline" className="rounded-xl border-slate-200" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row bg-slate-50/50 p-4 -mx-6 -mb-6 border-t border-slate-100">
+          <Button variant="outline" className="w-full sm:w-auto h-10 rounded-xl border-slate-200" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button className="rounded-xl px-8 shadow-lg shadow-primary/20" onClick={onSubmit}>
+          <Button className="w-full sm:w-auto h-10 rounded-xl sm:px-8 shadow-lg shadow-primary/20" onClick={onSubmit}>
             {editingProcedure ? "Salvar Alterações" : "Criar Procedimento"}
           </Button>
         </DialogFooter>

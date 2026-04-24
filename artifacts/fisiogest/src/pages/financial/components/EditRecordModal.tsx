@@ -87,7 +87,7 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Lançamento</DialogTitle>
           <DialogDescription>Atualize os dados do lançamento financeiro.</DialogDescription>
@@ -180,10 +180,10 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="w-full sm:w-auto h-10 rounded-xl">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" /> : null}
             Salvar alterações
           </Button>
         </DialogFooter>

@@ -74,17 +74,18 @@ export function DespesasFixasTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Despesas Fixas Recorrentes</h2>
-          <p className="text-sm text-slate-400 mt-0.5">Configure suas despesas fixas para calcular o orçamento estimado e o custo por hora clínico.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900">Despesas Fixas Recorrentes</h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">Configure suas despesas fixas para calcular o orçamento estimado e o custo por hora clínico.</p>
         </div>
         <Button
           onClick={() => { setEditTarget(null); setIsModalOpen(true); }}
-          size="sm"
-          className="rounded-xl shadow-sm h-9 px-4 shrink-0"
+          className="w-full sm:w-auto h-10 rounded-xl shadow-sm gap-1.5 shrink-0"
         >
-          <Plus className="w-4 h-4 mr-1.5" /> Nova Despesa
+          <Plus className="w-4 h-4 shrink-0" />
+          <span className="sm:hidden">Nova</span>
+          <span className="hidden sm:inline">Nova Despesa</span>
         </Button>
       </div>
 
@@ -174,17 +175,17 @@ export function DespesasFixasTab() {
       />
 
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent className="rounded-2xl">
+        <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Remover Despesa Fixa</DialogTitle>
             <DialogDescription>
               Confirmar remoção de <strong>{deleteTarget?.name}</strong>? Isso não afetará registros financeiros já gerados.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Remover"}
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isDeleting} className="w-full sm:w-auto h-10 rounded-xl">
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : "Remover"}
             </Button>
           </DialogFooter>
         </DialogContent>

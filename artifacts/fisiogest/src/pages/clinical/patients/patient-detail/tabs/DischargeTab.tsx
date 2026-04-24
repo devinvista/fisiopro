@@ -129,23 +129,25 @@ export function DischargeTab({ patientId, patient }: { patientId: number; patien
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800">Alta Fisioterapêutica</h3>
-          <p className="text-sm text-slate-500">Exigência regulatória COFFITO — finalização formal do tratamento</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800">Alta Fisioterapêutica</h3>
+          <p className="text-xs sm:text-sm text-slate-500">Exigência regulatória COFFITO — finalização formal do tratamento</p>
         </div>
         {data && !editing && (
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             {patient && (
-              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl text-xs gap-1.5"
+              <Button variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-9 px-3 rounded-xl text-xs gap-1.5"
                 onClick={() => printDocument(
                   generateDischargeHTML(patient, data as unknown as Record<string, string>, { name: (user as any)?.name }, clinic),
                   `Alta Fisioterapêutica — ${patient.name}`
                 )}>
-                <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+                <Printer className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">PDF</span>
+                <span className="hidden sm:inline">Imprimir / PDF</span>
               </Button>
             )}
-            <Button variant="outline" onClick={() => setEditing(true)} className="h-9 px-4 rounded-xl text-sm">
+            <Button variant="outline" onClick={() => setEditing(true)} className="w-full sm:w-auto h-10 sm:h-9 px-4 rounded-xl text-sm">
               Editar Alta
             </Button>
           </div>
@@ -208,14 +210,14 @@ export function DischargeTab({ patientId, patient }: { patientId: number; patien
                 placeholder="Orientações pós-alta: exercícios domiciliares, cuidados posturais, retorno se necessário..." />
             </div>
 
-            <div className="flex gap-3 justify-end pt-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end pt-2">
               {editing && (
-                <Button variant="outline" onClick={() => setEditing(false)} className="rounded-xl">Cancelar</Button>
+                <Button variant="outline" onClick={() => setEditing(false)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
               )}
               <Button onClick={handleSave}
                 disabled={mutation.isPending || !form.dischargeReason || !form.dischargeDate}
-                className="h-11 px-8 rounded-xl shadow-md shadow-primary/20">
-                {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <LogOut className="w-4 h-4 mr-2" />}
+                className="w-full sm:w-auto h-11 sm:px-8 rounded-xl shadow-md shadow-primary/20 gap-1.5">
+                {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <LogOut className="w-4 h-4 shrink-0" />}
                 Registrar Alta
               </Button>
             </div>

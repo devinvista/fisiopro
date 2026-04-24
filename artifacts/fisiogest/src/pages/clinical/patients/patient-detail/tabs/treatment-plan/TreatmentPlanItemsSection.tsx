@@ -206,18 +206,18 @@ export function TreatmentPlanItemsSection({
   return (
     <div className="pt-4 border-t border-slate-100 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-          <Package className="w-4 h-4 text-primary" />
-          Procedimentos e Pacotes do Plano
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 min-w-0">
+          <Package className="w-4 h-4 text-primary shrink-0" />
+          <span className="truncate">Procedimentos e Pacotes do Plano</span>
         </p>
         {addMode === null && editingId === null && (
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2.5" onClick={() => { setAddMode("package"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
-              <Plus className="h-3 w-3" /> Pacote
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-1.5">
+            <Button size="sm" variant="outline" className="w-full sm:w-auto h-9 rounded-xl text-xs gap-1.5 px-3" onClick={() => { setAddMode("package"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
+              <Plus className="h-3.5 w-3.5 shrink-0" /> Pacote
             </Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 px-2.5" onClick={() => { setAddMode("procedure"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
-              <Plus className="h-3 w-3" /> Avulso
+            <Button size="sm" variant="outline" className="w-full sm:w-auto h-9 rounded-xl text-xs gap-1.5 px-3" onClick={() => { setAddMode("procedure"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
+              <Plus className="h-3.5 w-3.5 shrink-0" /> Avulso
             </Button>
           </div>
         )}
@@ -281,7 +281,7 @@ export function TreatmentPlanItemsSection({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Sessões/semana</Label>
               <Select value={String(itemSpw)} onValueChange={v => setItemSpw(Number(v))}>
@@ -298,7 +298,7 @@ export function TreatmentPlanItemsSection({
           </div>
 
           {/* Price override + discount */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">
                 Preço negociado <span className="text-slate-400 font-normal">(deixe vazio p/ usar catálogo)</span>
@@ -377,12 +377,12 @@ export function TreatmentPlanItemsSection({
             );
           })()}
 
-          <div className="flex gap-2 justify-end">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setAddMode(null); setSelectedPkgId(""); setSelectedProcId(""); setItemCustomPrice(""); setItemDiscountType("reais"); setItemDiscount("0"); }}>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="w-full sm:w-auto h-10 rounded-xl" onClick={() => { setAddMode(null); setSelectedPkgId(""); setSelectedProcId(""); setItemCustomPrice(""); setItemDiscountType("reais"); setItemDiscount("0"); }}>
               Cancelar
             </Button>
-            <Button size="sm" className="h-7 text-xs" onClick={handleAddSubmit} disabled={addMutation.isPending}>
-              {addMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
+            <Button className="w-full sm:w-auto h-10 rounded-xl gap-1.5" onClick={handleAddSubmit} disabled={addMutation.isPending}>
+              {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Plus className="h-4 w-4 shrink-0" />}
               Adicionar ao Plano
             </Button>
           </div>

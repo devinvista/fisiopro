@@ -330,7 +330,7 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
 
       {/* Add Measurement Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Adicionar Medição Corporal</DialogTitle>
             <DialogDescription>Registre as medidas do paciente para acompanhar a evolução ao longo do tratamento.</DialogDescription>

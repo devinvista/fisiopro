@@ -169,12 +169,12 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
         <ExamAttachmentsSection patientId={patientId} />
 
         {/* ── Floating/Bottom Save Bar ── */}
-        <div className="sticky bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex justify-end gap-3 z-10">
-          <Button variant="outline" onClick={() => setForm(emptyForm)}>
+        <div className="sticky bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end z-10">
+          <Button variant="outline" onClick={() => setForm(emptyForm)} className="w-full sm:w-auto h-10 rounded-xl">
             Limpar Campos
           </Button>
-          <Button className="px-8 gap-2" disabled={mutation.isPending} onClick={handleSave}>
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          <Button className="w-full sm:w-auto h-10 sm:px-8 rounded-xl gap-1.5" disabled={mutation.isPending} onClick={handleSave}>
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
             Salvar Anamnese
           </Button>
         </div>

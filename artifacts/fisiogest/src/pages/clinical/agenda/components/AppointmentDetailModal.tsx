@@ -227,7 +227,7 @@ export function AppointmentDetailModal({
   return (
     <>
       <Dialog open onOpenChange={onClose}>
-        <DialogContent className={cn("border-none shadow-2xl rounded-3xl", isGroupSession ? "sm:max-w-[520px]" : "sm:max-w-[480px]")} aria-describedby={undefined}>
+        <DialogContent className={cn("w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto border-none shadow-2xl rounded-3xl", isGroupSession ? "sm:max-w-[520px]" : "sm:max-w-[480px]")} aria-describedby={undefined}>
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className={cn("p-2.5 rounded-xl", isGroupSession ? "bg-violet-500" : cfg.bg)}>
@@ -321,7 +321,7 @@ export function AppointmentDetailModal({
 
             {/* Info summary for group sessions */}
             {isGroupSession && (
-              <div className="bg-slate-50 rounded-2xl px-4 py-3 flex items-center gap-4 text-sm">
+              <div className="bg-slate-50 rounded-2xl px-3 sm:px-4 py-3 flex items-center gap-3 sm:gap-4 text-xs sm:text-sm flex-wrap">
                 <div className="flex items-center gap-2 text-slate-600">
                   <CalIcon className="w-3.5 h-3.5 text-slate-400" />
                   <span>{appointment.date ? format(new Date(appointment.date + "T12:00:00"), "dd/MM/yyyy", { locale: ptBR }) : "—"}</span>

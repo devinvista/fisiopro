@@ -39,7 +39,7 @@ export function CatalogModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-3xl border-none shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md rounded-3xl border-none shadow-2xl">
         <DialogHeader>
           <DialogTitle className="font-display text-2xl flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-primary" />

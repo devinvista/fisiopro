@@ -196,10 +196,10 @@ function EvalForm({ onSave, onCancel, saving, title, form, setForm }: EvalFormPr
             placeholder="Conclusão da avaliação: diagnóstico fisioterapêutico, prognóstico e objetivos do tratamento..." />
         </div>
 
-        <div className="flex gap-3 justify-end pt-2">
-          <Button variant="outline" onClick={onCancel} className="rounded-xl">Cancelar</Button>
-          <Button onClick={onSave} className="rounded-xl" disabled={saving}>
-            {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end pt-2">
+          <Button variant="outline" onClick={onCancel} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+          <Button onClick={onSave} className="w-full sm:w-auto h-10 rounded-xl" disabled={saving}>
+            {saving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
             Salvar Avaliação
           </Button>
         </div>
@@ -291,13 +291,15 @@ export function EvaluationsTab({ patientId }: { patientId: number }) {
       {/* ── Indicadores de Resultado ── */}
       <IndicatorsPanel patientId={patientId} />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800">Avaliações Físicas</h3>
-          <p className="text-sm text-slate-500">{evaluations.length} avaliação(ões) registrada(s)</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800 truncate">Avaliações Físicas</h3>
+          <p className="text-xs sm:text-sm text-slate-500">{evaluations.length} avaliação(ões) registrada(s)</p>
         </div>
-        <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvalForm); }} className="h-10 px-5 rounded-xl">
-          <Plus className="w-4 h-4 mr-2" /> Nova Avaliação
+        <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvalForm); }} className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5">
+          <Plus className="w-4 h-4 shrink-0" />
+          <span className="sm:hidden">Nova</span>
+          <span className="hidden sm:inline">Nova Avaliação</span>
         </Button>
       </div>
 

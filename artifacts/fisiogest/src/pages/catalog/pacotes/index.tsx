@@ -136,17 +136,18 @@ export default function Pacotes() {
   return (
     <AppLayout title="Pacotes">
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Pacotes de Serviços</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">Pacotes de Serviços</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
               Configure pacotes por sessões ou mensalidades com regras de frequência e falta
             </p>
           </div>
           {isAdmin && (
-            <Button onClick={openCreate} className="gap-2 shrink-0">
-              <Plus className="h-4 w-4" />
-              Novo Pacote
+            <Button onClick={openCreate} className="w-full sm:w-auto h-10 rounded-xl gap-1.5 shrink-0">
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Novo</span>
+              <span className="hidden sm:inline">Novo Pacote</span>
             </Button>
           )}
         </div>
@@ -161,7 +162,7 @@ export default function Pacotes() {
 
         {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9"
@@ -170,7 +171,7 @@ export default function Pacotes() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-1.5 p-1 bg-muted rounded-xl">
+          <div className="flex gap-1.5 p-1 bg-muted rounded-xl overflow-x-auto">
             {([
               { v: "all", label: "Todos" },
               { v: "sessoes", label: "Por Sessões" },

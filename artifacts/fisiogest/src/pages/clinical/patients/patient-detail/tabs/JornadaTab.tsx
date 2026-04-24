@@ -557,7 +557,7 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
 
       {/* ── Edit dialog ── */}
       <Dialog open={!!editingStep} onOpenChange={(open) => !open && setEditingStep(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar etapa</DialogTitle>
             <DialogDescription>{STEP_NAMES[editingStep?.stepKey ?? ""] || editingStep?.stepKey}</DialogDescription>
@@ -572,13 +572,14 @@ export function JornadaTab({ patientId, onNavigateToTab }: { patientId: number; 
               <Textarea className="min-h-[100px] resize-none" placeholder="Adicione observações sobre esta etapa..." value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
             </div>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => setEditingStep(null)}>Cancelar</Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-2">
+            <Button variant="outline" onClick={() => setEditingStep(null)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
             <Button
+              className="w-full sm:w-auto h-10 rounded-xl gap-1.5"
               disabled={editMutation.isPending}
               onClick={() => editingStep && editMutation.mutate({ stepId: editingStep.id, notes: editNotes, responsibleName: editResponsible })}
             >
-              {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}Salvar
+              {editMutation.isPending && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}Salvar
             </Button>
           </div>
         </DialogContent>

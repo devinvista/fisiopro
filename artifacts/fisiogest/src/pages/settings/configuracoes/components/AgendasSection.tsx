@@ -247,16 +247,17 @@ export function AgendasSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold">Agendas da Clínica</h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Configure agendas gerais ou vinculadas a profissionais.
           </p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nova Agenda
+        <Button onClick={openCreate} className="w-full sm:w-auto h-10 gap-1.5 shrink-0">
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="sm:hidden">Nova</span>
+          <span className="hidden sm:inline">Nova Agenda</span>
         </Button>
       </div>
 
@@ -296,7 +297,7 @@ export function AgendasSection() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editTarget ? "Editar Agenda" : "Nova Agenda"}</DialogTitle>
             <DialogDescription>

@@ -66,16 +66,16 @@ export function WalletSection({ patientId }: { patientId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-primary" /> Carteira de Crédito
+            <Wallet className="w-4 h-4 text-primary shrink-0" /> Carteira de Crédito
           </h4>
           <p className="text-xs text-slate-500">Saldo pré-pago em R$ para abatimento automático nas sessões</p>
         </div>
-        <Button size="sm" className="h-8 rounded-xl" variant={showDeposit ? "outline" : "default"}
+        <Button className="w-full sm:w-auto h-10 rounded-xl gap-1.5" variant={showDeposit ? "outline" : "default"}
           onClick={() => { setShowDeposit(v => !v); setDepositForm({ amount: "", paymentMethod: "", description: "" }); }}>
-          <Plus className="w-3.5 h-3.5 mr-1" />
+          <Plus className="w-4 h-4 shrink-0" />
           {showDeposit ? "Cancelar" : "Depositar"}
         </Button>
       </div>
@@ -105,7 +105,7 @@ export function WalletSection({ patientId }: { patientId: number }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Valor (R$) <span className="text-red-500">*</span></Label>
                 <Input type="number" min="0.01" step="0.01" placeholder="Ex: 200,00"
@@ -130,11 +130,11 @@ export function WalletSection({ patientId }: { patientId: number }) {
                 value={depositForm.description}
                 onChange={e => setDepositForm(f => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowDeposit(false)}>Cancelar</Button>
-              <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-700" disabled={saving} onClick={handleDeposit}>
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
-                <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Confirmar Depósito
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end pt-1">
+              <Button variant="outline" className="w-full sm:w-auto h-10 rounded-xl" onClick={() => setShowDeposit(false)}>Cancelar</Button>
+              <Button className="w-full sm:w-auto h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 gap-1.5" disabled={saving} onClick={handleDeposit}>
+                {saving ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
+                Confirmar Depósito
               </Button>
             </div>
           </CardContent>

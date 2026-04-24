@@ -181,18 +181,18 @@ export function StepProcedimento({
         );
       })}
 
-      <div className="mt-6 flex justify-between">
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
         {onBack ? (
-          <Button variant="outline" onClick={onBack} className="rounded-xl h-11 gap-2">
-            <ChevronLeft className="w-4 h-4" /> Voltar
+          <Button variant="outline" onClick={onBack} className="w-full sm:w-auto rounded-xl h-11 gap-1.5">
+            <ChevronLeft className="w-4 h-4 shrink-0" /> Voltar
           </Button>
-        ) : <div />}
+        ) : <div className="hidden sm:block" />}
         <Button
           disabled={!selected || !selectedProc}
           onClick={() => selectedProc && onSelect(selectedProc)}
-          className="rounded-xl h-11 px-8 gap-2"
+          className="w-full sm:w-auto rounded-xl h-11 sm:px-8 gap-1.5"
         >
-          Próximo <ChevronRight className="w-4 h-4" />
+          Próximo <ChevronRight className="w-4 h-4 shrink-0" />
         </Button>
       </div>
     </div>

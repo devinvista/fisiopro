@@ -70,21 +70,21 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
             <h4 className="text-base font-semibold text-slate-800">Assinaturas / Mensalidades</h4>
             <p className="text-xs text-slate-500">{subscriptions.length} assinatura(s) vinculada(s)</p>
           </div>
           {!subscriptionsEnabled && <PlanBadge feature="module.patient_subscriptions" />}
         </div>
         {subscriptionsEnabled ? (
-          <Button size="sm" className="h-8 rounded-xl" onClick={() => setShowForm(!showForm)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />{showForm ? "Cancelar" : "Nova Assinatura"}
+          <Button className="w-full sm:w-auto h-10 rounded-xl gap-1.5" onClick={() => setShowForm(!showForm)}>
+            <Plus className="w-4 h-4 shrink-0" />{showForm ? "Cancelar" : "Nova Assinatura"}
           </Button>
         ) : (
-          <Button size="sm" variant="outline" className="h-8 rounded-xl gap-2" disabled>
-            <Plus className="w-3.5 h-3.5" /> Indisponível no plano
+          <Button variant="outline" className="w-full sm:w-auto h-10 rounded-xl gap-1.5" disabled>
+            <Plus className="w-4 h-4 shrink-0" /> Indisponível no plano
           </Button>
         )}
       </div>
@@ -92,7 +92,7 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Procedimento *</Label>
                 <Select value={form.procedureId} onValueChange={v => setForm(f => ({ ...f, procedureId: v }))}>
@@ -121,10 +121,10 @@ export function SubscriptionsSection({ patientId }: { patientId: number }) {
               <Label className="text-xs font-semibold">Observações</Label>
               <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Opcional..." className="text-sm" />
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShowForm(false)}>Cancelar</Button>
-              <Button size="sm" className="rounded-xl" disabled={saving} onClick={handleCreate}>
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />} Criar Assinatura
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" className="w-full sm:w-auto h-10 rounded-xl" onClick={() => setShowForm(false)}>Cancelar</Button>
+              <Button className="w-full sm:w-auto h-10 rounded-xl gap-1.5" disabled={saving} onClick={handleCreate}>
+                {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />} Criar Assinatura
               </Button>
             </div>
           </CardContent>

@@ -281,7 +281,7 @@ export function AtestadoDialog({ open, onClose, patientId, patient, onCreated, a
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl">
         <div className="flex flex-col max-h-[90dvh] overflow-hidden">
           <DialogHeader className="pb-4 border-b border-slate-100 shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -417,13 +417,15 @@ export function AtestadosTab({ patientId, patient }: { patientId: number; patien
   return (
     <Card className="border-none shadow-md">
       <CardHeader className="border-b border-slate-100 pb-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <CardTitle className="text-xl">Atestados</CardTitle>
-            <CardDescription>Atestados e declarações emitidos para este paciente</CardDescription>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="text-lg sm:text-xl">Atestados</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Atestados e declarações emitidos para este paciente</CardDescription>
           </div>
-          <Button onClick={() => setShowDialog(true)} className="gap-2 h-10 shadow-md shadow-primary/20">
-            <Plus className="w-4 h-4" /> Emitir Atestado
+          <Button onClick={() => setShowDialog(true)} className="w-full sm:w-auto gap-1.5 h-10 rounded-xl shadow-md shadow-primary/20">
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="sm:hidden">Emitir</span>
+            <span className="hidden sm:inline">Emitir Atestado</span>
           </Button>
         </div>
       </CardHeader>
@@ -441,33 +443,35 @@ export function AtestadosTab({ patientId, patient }: { patientId: number; patien
         {!isLoading && atestados.length > 0 && (
           <div className="space-y-3">
             {atestados.map(at => (
-              <div key={at.id} className="rounded-xl border border-slate-200 bg-white p-4 flex gap-4 hover:shadow-sm transition-shadow">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <ScrollText className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE[at.type] ?? "bg-slate-100 text-slate-600"}`}>
-                      {TYPE_LABEL[at.type] ?? at.type}
-                    </span>
-                    {at.daysOff && <span className="text-xs text-slate-500">{at.daysOff} dia(s)</span>}
-                    {at.cid && <span className="text-xs text-slate-400">CID: {at.cid}</span>}
-                    <span className="text-xs text-slate-400 ml-auto shrink-0">{formatDateTime(at.issuedAt)}</span>
+              <div key={at.id} className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col sm:flex-row gap-3 sm:gap-4 hover:shadow-sm transition-shadow">
+                <div className="flex gap-3 sm:contents">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <ScrollText className="w-5 h-5 text-primary" />
                   </div>
-                  <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">{at.content}</p>
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    {at.professionalName}{at.professionalSpecialty ? ` · ${at.professionalSpecialty}` : ""}
-                    {at.professionalCouncil ? ` · ${at.professionalCouncil}` : ""}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE[at.type] ?? "bg-slate-100 text-slate-600"}`}>
+                        {TYPE_LABEL[at.type] ?? at.type}
+                      </span>
+                      {at.daysOff && <span className="text-xs text-slate-500">{at.daysOff} dia(s)</span>}
+                      {at.cid && <span className="text-xs text-slate-400">CID: {at.cid}</span>}
+                      <span className="text-xs text-slate-400 sm:ml-auto shrink-0">{formatDateTime(at.issuedAt)}</span>
+                    </div>
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">{at.content}</p>
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      {at.professionalName}{at.professionalSpecialty ? ` · ${at.professionalSpecialty}` : ""}
+                      {at.professionalCouncil ? ` · ${at.professionalCouncil}` : ""}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => printAtestado(at, clinic)}>
-                    <Printer className="w-3.5 h-3.5" /> Imprimir
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-col sm:gap-1.5 shrink-0">
+                  <Button variant="outline" size="sm" className="h-9 sm:h-8 gap-1.5 text-xs rounded-xl" onClick={() => printAtestado(at, clinic)}>
+                    <Printer className="w-3.5 h-3.5 shrink-0" /> Imprimir
                   </Button>
                   <Button variant="ghost" size="sm"
-                    className="h-8 gap-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                    className="h-9 sm:h-8 gap-1.5 text-xs rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50"
                     disabled={deletingId === at.id} onClick={() => handleDelete(at.id)}>
-                    {deletingId === at.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    {deletingId === at.id ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Trash2 className="w-3.5 h-3.5 shrink-0" />}
                     Excluir
                   </Button>
                 </div>

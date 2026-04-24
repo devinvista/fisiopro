@@ -216,7 +216,7 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
 
       {/* Reschedule dialog */}
       <Dialog open={!!rescheduleAppt} onOpenChange={(open) => { if (!open) setRescheduleAppt(null); }}>
-        <DialogContent className="sm:max-w-[380px] rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[380px] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Remarcar consulta</DialogTitle>
           </DialogHeader>

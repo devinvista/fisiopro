@@ -106,30 +106,30 @@ export function FinancialTab({ patientId }: { patientId: number }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800">Financeiro do Paciente</h3>
-          <p className="text-sm text-slate-500">{records.length} lançamento(s) · {pendingCount} pendente(s)</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800 truncate">Financeiro do Paciente</h3>
+          <p className="text-xs sm:text-sm text-slate-500">{records.length} lançamento(s) · {pendingCount} pendente(s)</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex border border-slate-200 rounded-lg overflow-hidden text-xs">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex border border-slate-200 rounded-lg overflow-x-auto text-xs">
             <button onClick={() => setActiveSection("history")}
-              className={`px-3 h-8 transition-colors ${activeSection === "history" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
+              className={`px-3 h-9 sm:h-8 whitespace-nowrap transition-colors ${activeSection === "history" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
               Histórico
             </button>
             <button onClick={() => setActiveSection("subscriptions")}
-              className={`px-3 h-8 border-l border-slate-200 transition-colors ${activeSection === "subscriptions" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
+              className={`px-3 h-9 sm:h-8 whitespace-nowrap border-l border-slate-200 transition-colors ${activeSection === "subscriptions" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
               Assinaturas
             </button>
             <button onClick={() => setActiveSection("carteira")}
-              className={`px-3 h-8 border-l border-slate-200 transition-colors flex items-center gap-1 ${activeSection === "carteira" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
-              <Wallet className="w-3 h-3" /> Carteira
+              className={`px-3 h-9 sm:h-8 whitespace-nowrap border-l border-slate-200 transition-colors flex items-center gap-1 ${activeSection === "carteira" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
+              <Wallet className="w-3 h-3 shrink-0" /> Carteira
             </button>
           </div>
           {activeSection === "history" && (
             <Button onClick={() => { setShowPayForm(!showPayForm); setPayForm(emptyPaymentForm); }}
-              className="h-8 px-3 rounded-xl text-xs" variant={showPayForm ? "outline" : "default"}>
-              <Plus className="w-3.5 h-3.5 mr-1" />
+              className="w-full sm:w-auto h-10 sm:h-8 px-3 rounded-xl text-xs gap-1.5" variant={showPayForm ? "outline" : "default"}>
+              <Plus className="w-3.5 h-3.5 shrink-0" />
               {showPayForm ? "Cancelar" : "Registrar Pagamento"}
             </Button>
           )}
@@ -156,7 +156,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                 <p className="text-xs text-slate-500 mt-0.5">Registre um valor recebido do paciente. O saldo será atualizado automaticamente.</p>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-sm font-semibold text-slate-700">Valor (R$) <span className="text-red-500">*</span></Label>
                     <Input type="number" min="0.01" step="0.01"
@@ -182,11 +182,11 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                     onChange={e => setPayForm({ ...payForm, description: e.target.value })}
                     placeholder="Ex: Pagamento das sessões de março…" />
                 </div>
-                <div className="flex justify-end gap-3 pt-1">
-                  <Button variant="outline" onClick={() => setShowPayForm(false)} className="rounded-xl">Cancelar</Button>
-                  <Button onClick={handleRegisterPayment} disabled={saving} className="rounded-xl bg-green-600 hover:bg-green-700">
-                    {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    <CheckCircle className="w-4 h-4 mr-1.5" /> Confirmar Pagamento
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 pt-1">
+                  <Button variant="outline" onClick={() => setShowPayForm(false)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+                  <Button onClick={handleRegisterPayment} disabled={saving} className="w-full sm:w-auto h-10 rounded-xl bg-green-600 hover:bg-green-700 gap-1.5">
+                    {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                    <CheckCircle className="w-4 h-4 shrink-0" /> Confirmar Pagamento
                   </Button>
                 </div>
               </CardContent>
@@ -320,7 +320,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
           {/* Estorno confirmation */}
           <Dialog open={!!estornoTarget} onOpenChange={v => { if (!v) setEstornoTarget(null); }}>
-            <DialogContent className="border-none shadow-2xl rounded-3xl sm:max-w-[420px]">
+            <DialogContent className="border-none shadow-2xl rounded-3xl w-[calc(100vw-2rem)] sm:max-w-[420px]">
               <DialogHeader>
                 <div className="flex items-center gap-3 mb-1">
                   <div className="p-2.5 rounded-xl bg-amber-100">

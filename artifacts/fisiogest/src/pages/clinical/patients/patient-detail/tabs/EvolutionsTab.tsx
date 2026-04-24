@@ -130,20 +130,24 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800">Evoluções de Sessão</h3>
-          <p className="text-sm text-slate-500">{evolutions.length} evolução(ões) registrada(s)</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800 truncate">Evoluções de Sessão</h3>
+          <p className="text-xs sm:text-sm text-slate-500">{evolutions.length} evolução(ões) registrada(s)</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           {patient && evolutions.length > 0 && (
-            <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl text-xs gap-1.5"
+            <Button variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-9 px-3 rounded-xl text-xs gap-1.5"
               onClick={() => printDocument(generateEvolutionsHTML(patient, evolutions, appointments, clinic), `Evoluções — ${patient.name}`)}>
-              <Printer className="w-3.5 h-3.5" /> Imprimir / PDF
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span className="sm:hidden">PDF</span>
+              <span className="hidden sm:inline">Imprimir / PDF</span>
             </Button>
           )}
-          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvoForm); }} className="h-10 px-5 rounded-xl">
-            <Plus className="w-4 h-4 mr-2" /> Nova Evolução
+          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvoForm); }} className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5">
+            <Plus className="w-4 h-4 shrink-0" />
+            <span className="sm:hidden">Nova</span>
+            <span className="hidden sm:inline">Nova Evolução</span>
           </Button>
         </div>
       </div>

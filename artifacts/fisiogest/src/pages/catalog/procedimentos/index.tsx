@@ -345,30 +345,34 @@ export default function Procedimentos() {
       <div className="space-y-5">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold font-display text-slate-800">Procedimentos</h1>
-            <p className="text-sm text-slate-500">Gerencie os serviços e procedimentos da clínica</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">Procedimentos</h1>
+            <p className="text-xs sm:text-sm text-slate-500">Gerencie os serviços e procedimentos da clínica</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 shrink-0">
             <Button
               variant="outline"
-              className="h-9 px-4 rounded-lg"
+              className="w-full sm:w-auto h-10 px-3 sm:px-4 rounded-lg gap-1.5"
               onClick={() => setIsCatalogModalOpen(true)}
             >
-              <BookOpen className="mr-1.5 h-4 w-4" /> Gerar Catálogo
+              <BookOpen className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Catálogo</span>
+              <span className="hidden sm:inline">Gerar Catálogo</span>
             </Button>
             <Button
-              className="h-9 px-4 rounded-lg shadow-md shadow-primary/20"
+              className="w-full sm:w-auto h-10 px-3 sm:px-4 rounded-lg shadow-md shadow-primary/20 gap-1.5"
               onClick={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}
             >
-              <Plus className="mr-1.5 h-4 w-4" /> Novo Procedimento
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">Novo</span>
+              <span className="hidden sm:inline">Novo Procedimento</span>
             </Button>
           </div>
         </div>
 
         {/* ── Stats strip ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "Total de procedimentos", value: allProcedures.length, icon: <Stethoscope className="w-4 h-4" />, color: "text-primary" },
             { label: "Preço médio", value: formatCurrency(avgPrice), icon: <span className="text-xs font-bold">R$</span>, color: "text-emerald-600" },

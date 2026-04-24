@@ -326,10 +326,10 @@ export function EvoForm({ onSave, onCancel, saving, title, form, setForm, appoin
           )}
         </div>
 
-        <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
-          <Button variant="outline" onClick={onCancel} className="rounded-xl">Cancelar</Button>
-          <Button onClick={onSave} className="rounded-xl gap-2" disabled={saving || !form.description.trim()}>
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end pt-2 border-t border-slate-100">
+          <Button variant="outline" onClick={onCancel} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+          <Button onClick={onSave} className="w-full sm:w-auto h-10 rounded-xl gap-1.5" disabled={saving || !form.description.trim()}>
+            {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
             Salvar Evolução
           </Button>
         </div>

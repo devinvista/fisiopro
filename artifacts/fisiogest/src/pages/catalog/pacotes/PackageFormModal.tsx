@@ -56,7 +56,7 @@ export function PackageFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editingPackage ? "Editar Pacote" : "Novo Pacote"}</DialogTitle>
         </DialogHeader>
@@ -325,9 +325,9 @@ export function PackageFormModal({
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={onSubmit} disabled={saving}>
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+          <Button onClick={onSubmit} disabled={saving} className="w-full sm:w-auto h-10 rounded-xl">
             {editingPackage ? "Salvar alterações" : "Criar pacote"}
           </Button>
         </DialogFooter>

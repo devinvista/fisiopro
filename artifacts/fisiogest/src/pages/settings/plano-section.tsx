@@ -88,18 +88,18 @@ export function PlanoSection() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-primary" />
-            Plano da clínica
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-foreground flex items-center gap-2">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-primary shrink-0" />
+            <span className="truncate">Plano da clínica</span>
           </h2>
-          <p className="text-muted-foreground text-sm mt-1">
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
             Escolha o plano que melhor se encaixa no momento da sua clínica.
           </p>
         </div>
         {subscription && (
-          <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-xl text-sm font-medium">
+          <div className="inline-flex flex-wrap items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-xl text-xs sm:text-sm font-medium w-fit">
             Plano atual: <strong className="capitalize">{subscription.planName}</strong>
             {subscription.status === "trial" && (
               <Badge variant="outline" className="ml-1 text-[10px]">trial</Badge>

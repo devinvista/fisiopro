@@ -276,16 +276,19 @@ export function StepSeusDados({
           * campos obrigatórios. Seus dados são utilizados apenas para gestão do seu agendamento.
         </p>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex pt-2">
           <Button
             type="submit"
-            className="rounded-xl h-11 px-8 gap-2"
+            className="w-full sm:w-auto sm:ml-auto rounded-xl h-11 sm:px-8 gap-1.5"
             disabled={lookupState === "searching"}
           >
             {isPreFilled ? (
-              <><UserCheck className="w-4 h-4" /> Continuar como {foundPatient?.patient?.name.split(" ")[0]}</>
+              <>
+                <UserCheck className="w-4 h-4 shrink-0" />
+                <span className="truncate">Continuar como {foundPatient?.patient?.name.split(" ")[0]}</span>
+              </>
             ) : (
-              <>Próximo <ChevronRight className="w-4 h-4" /></>
+              <>Próximo <ChevronRight className="w-4 h-4 shrink-0" /></>
             )}
           </Button>
         </div>

@@ -254,19 +254,19 @@ export function StepDataHora({
         </div>
       )}
 
-      <div className="mt-8 flex justify-between">
-        <Button variant="outline" onClick={onBack} disabled={submitting} className="rounded-xl h-11 gap-2">
-          <ChevronLeft className="w-4 h-4" /> Voltar
+      <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+        <Button variant="outline" onClick={onBack} disabled={submitting} className="w-full sm:w-auto rounded-xl h-11 gap-1.5">
+          <ChevronLeft className="w-4 h-4 shrink-0" /> Voltar
         </Button>
         <Button
           disabled={!selectedDate || !selectedTime || submitting}
           onClick={() => selectedDate && selectedTime && onSelect(format(selectedDate, "yyyy-MM-dd"), selectedTime, selectedSchedule?.id ?? null)}
-          className="rounded-xl h-11 px-8 gap-2"
+          className="w-full sm:w-auto rounded-xl h-11 sm:px-8 gap-1.5"
         >
           {submitting ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /> Confirmando...</>
+            <><Loader2 className="w-4 h-4 animate-spin shrink-0" /> Confirmando…</>
           ) : (
-            <><CheckCircle2 className="w-4 h-4" /> Confirmar Agendamento</>
+            <><CheckCircle2 className="w-4 h-4 shrink-0" /> Confirmar Agendamento</>
           )}
         </Button>
       </div>

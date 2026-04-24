@@ -226,21 +226,21 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   return (
     <div className="space-y-6">
       {/* Plan selector header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-primary/10 rounded-xl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2.5 bg-primary/10 rounded-xl shrink-0">
             <ClipboardList className="w-5 h-5 text-primary" />
           </div>
-          <div>
-            <h3 className="font-bold text-slate-800">Planos de Tratamento</h3>
-            <p className="text-xs text-slate-400">Gerencie os objetivos e condutas do paciente</p>
+          <div className="min-w-0">
+            <h3 className="font-bold text-slate-800 truncate">Planos de Tratamento</h3>
+            <p className="text-xs text-slate-400 truncate">Gerencie os objetivos e condutas do paciente</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {allPlans.length > 0 && (
             <Select value={String(selectedPlanId ?? "")} onValueChange={v => setSelectedPlanId(Number(v))}>
-              <SelectTrigger className="w-[240px] bg-slate-50 border-slate-200">
+              <SelectTrigger className="w-full sm:w-[240px] h-10 bg-slate-50 border-slate-200 rounded-xl">
                 <SelectValue placeholder="Selecione um plano..." />
               </SelectTrigger>
               <SelectContent>
@@ -253,9 +253,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             </Select>
           )}
 
-          <Button size="sm" variant="outline" className="gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5"
+          <Button size="sm" variant="outline" className="w-full sm:w-auto h-10 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5"
             onClick={handleCreatePlan} disabled={creatingNew}>
-            {creatingNew ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {creatingNew ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Plus className="w-4 h-4 shrink-0" />}
             Novo Plano
           </Button>
         </div>
@@ -264,12 +264,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
       {selectedPlanId ? (
         <Card className="border-none shadow-sm overflow-hidden bg-white">
           <CardHeader className="border-b border-slate-50 bg-slate-50/30 pb-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-3">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    Detalhes do Tratamento
-                    <Badge variant={selectedPlan?.status === "ativo" ? "default" : "secondary"} className="capitalize h-5 text-[10px]">
+                  <CardTitle className="text-base sm:text-lg flex items-center gap-2 min-w-0">
+                    <span className="truncate">Detalhes do Tratamento</span>
+                    <Badge variant={selectedPlan?.status === "ativo" ? "default" : "secondary"} className="capitalize h-5 text-[10px] shrink-0">
                       {selectedPlan?.status || "Ativo"}
                     </Badge>
                   </CardTitle>
@@ -279,16 +279,16 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                 </CardDescription>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handlePrintPlan}>
-                  <Printer className="w-3.5 h-3.5" /> Plano
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button size="sm" variant="outline" className="flex-1 sm:flex-none h-9 sm:h-8 gap-1 text-xs rounded-xl" onClick={handlePrintPlan}>
+                  <Printer className="w-3.5 h-3.5 shrink-0" /> Plano
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handlePrintContract}>
-                  <ScrollText className="w-3.5 h-3.5" /> Contrato
+                <Button size="sm" variant="outline" className="flex-1 sm:flex-none h-9 sm:h-8 gap-1 text-xs rounded-xl" onClick={handlePrintContract}>
+                  <ScrollText className="w-3.5 h-3.5 shrink-0" /> Contrato
                 </Button>
 
                 <AlertDialog>
-                  <Button asChild size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50">
+                  <Button asChild size="sm" variant="ghost" className="h-9 w-9 sm:h-8 sm:w-8 p-0 text-slate-400 hover:text-red-500 hover:bg-red-50 shrink-0">
                     <div className="cursor-pointer"><Trash2 className="w-4 h-4" /></div>
                   </Button>
                   <AlertDialogContent>
@@ -422,9 +422,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             <TreatmentPlanItemsSection planId={selectedPlanId ?? undefined} planItems={planItems} planItemsKey={planItemsKey} />
 
             {/* Save button */}
-            <div className="pt-3 flex justify-end">
-              <Button onClick={handleSave} className="h-11 px-8 rounded-xl shadow-md shadow-primary/20" disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <div className="pt-3 flex sm:justify-end">
+              <Button onClick={handleSave} className="w-full sm:w-auto h-11 sm:px-8 rounded-xl shadow-md shadow-primary/20 gap-1.5" disabled={saving}>
+                {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
                 Salvar Plano
               </Button>
             </div>

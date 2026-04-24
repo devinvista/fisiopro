@@ -82,7 +82,7 @@ export function NewRecordModal({ open, onClose, onSuccess }: { open: boolean; on
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Novo Lançamento</DialogTitle>
           <DialogDescription>Registre uma receita ou despesa manualmente.</DialogDescription>
@@ -209,14 +209,14 @@ export function NewRecordModal({ open, onClose, onSuccess }: { open: boolean; on
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
           <Button
             onClick={handleSubmit}
             disabled={saving}
-            className={type === "receita" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}
+            className={`w-full sm:w-auto h-10 rounded-xl ${type === "receita" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" /> : null}
             {type === "receita" ? "Registrar Receita" : "Registrar Despesa"}
           </Button>
         </DialogFooter>

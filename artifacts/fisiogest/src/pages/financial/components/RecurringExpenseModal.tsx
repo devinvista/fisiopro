@@ -59,7 +59,7 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl max-w-md">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{editData ? "Editar Despesa Fixa" : "Nova Despesa Fixa"}</DialogTitle>
           <DialogDescription>Despesas fixas são usadas para calcular o orçamento estimado e o custo por hora clínico.</DialogDescription>
@@ -78,7 +78,7 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="rec-amt">Valor (R$) *</Label>
               <Input id="rec-amt" type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0,00" className="rounded-xl" />
@@ -108,10 +108,10 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
             <Input id="rec-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional…" className="rounded-xl" />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={saving} className="w-full sm:w-auto h-10 rounded-xl">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" /> : null}
             {editData ? "Salvar" : "Cadastrar"}
           </Button>
         </DialogFooter>

@@ -217,7 +217,7 @@ export function BlockedSlotModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[480px] border-none shadow-2xl rounded-3xl" aria-describedby={undefined}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[480px] max-h-[90vh] overflow-y-auto border-none shadow-2xl rounded-3xl" aria-describedby={undefined}>
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-slate-100">
@@ -421,7 +421,7 @@ export function BlockedSlotModal({
       {/* Delete group confirmation */}
       {deleteGroupId && (
         <Dialog open onOpenChange={() => setDeleteGroupId(null)}>
-          <DialogContent className="sm:max-w-[380px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
+          <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[380px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Remover bloqueio recorrente</DialogTitle>
             </DialogHeader>
@@ -441,7 +441,7 @@ export function BlockedSlotModal({
       {/* Edit blocked slot dialog */}
       {editSlot && (
         <Dialog open onOpenChange={() => setEditSlot(null)}>
-          <DialogContent className="sm:max-w-[400px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
+          <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[400px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
             <DialogHeader>
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-slate-100">
@@ -510,7 +510,7 @@ export function BlockedSlotModal({
       {/* Recurring series update choice dialog */}
       {editShowGroupChoice && editSlot && (
         <Dialog open onOpenChange={() => setEditShowGroupChoice(false)}>
-          <DialogContent className="sm:max-w-[380px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
+          <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[380px] border-none shadow-2xl rounded-2xl" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Editar bloqueio recorrente</DialogTitle>
             </DialogHeader>
