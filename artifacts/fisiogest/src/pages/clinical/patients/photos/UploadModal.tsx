@@ -121,17 +121,45 @@ export function UploadModal({
     try {
       for (const entry of files) {
         const compressed = await imageCompression(entry.file, COMPRESSION_OPTIONS);
-        const formData = new FormData();
-        formData.append("file", compressed, entry.file.name);
-        formData.append("viewType", entry.viewType);
-        if (sessionLabel) formData.append("sessionLabel", sessionLabel);
-        if (appointmentId !== "none") formData.append("appointmentId", appointmentId);
+
+        const uploadForm = new FormData();
+        uploadForm.append("file", compressed, entry.file.name);
+        uploadForm.append("folder", `fisiogest/patients/${patientId}/photos`);
+
+        const uploadRes = await apiFetch(`/api/uploads/proxy`, {
+          method: "POST",
+          body: uploadForm,
+        });
+        if (!uploadRes.ok) {
+          const errBody = await uploadRes.json().catch(() => ({}));
+          throw new Error(errBody?.error || "Falha no envio do arquivo");
+        }
+        const uploaded = (await uploadRes.json()) as {
+          secure_url: string;
+          bytes: number;
+          format: string;
+        };
+
+        const contentType = compressed.type === "image/jpg" ? "image/jpeg" : compressed.type;
+        const payload: Record<string, unknown> = {
+          objectPath: uploaded.secure_url,
+          originalFilename: entry.file.name,
+          contentType,
+          fileSize: uploaded.bytes,
+          viewType: entry.viewType,
+        };
+        if (sessionLabel) payload.sessionLabel = sessionLabel;
+        if (appointmentId !== "none") payload.appointmentId = Number(appointmentId);
 
         const res = await apiFetch(`/api/patients/${patientId}/photos`, {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error("Falha no upload");
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody?.error || errBody?.message || "Falha ao salvar foto");
+        }
       }
 
       toast({ title: `${files.length} foto(s) enviada(s) com sucesso.` });
@@ -141,7 +169,8 @@ export function UploadModal({
       setSessionLabel("");
       setAppointmentId("none");
     } catch (err) {
-      toast({ title: "Erro ao enviar fotos.", variant: "destructive" });
+      const message = err instanceof Error ? err.message : "Erro ao enviar fotos.";
+      toast({ title: message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
