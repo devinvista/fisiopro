@@ -180,23 +180,24 @@
 }
 /* ========================================
    MOBILE SAFETY
+   Use overflow-x: clip (not hidden) on body only — `clip` prevents
+   horizontal overflow without creating a new scroll container, so
+   vertical page scrolling (wheel + touch) keeps working everywhere.
+   Never apply overflow-x to <html>: doing so transfers the scroll
+   context to <html> and can break momentum scroll on iOS Safari.
 ======================================== */
 
-html,
 body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+  min-height: 100dvh;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-}
-
-body {
-  min-height: 100dvh;
 }
 
 /* ========================================
@@ -247,14 +248,14 @@ body {
 
 /* ========================================
    SCROLL CONTROL
+   Only block horizontal overscroll bounce. We do NOT use
+   overscroll-behavior-y on <body> because, combined with the app
+   layout's internal scroll containers, it can prevent the page
+   from scrolling when the wheel/touch starts inside a child.
 ======================================== */
 
 html {
   overscroll-behavior-x: none;
-}
-
-body {
-  overscroll-behavior-y: contain;
 }
 
 /* ========================================
