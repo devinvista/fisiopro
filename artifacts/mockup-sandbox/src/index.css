@@ -158,34 +158,24 @@
 }
 /* ========================================
    MOBILE SAFETY
+   Use overflow-x: clip on body only — `clip` prevents horizontal
+   overflow without creating a new scroll container, so vertical
+   page scrolling (wheel + touch) keeps working everywhere.
+   Never apply overflow-x to <html>: doing so transfers the scroll
+   context to <html> and can break momentum scroll on iOS Safari.
 ======================================== */
 
-html,
 body {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+  min-height: 100dvh;
 }
-
-/* Prevent layout overflow */
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-  max-width: 100%;
-}
-
-/* Viewport stability */
-
-body {
-  min-height: 100dvh;
-}
-
-/* Fix iOS keyboard resize */
-
-html {
-  height: -webkit-fill-available;
 }
 
 /* ========================================
@@ -209,13 +199,17 @@ html {
 }
 
 /* ========================================
-   TOUCH TARGETS
+   TOUCH TARGETS — only on coarse pointers (mobile/tablet),
+   and never inside dense surfaces (menus, tabs, toolbars,
+   table rows, dropdowns) where the design needs compact controls.
 ======================================== */
 
-button,
-a,
-[role="button"] {
-  min-height: 44px;
+@media (pointer: coarse) {
+  button:not([data-density="compact"]):not([role="menuitem"]):not([role="option"]):not([role="tab"]):not([data-radix-collection-item]),
+  a[role="button"]:not([data-density="compact"]),
+  [role="button"]:not([data-density="compact"]):not([role="menuitem"]):not([role="option"]):not([role="tab"]) {
+    min-height: 44px;
+  }
 }
 
 /* ========================================
@@ -232,14 +226,14 @@ a,
 
 /* ========================================
    SCROLL CONTROL
+   Only block horizontal overscroll bounce. We do NOT use
+   overscroll-behavior-y on <body> because, combined with internal
+   scroll containers, it can prevent the page from scrolling when
+   the wheel/touch starts inside a child.
 ======================================== */
 
 html {
   overscroll-behavior-x: none;
-}
-
-body {
-  overscroll-behavior-y: contain;
 }
 
 /* ========================================
@@ -256,13 +250,16 @@ svg {
 
 /* ========================================
    FORM FIXES
+   Width is left to utility classes (w-full, w-32, flex-1).
+   On mobile, force ≥16px font-size to prevent iOS auto-zoom on focus.
 ======================================== */
 
-input,
-select,
-textarea {
-  width: 100%;
-  min-height: 44px;
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
 }
 
 /* ========================================
