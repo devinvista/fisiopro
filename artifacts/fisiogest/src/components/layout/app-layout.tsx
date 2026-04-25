@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ClinicSwitcher } from "@/components/layout/clinic-switcher";
+import { GlobalSearch } from "@/components/layout/global-search";
 import { ROLE_LABELS } from "@/utils/permissions";
 import type { Permission, Role } from "@/utils/permissions";
 import type { Feature } from "@/utils/plan-features";
@@ -540,8 +541,9 @@ export function AppLayout({ children, title }: AppLayoutProps) {
             <h1 className="font-display text-xl md:text-2xl font-bold text-foreground truncate">{title}</h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground bg-secondary/50 px-4 py-2 rounded-full whitespace-nowrap">
+          <div className="flex items-center gap-3">
+            <GlobalSearch />
+            <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground bg-secondary/50 px-4 py-2 rounded-full whitespace-nowrap">
               <CalendarIcon className="h-4 w-4 shrink-0" />
               {new Date().toLocaleDateString("pt-BR", {
                 weekday: "long",
