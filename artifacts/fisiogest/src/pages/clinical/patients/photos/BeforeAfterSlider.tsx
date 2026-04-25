@@ -40,7 +40,7 @@ export function BeforeAfterSlider({
   useEffect(() => {
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onMouseUp);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
@@ -50,20 +50,32 @@ export function BeforeAfterSlider({
     };
   }, [onMouseMove, onMouseUp, onTouchMove]);
 
-  const containerWidth = containerRef.current?.clientWidth ?? 0;
+  // Usamos clip-path para "revelar" a foto Antes apenas no lado esquerdo da
+  // barra. Assim ambas as fotos ficam ancoradas no mesmo enquadramento (full
+  // size) e somente a área visível muda — a Antes não desliza junto com a barra.
+  const beforeClip = `inset(0 ${100 - position}% 0 0)`;
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full rounded-xl overflow-hidden select-none cursor-ew-resize bg-black"
+      className="relative w-full rounded-xl overflow-hidden select-none cursor-ew-resize bg-black touch-none"
       style={{ aspectRatio: "3/4", maxHeight: "520px" }}
       onMouseDown={(e) => { isDragging.current = true; updatePosition(e.clientX); }}
       onTouchStart={(e) => { isDragging.current = true; updatePosition(e.touches[0].clientX); }}
     >
-      <CloudinaryImage objectPath={afterPath} alt="Depois" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-      <div className="absolute inset-0 overflow-hidden" style={{ width: `${position}%` }}>
-        <CloudinaryImage objectPath={beforePath} alt="Antes" className="absolute inset-0 object-cover" style={{ width: containerWidth || "100%", height: "100%" }} draggable={false} />
-      </div>
+      <CloudinaryImage
+        objectPath={afterPath}
+        alt="Depois"
+        className="absolute inset-0 w-full h-full object-cover"
+        draggable={false}
+      />
+      <CloudinaryImage
+        objectPath={beforePath}
+        alt="Antes"
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ clipPath: beforeClip, WebkitClipPath: beforeClip }}
+        draggable={false}
+      />
       <div className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg z-10 pointer-events-none" style={{ left: `${position}%` }}>
         <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-white shadow-xl border-2 border-primary flex items-center justify-center">
           <ChevronLeft className="w-3 h-3 text-primary absolute left-1" />
