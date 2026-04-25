@@ -163,7 +163,7 @@ export function PackageFormModal({
               <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5" /> Configurações do Pacote por Sessões
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Total de sessões *</Label>
                   <Input type="number" min={1}
@@ -193,7 +193,7 @@ export function PackageFormModal({
                 {form.packageType === "mensal" ? <RefreshCw className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                 {form.packageType === "mensal" ? "Configurações da Mensalidade" : "Configurações da Fatura Consolidada"}
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>{form.packageType === "mensal" ? "Valor mensal (R$) *" : "Valor por sessão (R$) *"}</Label>
                   <Input type="number" min={0} step={0.01} placeholder="0,00"

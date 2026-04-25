@@ -200,7 +200,7 @@ export function CompareModal({
 
           {/* ── Slider tab ── */}
           <TabsContent value="slider" className="mt-4">
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
               <div>
                 <Label className="text-xs">Antes</Label>
                 <Select value={sliderBeforeKey} onValueChange={setSliderBeforeKey}>

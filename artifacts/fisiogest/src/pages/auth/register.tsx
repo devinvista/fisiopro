@@ -179,7 +179,7 @@ export default function Register() {
   return (
     <div className="min-h-screen w-full flex bg-slate-50">
       <div className="w-full flex items-center justify-center p-4 sm:p-8">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 sm:p-10 border border-slate-100">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 sm:p-8 lg:p-10 border border-slate-100">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-primary p-2 rounded-lg">

@@ -178,3 +178,120 @@
   .status-cancelado { @apply bg-red-100 text-red-800 border-red-200; }
   .status-faltou { @apply bg-orange-100 text-orange-800 border-orange-200; }
 }
+/* ========================================
+   MOBILE SAFETY
+======================================== */
+
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Prevent layout overflow */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Viewport stability */
+
+body {
+  min-height: 100dvh;
+}
+
+/* Fix iOS keyboard resize */
+
+html {
+  height: -webkit-fill-available;
+}
+
+/* ========================================
+   SAFE AREA SUPPORT
+======================================== */
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ========================================
+   TOUCH TARGETS
+======================================== */
+
+button,
+a,
+[role="button"] {
+  min-height: 44px;
+}
+
+/* ========================================
+   MOBILE CONTAINERS
+======================================== */
+
+.container-mobile {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* ========================================
+   SCROLL CONTROL
+======================================== */
+
+html {
+  overscroll-behavior-x: none;
+}
+
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* ========================================
+   RESPONSIVE MEDIA
+======================================== */
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ========================================
+   FORM FIXES
+======================================== */
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 44px;
+}
+
+/* ========================================
+   TABLE FIX
+======================================== */
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}

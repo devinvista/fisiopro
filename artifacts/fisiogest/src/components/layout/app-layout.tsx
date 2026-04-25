@@ -494,7 +494,7 @@ export function AppLayout({ children, title }: AppLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-background overflow-hidden">
       <aside
         className={`hidden lg:block shrink-0 border-r border-sidebar-border shadow-2xl z-20 transition-all duration-300 ease-in-out ${
           collapsed ? "w-[72px]" : "w-72"
