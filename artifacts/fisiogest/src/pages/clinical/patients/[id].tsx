@@ -417,7 +417,7 @@ export default function PatientDetail() {
 
   return (
     <AppLayout title="Prontuário do Paciente">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0">
 
         {/* Dialogs */}
         {canEdit && (
@@ -455,7 +455,7 @@ export default function PatientDetail() {
         </AlertDialog>
 
         {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="lg:col-span-1 space-y-4 min-w-0">
           <Card className="border-none shadow-xl bg-white overflow-hidden">
             <div className="h-28 bg-gradient-to-r from-primary to-primary/60" />
             <CardContent className="px-5 pb-5 pt-0 relative">
@@ -562,7 +562,7 @@ export default function PatientDetail() {
         </div>
 
         {/* Main Content */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="mb-5">
               {/* ───── Mobile (<lg): single horizontally-scrollable bar ───── */}
