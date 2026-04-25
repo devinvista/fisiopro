@@ -184,3 +184,38 @@ Aplicar em toda a base — economiza tempo a longo prazo:
 1. **Prioridade 1 (1–2 dias):** Itens 🔴 críticos 1, 2, 3, 5 — Agenda + tabelas SuperAdmin.
 2. **Prioridade 2 (2–3 dias):** Itens 🟠 6, 8, 9, 13, 14 — KPIs, sticky bars colidindo, tabs do paciente, ações invisíveis no catálogo, modal com teclado.
 3. **Prioridade 3 (cosmético):** Demais itens conforme oportunidade.
+
+---
+
+## Atualização — Correções aplicadas (rodada 2)
+
+Padrões idênticos aos das telas Agenda/Histórico foram corrigidos em outras
+páginas/abas:
+
+### Padrão A — Sticky header + scroll aninhado
+* **Agenda (corrigido):** `pages/clinical/agenda/index.tsx` — `WeekHeader` e
+  grid agora compartilham um único container `overflow-auto`, com `sticky
+  top-0` no cabeçalho.
+* Auditoria do restante dos modais/listas: nenhuma outra ocorrência detectada
+  (modais usam um único container de scroll).
+
+### Padrão B — Cards/linhas com `shrink-0` espremendo o texto
+* **HistoryTab (corrigido):** ações empilham com `flex-col sm:flex-row` e
+  `flex-wrap` nos botões.
+* **FinancialTab — cartões de lançamentos
+  (`tabs/FinancialTab.tsx:279-321`):** reorganização da linha — descrição,
+  valor e botão de estorno agora dividem a linha do topo do cartão; chips
+  (categoria/status/data/forma de pagamento) caem para a linha de baixo com
+  `flex-wrap`. Botão de estorno passa a ser visível por padrão no mobile
+  (antes só aparecia em hover).
+* **EvaluationsTab — linha da avaliação
+  (`tabs/EvaluationsTab.tsx:342-381`):** badge "EVA n" exibida como pill grande
+  apenas em ≥ sm; em < sm é renderizada como pequeno badge numérico junto dos
+  ícones de ação (`hidden sm:flex` / `sm:hidden`). Padding reduzido (`p-3
+  sm:p-4`), título/data com `truncate`, ícone do chevron com `ml-0.5`.
+* **BlockedSlotModal — linha de bloqueio
+  (`agenda/components/BlockedSlotModal.tsx:376-399`):** linha agora alinha
+  por `items-start`, conteúdo principal usa `flex-wrap`. O motivo
+  (`b.reason`) ocupa toda a linha em mobile (`basis-full sm:basis-auto
+  sm:flex-1`) com `break-words`. Hora e ícone permanecem juntos com
+  `whitespace-nowrap`.

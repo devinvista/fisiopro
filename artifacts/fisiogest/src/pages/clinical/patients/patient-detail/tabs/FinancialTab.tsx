@@ -275,41 +275,43 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
                 return (
                   <Card key={record.id} className={`border shadow-sm group ${cardBg}`}>
-                    <CardContent className="p-3.5 flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold ${iconBg}`}>
-                        {txInfo.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-semibold text-sm truncate ${isEstornado ? "text-slate-400" : "text-slate-800"}`}>{record.description}</p>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${txInfo.color}`}>{txInfo.label}</span>
-                          <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                            <span className={`w-1.5 h-1.5 rounded-full ${stInfo.dot}`} />{stInfo.label}
-                          </span>
-                          <span className="text-[10px] text-slate-400">{formatDateTime(record.createdAt)}</span>
-                          {record.paymentMethod && (
-                            <span className="text-[10px] text-slate-400">{record.paymentMethod}</span>
+                    <CardContent className="p-3.5">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold ${iconBg}`}>
+                          {txInfo.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-semibold text-sm truncate ${isEstornado ? "text-slate-400" : "text-slate-800"}`}>{record.description}</p>
+                            </div>
+                            <p className={`text-sm font-bold text-right shrink-0 whitespace-nowrap ${amountColor}`}>
+                              {isSessionType ? (Number(record.amount) === 0 ? "—" : formatCurrency(Number(record.amount))) : (isPayment ? "+" : "↑") + (Number(record.amount) === 0 ? "Crédito" : formatCurrency(Number(record.amount)))}
+                            </p>
+                            {canEstorno && (
+                              <button
+                                onClick={() => setEstornoTarget({ id: record.id, description: record.description, amount: Number(record.amount) })}
+                                className="shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-slate-400 lg:text-slate-300 hover:text-red-500 transition-all"
+                                title="Estornar registro"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${txInfo.color}`}>{txInfo.label}</span>
+                            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                              <span className={`w-1.5 h-1.5 rounded-full ${stInfo.dot}`} />{stInfo.label}
+                            </span>
+                            <span className="text-[10px] text-slate-400">{formatDateTime(record.createdAt)}</span>
+                            {record.paymentMethod && (
+                              <span className="text-[10px] text-slate-400">{record.paymentMethod}</span>
+                            )}
+                          </div>
+                          {record.dueDate && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">Vencimento: {format(parseISO(record.dueDate), "dd/MM/yyyy")}</p>
                           )}
                         </div>
-                        {record.dueDate && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">Vencimento: {format(parseISO(record.dueDate), "dd/MM/yyyy")}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="text-right">
-                          <p className={`text-sm font-bold ${amountColor}`}>
-                            {isSessionType ? (Number(record.amount) === 0 ? "—" : formatCurrency(Number(record.amount))) : (isPayment ? "+" : "↑") + (Number(record.amount) === 0 ? "Crédito" : formatCurrency(Number(record.amount)))}
-                          </p>
-                        </div>
-                        {canEstorno && (
-                          <button
-                            onClick={() => setEstornoTarget({ id: record.id, description: record.description, amount: Number(record.amount) })}
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"
-                            title="Estornar registro"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                          </button>
-                        )}
                       </div>
                     </CardContent>
                   </Card>

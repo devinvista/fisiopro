@@ -372,26 +372,28 @@ export function BlockedSlotModal({
                   return (
                     <div
                       key={b.id}
-                      className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2 border border-slate-200"
+                      className="flex items-start justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2 border border-slate-200"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Ban className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="text-sm font-medium text-slate-700">{b.startTime}–{b.endTime}</span>
+                      <div className="flex items-start gap-2 min-w-0 flex-1 flex-wrap">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Ban className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="text-sm font-medium text-slate-700 whitespace-nowrap">{b.startTime}–{b.endTime}</span>
+                        </div>
                         {b.reason && (
-                          <span className="text-xs text-slate-500 truncate">{b.reason}</span>
+                          <span className="text-xs text-slate-500 break-words min-w-0 basis-full sm:basis-auto sm:flex-1">{b.reason}</span>
                         )}
                         {schedName && (
-                          <span className="text-[10px] font-semibold bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-[10px] font-semibold bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded shrink-0 self-center">
                             {schedName}
                           </span>
                         )}
                         {b.recurrenceGroupId && (
-                          <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-[10px] font-semibold bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded shrink-0 self-center">
                             Recorrente
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"

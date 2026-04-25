@@ -337,27 +337,34 @@ export function EvaluationsTab({ patientId }: { patientId: number }) {
                 />
               ) : (
                 <Card className="border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center justify-between gap-2 p-3 sm:p-4">
                     <button
-                      className="flex items-center gap-3 flex-1 text-left"
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
                       onClick={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
                     >
                       <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold shrink-0">
                         {evaluations.length - idx}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-800 text-sm">Avaliação #{evaluations.length - idx}</p>
-                        <p className="text-xs text-slate-500">{formatDateTime(ev.createdAt)}</p>
+                        <p className="font-semibold text-slate-800 text-sm truncate">Avaliação #{evaluations.length - idx}</p>
+                        <p className="text-xs text-slate-500 truncate">{formatDateTime(ev.createdAt)}</p>
                       </div>
                       {ev.painScale !== null && ev.painScale !== undefined && (
-                        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-white shrink-0 ${
+                        <div className={`hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold text-white shrink-0 ${
                           Number(ev.painScale) >= 7 ? "bg-red-500" : Number(ev.painScale) >= 4 ? "bg-orange-400" : "bg-green-500"
                         }`}>
                           EVA {ev.painScale}
                         </div>
                       )}
                     </button>
-                    <div className="flex items-center gap-1 ml-2">
+                    <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                      {ev.painScale !== null && ev.painScale !== undefined && (
+                        <div className={`sm:hidden flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold text-white shrink-0 ${
+                          Number(ev.painScale) >= 7 ? "bg-red-500" : Number(ev.painScale) >= 4 ? "bg-orange-400" : "bg-green-500"
+                        }`}>
+                          {ev.painScale}
+                        </div>
+                      )}
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-primary"
                         onClick={() => startEdit(ev)}>
                         <Pencil className="w-3.5 h-3.5" />
@@ -366,7 +373,7 @@ export function EvaluationsTab({ patientId }: { patientId: number }) {
                         onClick={() => handleDelete(ev.id)} disabled={deleteMutation.isPending}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                      {expandedId === ev.id ? <ChevronUp className="w-4 h-4 text-slate-400 ml-1" /> : <ChevronDown className="w-4 h-4 text-slate-400 ml-1" />}
+                      {expandedId === ev.id ? <ChevronUp className="w-4 h-4 text-slate-400 ml-0.5" /> : <ChevronDown className="w-4 h-4 text-slate-400 ml-0.5" />}
                     </div>
                   </div>
                   {expandedId === ev.id && (
