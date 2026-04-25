@@ -194,12 +194,6 @@ body {
   min-height: 100dvh;
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
 /* ========================================
    SAFE AREA SUPPORT
 ======================================== */
