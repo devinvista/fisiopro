@@ -330,7 +330,7 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
 
       {/* Add Measurement Dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Adicionar Medição Corporal</DialogTitle>
             <DialogDescription>Registre as medidas do paciente para acompanhar a evolução ao longo do tratamento.</DialogDescription>
@@ -367,7 +367,7 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
 
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Composição & Qualidade</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <MeasField label="% Gordura Corporal" value={mf("bodyFat")} unit="%" onChange={sf("bodyFat")} />
                 <div className="space-y-1">
                   <Label className="text-[11px] text-slate-500">Grau de Celulite</Label>

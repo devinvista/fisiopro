@@ -313,7 +313,7 @@ export function AtestadoDialog({ open, onClose, patientId, patient, onCreated, a
 
             {/* Type-specific fields */}
             {type === "afastamento" && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-slate-600">Dias de afastamento <span className="text-red-400">*</span></Label>
                   <Input type="number" min={1} max={365} className="h-9 text-sm bg-slate-50"
@@ -357,7 +357,7 @@ export function AtestadoDialog({ open, onClose, patientId, patient, onCreated, a
             {/* Professional info */}
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-3">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dados do Profissional (salvos automaticamente)</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Nome do profissional</Label>
                   <p className="text-sm font-semibold text-slate-700 h-9 flex items-center">{user?.name ?? "—"}</p>

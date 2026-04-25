@@ -246,7 +246,7 @@ export function UploadModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !uploading && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Camera className="w-5 h-5 text-primary" /> Adicionar Fotos

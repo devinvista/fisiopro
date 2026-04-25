@@ -472,7 +472,7 @@ export function TreatmentPlanItemsSection({
                     ) : (
                       /* Edit mode */
                       <div className="mt-2 space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div className="space-y-1">
                             <Label className="text-[10px]">Sessões/semana</Label>
                             <Select value={String(editSpw)} onValueChange={v => setEditSpw(Number(v))}>
@@ -487,7 +487,7 @@ export function TreatmentPlanItemsSection({
                             </div>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div className="space-y-1">
                             <Label className="text-[10px]">Preço unitário</Label>
                             <Input className="h-7 text-xs" type="number" min={0} step={0.01} placeholder={String(item.unitPrice ?? item.price ?? "")} value={editCustomPrice} onChange={e => setEditCustomPrice(e.target.value)} />

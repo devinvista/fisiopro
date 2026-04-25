@@ -216,7 +216,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
           </Card>
 
           {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Card className="border-none bg-gradient-to-br from-blue-50 to-indigo-50 shadow-sm">
               <CardContent className="p-4">
                 <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">Total A Receber</p>

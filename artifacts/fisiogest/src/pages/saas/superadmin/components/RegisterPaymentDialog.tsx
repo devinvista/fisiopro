@@ -198,7 +198,7 @@ export function RegisterPaymentDialog({
           )}
 
           {/* Amount + Method row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Valor (R$) *</Label>
               <Input
@@ -227,7 +227,7 @@ export function RegisterPaymentDialog({
           </div>
 
           {/* Reference month + paid at row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Mês de referência</Label>
               <Input

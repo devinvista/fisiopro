@@ -462,7 +462,7 @@ export function CouponsTab() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editTarget ? "Editar Cupom" : "Novo Cupom"}</DialogTitle>
             <DialogDescription>
@@ -471,7 +471,7 @@ export function CouponsTab() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Código *</Label>
                 <Input
@@ -505,7 +505,7 @@ export function CouponsTab() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo de Desconto *</Label>
                 <Select value={form.discountType} onValueChange={(v: "percent" | "fixed") => setForm({ ...form, discountType: v })}>
@@ -536,7 +536,7 @@ export function CouponsTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Limite de Usos</Label>
                 <Input
@@ -595,7 +595,7 @@ export function CouponsTab() {
                 <p className="text-xs font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1">
                   <Link2 className="w-3.5 h-3.5" /> Benefício para quem indica
                 </p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Tipo do benefício</Label>
                     <Select

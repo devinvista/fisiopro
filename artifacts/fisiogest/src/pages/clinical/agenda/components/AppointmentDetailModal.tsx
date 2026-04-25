@@ -227,7 +227,7 @@ export function AppointmentDetailModal({
   return (
     <>
       <Dialog open onOpenChange={onClose}>
-        <DialogContent className={cn("w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto border-none shadow-2xl rounded-3xl", isGroupSession ? "sm:max-w-[520px]" : "sm:max-w-[480px]")} aria-describedby={undefined}>
+        <DialogContent className={cn("w-[calc(100vw-2rem)] max-h-[90dvh] overflow-y-auto border-none shadow-2xl rounded-3xl", isGroupSession ? "sm:max-w-[520px]" : "sm:max-w-[480px]")} aria-describedby={undefined}>
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className={cn("p-2.5 rounded-xl", isGroupSession ? "bg-violet-500" : cfg.bg)}>
@@ -521,7 +521,7 @@ export function AppointmentDetailModal({
                   <Repeat className="w-3.5 h-3.5" /> Remarcar consulta
                 </p>
                 <p className="text-sm text-slate-500">Selecione a nova data e horário para <strong>{appointment.patient?.name}</strong>.</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Nova data</Label>
                     <DatePickerPTBR value={rescheduleForm.date} onChange={(v) => setRescheduleForm(f => ({ ...f, date: v }))} className="rounded-xl h-10" />
@@ -545,7 +545,7 @@ export function AppointmentDetailModal({
             {isEditing && (
               <div className="space-y-3 bg-slate-50 rounded-2xl p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Editar Consulta</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Data</Label>
                     <DatePickerPTBR value={editForm.date} onChange={(v) => setEditForm({ ...editForm, date: v })} className="rounded-xl h-10" />

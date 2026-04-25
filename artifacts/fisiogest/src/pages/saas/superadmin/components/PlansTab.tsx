@@ -445,7 +445,7 @@ export function PlansTab() {
 
       {/* Edit / Create dialog */}
       <Dialog open={isOpen} onOpenChange={(o) => { if (!o) { setCreating(false); setEditPlan(null); } }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editPlan ? "Editar Plano" : "Novo Plano"}</DialogTitle>
             <DialogDescription>Configure os limites e recursos do plano</DialogDescription>

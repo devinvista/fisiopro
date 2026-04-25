@@ -370,7 +370,7 @@ export function UsuariosSection() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingUser ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
             <DialogDescription>

@@ -57,7 +57,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
+    <div className="min-h-[100dvh] bg-white text-slate-900 overflow-x-hidden">
       <LandingHeader />
 
       <main id="main-content">

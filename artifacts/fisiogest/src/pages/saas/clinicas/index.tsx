@@ -399,7 +399,7 @@ export default function Clinicas() {
 
       {/* Manage Users Dialog */}
       <Dialog open={!!managingClinic} onOpenChange={(open) => !open && setManagingClinic(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users className="h-5 w-5" />
@@ -416,7 +416,7 @@ export default function Clinicas() {
               <p className="text-sm font-semibold text-foreground flex items-center gap-2">
                 <UserPlus className="h-4 w-4 text-primary" /> Adicionar usuário
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Nome *</Label>
                   <Input placeholder="Nome completo" value={addUserForm.name}

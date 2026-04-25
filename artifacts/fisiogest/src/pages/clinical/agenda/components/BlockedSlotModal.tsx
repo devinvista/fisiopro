@@ -217,7 +217,7 @@ export function BlockedSlotModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[480px] max-h-[90vh] overflow-y-auto border-none shadow-2xl rounded-3xl" aria-describedby={undefined}>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[480px] max-h-[90dvh] overflow-y-auto border-none shadow-2xl rounded-3xl" aria-describedby={undefined}>
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-slate-100">
@@ -262,7 +262,7 @@ export function BlockedSlotModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Início *</Label>
                 <TimeInputPTBR
@@ -466,7 +466,7 @@ export function BlockedSlotModal({
                   className="h-10 rounded-xl"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">Início</Label>
                   <TimeInputPTBR

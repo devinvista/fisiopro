@@ -224,7 +224,7 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
             <p className="text-sm text-slate-500">
               Selecione nova data e horário para: <strong>{rescheduleAppt?.procedure?.name}</strong>
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Nova data</Label>
                 <DatePickerPTBR value={rescheduleForm.date} onChange={(v) => setRescheduleForm(f => ({ ...f, date: v }))} className="rounded-xl h-10" />

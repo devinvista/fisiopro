@@ -214,7 +214,7 @@ export function PainelTab() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     <div className={`rounded-xl p-3 ${tier.bg}`}>
                       <p className="text-xs text-slate-500 mb-0.5">Total</p>
                       <p className="text-xl font-extrabold" style={{ color: tier.color }}>{stat.total}</p>

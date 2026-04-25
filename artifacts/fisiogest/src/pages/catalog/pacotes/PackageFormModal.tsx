@@ -56,7 +56,7 @@ export function PackageFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[92vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[92dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editingPackage ? "Editar Pacote" : "Novo Pacote"}</DialogTitle>
         </DialogHeader>

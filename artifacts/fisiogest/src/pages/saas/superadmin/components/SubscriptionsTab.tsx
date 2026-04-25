@@ -560,7 +560,7 @@ export function SubscriptionsTab() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Status</Label>
                 <Select value={newSubForm.status} onValueChange={(v) => setNewSubForm((f) => ({ ...f, status: v }))}>
@@ -629,7 +629,7 @@ export function SubscriptionsTab() {
 
       {/* Edit subscription dialog */}
       <Dialog open={editSub !== null} onOpenChange={(o) => { if (!o) setEditSub(null); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Assinatura</DialogTitle>
             <DialogDescription>
@@ -659,7 +659,7 @@ export function SubscriptionsTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Status da Assinatura</Label>
                 <Select value={subForm.status} onValueChange={(v) => setSubForm({ ...subForm, status: v })}>
@@ -697,7 +697,7 @@ export function SubscriptionsTab() {
               <Label>Trial válido até</Label>
               <DatePickerPTBR value={subForm.trialEndDate} onChange={(v) => setSubForm({ ...subForm, trialEndDate: v })} className="rounded-xl h-9" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Início do período</Label>
                 <DatePickerPTBR value={subForm.currentPeriodStart} onChange={(v) => setSubForm({ ...subForm, currentPeriodStart: v })} className="rounded-xl h-9" />

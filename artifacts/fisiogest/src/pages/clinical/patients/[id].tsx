@@ -595,29 +595,31 @@ export default function PatientDetail() {
                 ))}
               </TabsList>
               {/* Fotos + Atestados + Alta + Auditoria row */}
-              <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-dashed border-slate-300 h-auto flex gap-1">
+              <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-dashed border-slate-300 h-auto flex flex-wrap gap-1">
                 <TabsTrigger
                   value="photos"
-                  className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
                 >
                   <Camera className="w-3.5 h-3.5 shrink-0" /> Fotos
                 </TabsTrigger>
                 <TabsTrigger
                   value="atestados"
-                  className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
                 >
                   <ScrollText className="w-3.5 h-3.5 shrink-0" /> Atestados
                 </TabsTrigger>
                 <TabsTrigger
                   value="discharge"
-                  className="flex-1 rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
                 >
-                  <LogOut className="w-3.5 h-3.5 shrink-0" /> Alta Fisioterapêutica
+                  <LogOut className="w-3.5 h-3.5 shrink-0" />
+                  <span className="sm:hidden">Alta</span>
+                  <span className="hidden sm:inline">Alta Fisioterapêutica</span>
                 </TabsTrigger>
                 {isSuperAdmin && (
                   <TabsTrigger
                     value="auditoria"
-                    className="flex-1 rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                    className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
                   >
                     <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Auditoria
                   </TabsTrigger>

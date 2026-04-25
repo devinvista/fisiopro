@@ -372,7 +372,7 @@ export default function Procedimentos() {
         </div>
 
         {/* ── Stats strip ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "Total de procedimentos", value: allProcedures.length, icon: <Stethoscope className="w-4 h-4" />, color: "text-primary" },
             { label: "Preço médio", value: formatCurrency(avgPrice), icon: <span className="text-xs font-bold">R$</span>, color: "text-emerald-600" },

@@ -87,7 +87,7 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar Lançamento</DialogTitle>
           <DialogDescription>Atualize os dados do lançamento financeiro.</DialogDescription>

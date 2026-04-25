@@ -145,7 +145,7 @@ export function HeroSection({ onScrollTo }: HeroSectionProps) {
     <section
       id="hero"
       aria-labelledby="hero-headline"
-      className="relative min-h-screen flex items-center bg-[#060f1e] overflow-hidden"
+      className="relative min-h-[100dvh] flex items-center bg-[#060f1e] overflow-hidden"
     >
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl animate-[pulse_6s_ease-in-out_infinite]" />
@@ -162,7 +162,7 @@ export function HeroSection({ onScrollTo }: HeroSectionProps) {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-32 lg:py-0 w-full">
-        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16 min-h-screen lg:pt-16">
+        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16 min-h-[100dvh] lg:pt-16">
           <div className="flex-1 text-center lg:text-left">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -179,7 +179,7 @@ export function HeroSection({ onScrollTo }: HeroSectionProps) {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="font-display font-bold text-white text-5xl sm:text-6xl lg:text-7xl leading-[1.08] tracking-tight mb-6"
+              className="font-display font-bold text-white text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.08] tracking-tight mb-6"
             >
               Sistema completo para{" "}
               <span className="relative">
@@ -198,7 +198,7 @@ export function HeroSection({ onScrollTo }: HeroSectionProps) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.35 }}
-              className="text-white/55 text-xl leading-relaxed mb-10 max-w-xl mx-auto lg:mx-0"
+              className="text-white/55 text-base sm:text-lg md:text-xl leading-relaxed mb-10 max-w-xl mx-auto lg:mx-0"
             >
               Agenda, pacientes, financeiro e relatórios em um único lugar.
               Simples, rápido e feito para fisioterapeutas.

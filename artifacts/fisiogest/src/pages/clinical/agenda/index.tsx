@@ -297,7 +297,7 @@ export default function Agenda() {
 
       <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
         <DialogContent
-          className="sm:max-w-[520px] border-none shadow-2xl rounded-3xl max-h-[92vh] overflow-y-auto"
+          className="sm:max-w-[520px] border-none shadow-2xl rounded-3xl max-h-[92dvh] overflow-y-auto"
           aria-describedby={undefined}
         >
           <DialogHeader>

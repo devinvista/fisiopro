@@ -50,7 +50,7 @@ export function ProcedureFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border-none shadow-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90dvh] overflow-y-auto rounded-3xl border-none shadow-2xl">
         <DialogHeader className="px-1">
           <DialogTitle className="font-display text-xl sm:text-2xl flex items-center gap-2">
             <div className="p-2 bg-primary/10 rounded-xl shrink-0">

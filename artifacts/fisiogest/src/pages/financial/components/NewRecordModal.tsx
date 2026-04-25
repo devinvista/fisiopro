@@ -82,7 +82,7 @@ export function NewRecordModal({ open, onClose, onSuccess }: { open: boolean; on
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Novo Lançamento</DialogTitle>
           <DialogDescription>Registre uma receita ou despesa manualmente.</DialogDescription>

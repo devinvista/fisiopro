@@ -118,7 +118,7 @@ export default function PatientsList() {
                   Novo Paciente
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto">
                 <CreatePatientForm onSuccess={() => { setIsDialogOpen(false); refetch(); }} />
               </DialogContent>
             </Dialog>
