@@ -129,39 +129,45 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
     const canReschedule = ["agendado", "confirmado", "faltou", "cancelado"].includes(appt.status);
     return (
       <Card key={appt.id} className="border border-slate-200 shadow-sm">
-        <CardContent className="p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center text-primary shrink-0">
-            <span className="text-lg font-bold leading-none">{format(parseISO(appt.date), "d")}</span>
-            <span className="text-[10px] uppercase font-medium opacity-70">
-              {format(parseISO(appt.date), "MMM", { locale: ptBR })}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-slate-800 truncate">{appt.procedure?.name || "Procedimento não informado"}</p>
-            <p className="text-sm text-slate-500">{appt.startTime} — {appt.endTime} &bull; {formatDate(appt.date)}</p>
-            {appt.notes && <p className="text-xs text-slate-400 mt-0.5 truncate">{appt.notes}</p>}
-            {appt.status === "remarcado" && appt.rescheduledToId && (
-              <p className="text-xs text-purple-500 mt-0.5">Remarcado para novo agendamento</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {canReschedule && (
-              <Button variant="outline" size="sm"
-                className="h-8 gap-1.5 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
-                onClick={() => openReschedule(appt)}>
-                <RefreshCw className="w-3.5 h-3.5" /> Remarcar
-              </Button>
-            )}
-            {isConcluido && (
-              <Button variant="outline" size="sm"
-                className="h-8 gap-1.5 text-xs border-slate-200 text-slate-600 hover:text-primary hover:border-primary"
-                onClick={() => setDialogAppt(appt)}>
-                <ScrollText className="w-3.5 h-3.5" /> Atestado
-              </Button>
-            )}
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
-              {cfg.icon} {cfg.label}
-            </span>
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center text-primary shrink-0">
+              <span className="text-lg font-bold leading-none">{format(parseISO(appt.date), "d")}</span>
+              <span className="text-[10px] uppercase font-medium opacity-70">
+                {format(parseISO(appt.date), "MMM", { locale: ptBR })}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-800 truncate">{appt.procedure?.name || "Procedimento não informado"}</p>
+                  <p className="text-sm text-slate-500 whitespace-nowrap">{appt.startTime} — {appt.endTime} &bull; {formatDate(appt.date)}</p>
+                  {appt.notes && <p className="text-xs text-slate-400 mt-0.5 truncate">{appt.notes}</p>}
+                  {appt.status === "remarcado" && appt.rescheduledToId && (
+                    <p className="text-xs text-purple-500 mt-0.5">Remarcado para novo agendamento</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0 sm:shrink-0">
+                  {canReschedule && (
+                    <Button variant="outline" size="sm"
+                      className="h-8 gap-1.5 text-xs border-purple-200 text-purple-700 hover:bg-purple-50"
+                      onClick={() => openReschedule(appt)}>
+                      <RefreshCw className="w-3.5 h-3.5" /> Remarcar
+                    </Button>
+                  )}
+                  {isConcluido && (
+                    <Button variant="outline" size="sm"
+                      className="h-8 gap-1.5 text-xs border-slate-200 text-slate-600 hover:text-primary hover:border-primary"
+                      onClick={() => setDialogAppt(appt)}>
+                      <ScrollText className="w-3.5 h-3.5" /> Atestado
+                    </Button>
+                  )}
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.color}`}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

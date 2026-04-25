@@ -227,26 +227,30 @@ export default function Agenda() {
           )}
 
           {nav.view !== "month" && (
-            <div className="overflow-x-auto">
-              <WeekHeader
-                weekDays={nav.weekDays}
-                daysCount={nav.daysCount}
-                appointments={filteredAppointments}
-                selectedScheduleId={selectedScheduleId}
-                activeSchedules={activeSchedules}
-              />
-
-              {isLoadingAppointments ? (
-                <div className="h-96 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                </div>
-              ) : (
-                <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
+            isLoadingAppointments ? (
+              <div className="h-96 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
+                <div
+                  style={{
+                    minWidth: nav.daysCount > 1 ? `${56 + nav.daysCount * 96}px` : undefined,
+                  }}
+                >
+                  <div className="sticky top-0 z-20 bg-white">
+                    <WeekHeader
+                      weekDays={nav.weekDays}
+                      daysCount={nav.daysCount}
+                      appointments={filteredAppointments}
+                      selectedScheduleId={selectedScheduleId}
+                      activeSchedules={activeSchedules}
+                    />
+                  </div>
                   <div
                     className="grid relative"
                     style={{
                       gridTemplateColumns: `56px repeat(${nav.daysCount}, minmax(96px, 1fr))`,
-                      minWidth: nav.daysCount > 1 ? `${56 + nav.daysCount * 96}px` : undefined,
                     }}
                   >
                     <div className="border-r border-slate-200">
@@ -292,8 +296,8 @@ export default function Agenda() {
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )
           )}
         </div>
       </div>
