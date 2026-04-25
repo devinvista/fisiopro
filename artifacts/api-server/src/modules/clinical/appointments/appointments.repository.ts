@@ -93,8 +93,33 @@ export async function checkConflict(
   maxCapacity: number,
   excludeId?: number,
   scheduleId?: number | null,
-  clinicId?: number | null
+  clinicId?: number | null,
+  patientId?: number | null,
 ): Promise<{ conflict: boolean; currentCount: number; reason?: string }> {
+  // ── Duplicidade por paciente ───────────────────────────────────────────────
+  // Mesmo paciente NÃO pode ter dois agendamentos ativos que se sobreponham
+  // no tempo, ainda que o procedimento tenha vagas (ex: sessão em grupo).
+  if (patientId) {
+    const dupConds: any[] = [
+      eq(appointmentsTable.patientId, patientId),
+      eq(appointmentsTable.date, date),
+      sql`status NOT IN ('cancelado', 'faltou', 'remarcado')`,
+      sql`start_time < ${endTime} AND end_time > ${startTime}`,
+    ];
+    if (clinicId) dupConds.push(eq(appointmentsTable.clinicId, clinicId));
+    if (excludeId) dupConds.push(ne(appointmentsTable.id, excludeId));
+
+    const duplicate = await db
+      .select({ id: appointmentsTable.id })
+      .from(appointmentsTable)
+      .where(and(...dupConds))
+      .limit(1);
+
+    if (duplicate.length > 0) {
+      return { conflict: true, currentCount: 0, reason: "duplicate_patient" };
+    }
+  }
+
   if (maxCapacity > 1) {
     const sameSessionConds: any[] = [
       eq(appointmentsTable.date, date),

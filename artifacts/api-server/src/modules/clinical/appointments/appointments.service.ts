@@ -31,6 +31,9 @@ function isAdminOrSecretary(ctx: AuthCtx): boolean {
 }
 
 function describeConflict(reason: string | undefined, currentCount: number, maxCapacity: number, procedureName: string | undefined, startTime: string, endTime: string): string {
+  if (reason === "duplicate_patient") {
+    return `Este paciente já possui um agendamento ativo entre ${startTime} e ${endTime}. Não é permitido agendar o mesmo paciente em horários sobrepostos, mesmo que existam vagas.`;
+  }
   if (maxCapacity > 1) {
     return reason === "full"
       ? `Horário lotado: ${currentCount}/${maxCapacity} vagas ocupadas${procedureName ? ` para "${procedureName}"` : ""} neste horário.`
@@ -231,7 +234,7 @@ export async function createAppointment(body: {
   }
 
   const { conflict, currentCount, reason } = await checkConflict(
-    date, startTime, endTime, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId
+    date, startTime, endTime, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId, patientId
   );
   if (conflict) {
     throw conflictErr(describeConflict(reason, currentCount, maxCapacity, procedure.name, startTime, endTime));
@@ -329,8 +332,9 @@ export async function updateAppointment(id: number, body: {
   const targetDate = date ?? currentAppt.date;
   const targetStart = startTime ?? currentAppt.startTime;
   if (endTime && effectiveProcedureId != null) {
+    const targetPatientId = patientId ?? currentAppt.patientId;
     const { conflict, currentCount, reason } = await checkConflict(
-      targetDate, targetStart, endTime, effectiveProcedureId, maxCapacity, id, effectiveScheduleId, ctx.clinicId
+      targetDate, targetStart, endTime, effectiveProcedureId, maxCapacity, id, effectiveScheduleId, ctx.clinicId, targetPatientId
     );
     if (conflict) {
       throw conflictErr(describeConflict(reason, currentCount, maxCapacity, undefined, targetStart, endTime));
@@ -432,7 +436,7 @@ export async function rescheduleAppointment(id: number, body: {
   }
 
   const { conflict, currentCount, reason } = await checkConflict(
-    date, startTime, endTime, original.procedureId, maxCapacity, undefined, original.scheduleId, ctx.clinicId
+    date, startTime, endTime, original.procedureId, maxCapacity, id, original.scheduleId, ctx.clinicId, original.patientId
   );
   if (conflict) {
     throw conflictErr(describeConflict(reason, currentCount, maxCapacity, undefined, startTime, endTime));
@@ -586,7 +590,7 @@ export async function createRecurringAppointments(body: {
       const sessionDate = cursor.toISOString().slice(0, 10);
       const et = endTimeFn(startTime);
       const { conflict, reason, currentCount } = await checkConflict(
-        sessionDate, startTime, et, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId
+        sessionDate, startTime, et, procedure.id, maxCapacity, undefined, resolvedScheduleId, ctx.clinicId, patientId
       );
       if (conflict) {
         skipped.push({ date: sessionDate, reason: reason || "conflict", currentCount });
