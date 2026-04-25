@@ -169,7 +169,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     if (!selectedPlanId) return;
     setSaving(true);
     try {
-      await apiSendJson(`/api/treatment-plans/${selectedPlanId}`, "PUT", {
+      await apiSendJson(`/api/patients/${patientId}/treatment-plans/${selectedPlanId}`, "PUT", {
         ...form,
         estimatedSessions: form.estimatedSessions ? Number(form.estimatedSessions) : null,
       });
@@ -200,7 +200,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   };
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiSendJson(`/api/treatment-plans/${id}`, "DELETE"),
+    mutationFn: (id: number) => apiSendJson(`/api/patients/${patientId}/treatment-plans/${id}`, "DELETE"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: plansKey });
       setSelectedPlanId(null);
