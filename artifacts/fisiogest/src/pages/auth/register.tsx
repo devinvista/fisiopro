@@ -291,7 +291,7 @@ export default function Register() {
             {/* Profile type selector */}
             <div className="space-y-2">
               <Label>Tipo de Perfil</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {PROFILE_OPTIONS.map((option) => {
                   const Icon = option.icon;
                   const selected = profileType === option.type;

@@ -196,14 +196,16 @@ export default function Agenda() {
       />
 
       <div className="flex gap-4 items-start">
-        <AgendaSidebar
-          currentDate={nav.currentDate}
-          miniCalMonth={nav.miniCalMonth}
-          onMiniCalMonthChange={nav.setMiniCalMonth}
-          onSelectDate={(d) => nav.setCurrentDate(d)}
-          weekDays={nav.weekDays}
-          activeSchedules={activeSchedules}
-        />
+        <div className="hidden lg:block">
+          <AgendaSidebar
+            currentDate={nav.currentDate}
+            miniCalMonth={nav.miniCalMonth}
+            onMiniCalMonthChange={nav.setMiniCalMonth}
+            onSelectDate={(d) => nav.setCurrentDate(d)}
+            weekDays={nav.weekDays}
+            activeSchedules={activeSchedules}
+          />
+        </div>
 
         <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
           {nav.view === "month" && (

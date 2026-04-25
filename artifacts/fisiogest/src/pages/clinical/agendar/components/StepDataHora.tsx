@@ -227,7 +227,7 @@ export function StepDataHora({
               <p className="text-xs mt-1">Tente outra data</p>
             </div>
           ) : (
-            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
               {slots.map((slot) => (
                 <button
                   key={slot.time}

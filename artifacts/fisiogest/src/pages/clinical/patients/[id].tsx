@@ -564,67 +564,113 @@ export default function PatientDetail() {
         {/* Main Content */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="mb-5 space-y-1">
-              {/* Jornada do Cliente — featured tab */}
-              <TabsList className="w-full bg-gradient-to-r from-primary/5 to-emerald-50 p-1 rounded-xl shadow-sm border border-primary/20 h-auto flex">
-                <TabsTrigger
-                  value="jornada"
-                  className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
-                >
-                  <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada do Cliente
-                </TabsTrigger>
-              </TabsList>
-              {/* Main 6 tabs — scrollable on mobile, 3-col grid on md+ */}
-              <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto flex flex-wrap gap-1">
-                {[
-                  { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: "Anamnese" },
-                  { value: "evaluations", icon: <Activity className="w-3.5 h-3.5 shrink-0" />,      label: "Avaliações" },
-                  { value: "treatment",   icon: <Target className="w-3.5 h-3.5 shrink-0" />,         label: "Plano Trat." },
-                  { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5 shrink-0" />,     label: "Evoluções" },
-                  { value: "history",     icon: <History className="w-3.5 h-3.5 shrink-0" />,        label: "Histórico" },
-                  { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5 shrink-0" />,     label: "Financeiro" },
-                ].map(tab => (
+            <div className="mb-5">
+              {/* ───── Mobile (<lg): single horizontally-scrollable bar ───── */}
+              <div className="lg:hidden -mx-1 px-1 overflow-x-auto">
+                <TabsList className="inline-flex w-auto min-w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto gap-1">
                   <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="flex-1 basis-[calc(33.33%-4px)] min-w-[90px] rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5"
+                    value="jornada"
+                    className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
                   >
-                    {tab.icon}
-                    <span className="truncate">{tab.label}</span>
+                    <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada
                   </TabsTrigger>
-                ))}
-              </TabsList>
-              {/* Fotos + Atestados + Alta + Auditoria row */}
-              <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-dashed border-slate-300 h-auto flex flex-wrap gap-1">
-                <TabsTrigger
-                  value="photos"
-                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
-                >
-                  <Camera className="w-3.5 h-3.5 shrink-0" /> Fotos
-                </TabsTrigger>
-                <TabsTrigger
-                  value="atestados"
-                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
-                >
-                  <ScrollText className="w-3.5 h-3.5 shrink-0" /> Atestados
-                </TabsTrigger>
-                <TabsTrigger
-                  value="discharge"
-                  className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
-                >
-                  <LogOut className="w-3.5 h-3.5 shrink-0" />
-                  <span className="sm:hidden">Alta</span>
-                  <span className="hidden sm:inline">Alta Fisioterapêutica</span>
-                </TabsTrigger>
-                {isSuperAdmin && (
+                  {[
+                    { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: "Anamnese" },
+                    { value: "evaluations", icon: <Activity className="w-3.5 h-3.5 shrink-0" />,      label: "Avaliações" },
+                    { value: "treatment",   icon: <Target className="w-3.5 h-3.5 shrink-0" />,         label: "Plano Trat." },
+                    { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5 shrink-0" />,     label: "Evoluções" },
+                    { value: "history",     icon: <History className="w-3.5 h-3.5 shrink-0" />,        label: "Histórico" },
+                    { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5 shrink-0" />,     label: "Financeiro" },
+                    { value: "photos",      icon: <Camera className="w-3.5 h-3.5 shrink-0" />,         label: "Fotos" },
+                    { value: "atestados",   icon: <ScrollText className="w-3.5 h-3.5 shrink-0" />,     label: "Atestados" },
+                  ].map(tab => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 text-slate-500"
+                    >
+                      {tab.icon}
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
                   <TabsTrigger
-                    value="auditoria"
-                    className="flex-1 basis-[calc(50%-4px)] sm:basis-auto min-w-[90px] rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                    value="discharge"
+                    className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 text-slate-500"
                   >
-                    <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Auditoria
+                    <LogOut className="w-3.5 h-3.5 shrink-0" /> Alta
                   </TabsTrigger>
-                )}
-              </TabsList>
+                  {isSuperAdmin && (
+                    <TabsTrigger
+                      value="auditoria"
+                      className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 text-slate-500"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Auditoria
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
+
+              {/* ───── Desktop (≥lg): grouped 3-row layout ───── */}
+              <div className="hidden lg:block space-y-1">
+                {/* Jornada do Cliente — featured tab */}
+                <TabsList className="w-full bg-gradient-to-r from-primary/5 to-emerald-50 p-1 rounded-xl shadow-sm border border-primary/20 h-auto flex">
+                  <TabsTrigger
+                    value="jornada"
+                    className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
+                  >
+                    <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada do Cliente
+                  </TabsTrigger>
+                </TabsList>
+                {/* Main 6 tabs */}
+                <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto flex gap-1">
+                  {[
+                    { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: "Anamnese" },
+                    { value: "evaluations", icon: <Activity className="w-3.5 h-3.5 shrink-0" />,      label: "Avaliações" },
+                    { value: "treatment",   icon: <Target className="w-3.5 h-3.5 shrink-0" />,         label: "Plano Trat." },
+                    { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5 shrink-0" />,     label: "Evoluções" },
+                    { value: "history",     icon: <History className="w-3.5 h-3.5 shrink-0" />,        label: "Histórico" },
+                    { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5 shrink-0" />,     label: "Financeiro" },
+                  ].map(tab => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5"
+                    >
+                      {tab.icon}
+                      <span className="truncate">{tab.label}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {/* Fotos + Atestados + Alta + Auditoria row */}
+                <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-dashed border-slate-300 h-auto flex gap-1">
+                  <TabsTrigger
+                    value="photos"
+                    className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  >
+                    <Camera className="w-3.5 h-3.5 shrink-0" /> Fotos
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="atestados"
+                    className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  >
+                    <ScrollText className="w-3.5 h-3.5 shrink-0" /> Atestados
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="discharge"
+                    className="flex-1 rounded-lg data-[state=active]:bg-green-600 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                  >
+                    <LogOut className="w-3.5 h-3.5 shrink-0" /> Alta Fisioterapêutica
+                  </TabsTrigger>
+                  {isSuperAdmin && (
+                    <TabsTrigger
+                      value="auditoria"
+                      className="flex-1 rounded-lg data-[state=active]:bg-slate-800 data-[state=active]:text-white text-xs py-2 flex items-center justify-center gap-1.5 data-[state=inactive]:text-slate-500"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" /> Auditoria
+                    </TabsTrigger>
+                  )}
+                </TabsList>
+              </div>
             </div>
 
             <TabsContent value="jornada">
