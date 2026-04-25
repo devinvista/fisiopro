@@ -13,11 +13,12 @@ interface TemplateReabilitacaoProps {
   sv: (field: keyof AnamnesisForm) => (val: string) => void;
   sections: Record<string, boolean>;
   toggle: (k: string) => void;
+  readOnly?: boolean;
 }
 
-export function TemplateReabilitacao({ form, f, sv, sections, toggle }: TemplateReabilitacaoProps) {
+export function TemplateReabilitacao({ form, f, sv, sections, toggle, readOnly = false }: TemplateReabilitacaoProps) {
   return (
-    <>
+    <fieldset disabled={readOnly} className="contents">
       <AnamSection title="Queixa Principal e História" subtitle="QP, HDA, ocupação e lateralidade" icon={<ClipboardList className="w-4 h-4" />} colorClass="blue" open={sections.s1} onToggle={() => toggle("s1")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -119,6 +120,6 @@ export function TemplateReabilitacao({ form, f, sv, sections, toggle }: Template
           <Textarea className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.patientGoals} onChange={f("patientGoals")} placeholder="O que o paciente espera alcançar com o tratamento? Metas de curto e longo prazo..." />
         </div>
       </AnamSection>
-    </>
+    </fieldset>
   );
 }

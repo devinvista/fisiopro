@@ -1393,6 +1393,9 @@ components:
           type: integer
         patientId:
           type: integer
+        templateType:
+          type: string
+          enum: [reabilitacao, esteticaFacial, esteticaCorporal, pilates]
         mainComplaint:
           type: string
         diseaseHistory:
@@ -1411,6 +1414,90 @@ components:
           type: integer
           minimum: 0
           maximum: 10
+        occupation:
+          type: string
+        laterality:
+          type: string
+        cid10:
+          type: string
+        painLocation:
+          type: string
+        painAggravatingFactors:
+          type: string
+        painRelievingFactors:
+          type: string
+        functionalImpact:
+          type: string
+        patientGoals:
+          type: string
+        previousTreatments:
+          type: string
+        tobaccoAlcohol:
+          type: string
+        phototype:
+          type: string
+        skinType:
+          type: string
+        skinConditions:
+          type: string
+        sunExposure:
+          type: string
+        sunProtector:
+          type: string
+        currentSkincareRoutine:
+          type: string
+        previousAestheticTreatments:
+          type: string
+        aestheticReactions:
+          type: string
+        facialSurgeries:
+          type: string
+        sensitizingMedications:
+          type: string
+        skinContraindications:
+          type: string
+        aestheticGoalDetails:
+          type: string
+        mainBodyConcern:
+          type: string
+        bodyConcernRegions:
+          type: string
+        celluliteGrade:
+          type: string
+        bodyWeight:
+          type: string
+        bodyHeight:
+          type: string
+        bodyMeasurements:
+          type: string
+        physicalActivityLevel:
+          type: string
+        physicalActivityType:
+          type: string
+        waterIntake:
+          type: string
+        dietHabits:
+          type: string
+        bodyMedicalConditions:
+          type: string
+        bodyContraindications:
+          type: string
+        previousBodyTreatments:
+          type: string
+        pilatesExperience:
+          type: string
+        pilatesGoals:
+          type: string
+        posturalAlterations:
+          type: string
+        pregnancyStatus:
+          type: string
+        previousInjuries:
+          type: string
+        mobilityRestrictions:
+          type: string
+        respiratoryConditions:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -1425,6 +1512,9 @@ components:
     CreateAnamnesisRequest:
       type: object
       properties:
+        templateType:
+          type: string
+          enum: [reabilitacao, esteticaFacial, esteticaCorporal, pilates]
         mainComplaint:
           type: string
         diseaseHistory:
@@ -1443,6 +1533,90 @@ components:
           type: integer
           minimum: 0
           maximum: 10
+        occupation:
+          type: string
+        laterality:
+          type: string
+        cid10:
+          type: string
+        painLocation:
+          type: string
+        painAggravatingFactors:
+          type: string
+        painRelievingFactors:
+          type: string
+        functionalImpact:
+          type: string
+        patientGoals:
+          type: string
+        previousTreatments:
+          type: string
+        tobaccoAlcohol:
+          type: string
+        phototype:
+          type: string
+        skinType:
+          type: string
+        skinConditions:
+          type: string
+        sunExposure:
+          type: string
+        sunProtector:
+          type: string
+        currentSkincareRoutine:
+          type: string
+        previousAestheticTreatments:
+          type: string
+        aestheticReactions:
+          type: string
+        facialSurgeries:
+          type: string
+        sensitizingMedications:
+          type: string
+        skinContraindications:
+          type: string
+        aestheticGoalDetails:
+          type: string
+        mainBodyConcern:
+          type: string
+        bodyConcernRegions:
+          type: string
+        celluliteGrade:
+          type: string
+        bodyWeight:
+          type: string
+        bodyHeight:
+          type: string
+        bodyMeasurements:
+          type: string
+        physicalActivityLevel:
+          type: string
+        physicalActivityType:
+          type: string
+        waterIntake:
+          type: string
+        dietHabits:
+          type: string
+        bodyMedicalConditions:
+          type: string
+        bodyContraindications:
+          type: string
+        previousBodyTreatments:
+          type: string
+        pilatesExperience:
+          type: string
+        pilatesGoals:
+          type: string
+        posturalAlterations:
+          type: string
+        pregnancyStatus:
+          type: string
+        previousInjuries:
+          type: string
+        mobilityRestrictions:
+          type: string
+        respiratoryConditions:
+          type: string
 
     Evaluation:
       type: object

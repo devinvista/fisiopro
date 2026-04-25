@@ -14,7 +14,7 @@ export type PAtestado = { patientId: string; atestadoId: string };
 
 // ─── Anamnesis ────────────────────────────────────────────────────────────────
 export const anamnesisSchema = z.object({
-  templateType: z.enum(["reabilitacao", "esteticaFacial", "esteticaCorporal"]).optional().nullable(),
+  templateType: z.enum(["reabilitacao", "esteticaFacial", "esteticaCorporal", "pilates"]).optional().nullable(),
   // Shared fields
   mainComplaint: z.string().max(2000).optional().nullable(),
   diseaseHistory: z.string().max(5000).optional().nullable(),
@@ -61,6 +61,14 @@ export const anamnesisSchema = z.object({
   bodyMedicalConditions: z.string().max(2000).optional().nullable(),
   bodyContraindications: z.string().max(2000).optional().nullable(),
   previousBodyTreatments: z.string().max(2000).optional().nullable(),
+  // Pilates fields
+  pilatesExperience: z.string().max(500).optional().nullable(),
+  pilatesGoals: z.string().max(2000).optional().nullable(),
+  posturalAlterations: z.string().max(2000).optional().nullable(),
+  pregnancyStatus: z.string().max(200).optional().nullable(),
+  previousInjuries: z.string().max(2000).optional().nullable(),
+  mobilityRestrictions: z.string().max(2000).optional().nullable(),
+  respiratoryConditions: z.string().max(2000).optional().nullable(),
 });
 
 // ─── Evaluation ───────────────────────────────────────────────────────────────

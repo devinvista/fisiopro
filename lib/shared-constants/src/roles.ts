@@ -20,6 +20,8 @@ export const ALL_PERMISSIONS = [
   "patients.delete",
   "medical.read",
   "medical.write",
+  "anamnesis.read",
+  "anamnesis.write",
   "appointments.read",
   "appointments.create",
   "appointments.update",
@@ -41,6 +43,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "appointments.read",
     "appointments.create",
     "appointments.update",
+    // Anamnese: leitura permitida (sem edição)
+    "anamnesis.read",
   ],
   profissional: [
     "patients.read",
@@ -51,6 +55,9 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "appointments.update",
     "medical.read",
     "medical.write",
+    // Anamnese: leitura e escrita (único papel autorizado a editar)
+    "anamnesis.read",
+    "anamnesis.write",
     "financial.read",
     "reports.read",
     "procedures.manage",
@@ -62,6 +69,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "patients.delete",
     "medical.read",
     "medical.write",
+    // Anamnese: somente leitura — admin NÃO edita anamnese
+    "anamnesis.read",
     "appointments.read",
     "appointments.create",
     "appointments.update",

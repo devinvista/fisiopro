@@ -16,12 +16,13 @@ interface TemplateEsteticaFacialProps {
   sv: (field: keyof AnamnesisForm) => (val: string) => void;
   sections: Record<string, boolean>;
   toggle: (k: string) => void;
+  readOnly?: boolean;
 }
 
-export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle }: TemplateEsteticaFacialProps) {
+export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle, readOnly = false }: TemplateEsteticaFacialProps) {
   return (
-    <>
-      <AnamSection title="Queixa Principal e Histórico" subtitle="Motivo da consulta e histórico do problem" icon={<ClipboardList className="w-4 h-4" />} colorClass="rose" open={sections.s1} onToggle={() => toggle("s1")}>
+    <fieldset disabled={readOnly} className="contents">
+      <AnamSection title="Queixa Principal e Histórico" subtitle="Motivo da consulta e histórico do problema" icon={<ClipboardList className="w-4 h-4" />} colorClass="rose" open={sections.s1} onToggle={() => toggle("s1")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label className="text-sm font-semibold text-slate-700">Profissão / Ocupação</Label>
@@ -112,10 +113,10 @@ export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle 
         </div>
       </AnamSection>
 
-      <AnamSection title="Histórico de Tratamentos Estéticos" subtitle="Procedimentos anteriores, reações e cirurgias" icon={<FlaskConical className="w-4 h-4" />} colorClass="pink" open={sections.s3} onToggle={() => toggle("s3")}>
+      <AnamSection title="Histórico de Tratamentos Estéticos" subtitle="Procedimentos anteriores, reações, contraindicações e cirurgias" icon={<FlaskConical className="w-4 h-4" />} colorClass="pink" open={sections.s3} onToggle={() => toggle("s3")}>
         <div className="space-y-1.5">
           <Label className="text-sm font-semibold text-slate-700">Tratamentos Estéticos Anteriores</Label>
-          <Textarea className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.previousAestheticTreatments} onChange={f("previousAestheticTreatments")} placeholder="Ex: Peeling químico, laser CO₂, luz intensa pulsada (IPL), microagulhamento, toxina botulínica, preenchimento com ácido hialurônico, HIFU..." />
+          <Textarea className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.previousAestheticTreatments} onChange={f("previousAestheticTreatments")} placeholder="Ex: Peeling químico, laser CO₂, IPL, microagulhamento, toxina botulínica, preenchimento, HIFU..." />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -129,41 +130,36 @@ export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle 
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label className="text-sm font-semibold text-slate-700">Medicamentos Fotossensibilizantes ou Interfirentes</Label>
+            <Label className="text-sm font-semibold text-slate-700">Medicamentos Fotossensibilizantes / Interferentes</Label>
             <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.sensitizingMedications} onChange={f("sensitizingMedications")} placeholder="Isotretinoína, retinoides tópicos, anticoagulantes, corticoides, anticonvulsivantes, metformina, antibióticos..." />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-sm font-semibold text-slate-700">Alergias</Label>
-            <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.allergies} onChange={f("allergies")} placeholder="Cosméticos, anestésicos tópicos (lidocaína), metais (níquel), fragrâncias, látex..." />
+            <Label className="text-sm font-semibold text-slate-700">Contraindicações Conhecidas</Label>
+            <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.skinContraindications} onChange={f("skinContraindications")} placeholder="Ex: Não pode realizar peeling, contraindicação a luz pulsada, gestação..." />
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-semibold text-slate-700">Alergias</Label>
+          <Textarea className="min-h-[60px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.allergies} onChange={f("allergies")} placeholder="Cosméticos, anestésicos tópicos (lidocaína), metais (níquel), fragrâncias, látex..." />
         </div>
       </AnamSection>
 
-      <AnamSection title="Saúde e Hábitos" subtitle="Histórico médico relevante e estilo de vida" icon={<HeartPulse className="w-4 h-4" />} colorClass="emerald" open={sections.s4} onToggle={() => toggle("s4")}>
+      <AnamSection title="Saúde e Hábitos" subtitle="Histórico médico, medicações e estilo de vida" icon={<HeartPulse className="w-4 h-4" />} colorClass="emerald" open={sections.s4} onToggle={() => toggle("s4")}>
         <div className="space-y-1.5">
           <Label className="text-sm font-semibold text-slate-700">Histórico Médico Relevante</Label>
           <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.medicalHistory} onChange={f("medicalHistory")} placeholder="Diabetes, hipertensão, problemas de tireoide, gravidez/amamentação, lúpus, vitiligo, herpes recidivante..." />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-700">Hábitos (marque se aplicar)</Label>
-            <div className="flex flex-wrap gap-2">
-              {["Fumante", "Consumo de álcool", "Uso de anticoncepcional", "Sono irregular", "Exposição excessiva a telas", "Baixa ingestão de água", "Dieta rica em açúcar"].map(h => (
-                <CheckTag key={h} label={h} active={hasInList(form.aestheticHabits, h)} onClick={() => setForm(p => ({ ...p, aestheticHabits: toggleInList(p.aestheticHabits, h) }))} />
-              ))}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-sm font-semibold text-slate-700">Nível de Estresse</Label>
-            <Select value={form.lifestyle} onValueChange={sv("lifestyle")}>
-              <SelectTrigger className="bg-slate-50 border-slate-200"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="baixo">Baixo</SelectItem>
-                <SelectItem value="moderado">Moderado</SelectItem>
-                <SelectItem value="alto">Alto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-semibold text-slate-700">Medicamentos em Uso</Label>
+          <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.medications} onChange={f("medications")} placeholder="Nome, dosagem e frequência..." />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-semibold text-slate-700">Hábitos (tabagismo, etilismo)</Label>
+          <Textarea className="min-h-[60px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.tobaccoAlcohol} onChange={f("tobaccoAlcohol")} placeholder="Fuma? Bebe? Frequência..." />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-semibold text-slate-700">Estilo de Vida</Label>
+          <Textarea className="min-h-[70px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.lifestyle} onChange={f("lifestyle")} placeholder="Sono, alimentação, ingestão de água, atividade física, nível de estresse..." />
         </div>
       </AnamSection>
 
@@ -172,7 +168,11 @@ export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle 
           <Label className="text-sm font-semibold text-slate-700">O que espera alcançar?</Label>
           <Textarea className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.patientGoals} onChange={f("patientGoals")} placeholder="Melhorar manchas, reduzir rugas, harmonização facial, rejuvenescimento, controle de acne..." />
         </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-semibold text-slate-700">Detalhes Adicionais do Objetivo</Label>
+          <Textarea className="min-h-[60px] bg-slate-50 border-slate-200 focus:bg-white resize-none" value={form.aestheticGoalDetails} onChange={f("aestheticGoalDetails")} placeholder="Prazo desejado, evento específico, prioridade entre queixas..." />
+        </div>
       </AnamSection>
-    </>
+    </fieldset>
   );
 }

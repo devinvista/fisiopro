@@ -1,15 +1,17 @@
 import {
   useGetPatient,
   useCreateAnamnesis,
+  useListProcedures,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
-  Loader2, Clock, CheckCircle, Check,
+  Loader2, Clock, CheckCircle, Check, Lock, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/lib/toast";
+import { useAuth } from "@/hooks/use-auth";
 import { formatDateTime } from "../utils/format";
 
 import { AnamnesisForm, AnamTemplate } from "./anamnesis/types";
@@ -18,20 +20,74 @@ import { ExamAttachmentsSection } from "./anamnesis/ExamAttachmentsSection";
 import { TemplateReabilitacao } from "./anamnesis/TemplateReabilitacao";
 import { TemplateEsteticaFacial } from "./anamnesis/TemplateEsteticaFacial";
 import { TemplateEsteticaCorporal } from "./anamnesis/TemplateEsteticaCorporal";
+import { TemplatePilates } from "./anamnesis/TemplatePilates";
 
 export function AnamnesisTab({ patientId }: { patientId: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { hasRole, hasPermission } = useAuth();
+
+  // ── RBAC ──
+  // ÚNICO papel autorizado a editar/criar anamnese: profissional.
+  // Admin e secretaria têm somente leitura.
+  const canEdit = hasPermission("anamnesis.write") && hasRole("profissional");
+  const canRead = hasPermission("anamnesis.read");
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: patient } = useGetPatient(patientId);
+
+  // Lista de procedimentos da clínica (somente ativos por padrão).
+  // Usado para mostrar APENAS os templates de anamnese cujas categorias de
+  // procedimento estão habilitadas na clínica.
+  const { data: procedures = [] } = useListProcedures(
+    {},
+    {
+      query: {
+        queryKey: ["listProcedures", "anamnesis-categories"],
+        // Cache curto — categorias raramente mudam
+        staleTime: 60_000,
+        // Se o usuário não pode sequer ler anamnese, não precisamos buscar
+        enabled: canRead,
+      },
+    },
+  );
+
+  const activeCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of procedures as Array<{ category?: string | null; isActive?: boolean | null }>) {
+      if (p.isActive === false) continue;
+      if (p.category) set.add(p.category);
+    }
+    return set;
+  }, [procedures]);
+
+  // Templates visíveis = aqueles cuja categoria está ativa na clínica.
+  // Se nenhuma categoria for detectada (clínica nova / sem procedimentos),
+  // mostramos todos como fallback para não bloquear o cadastro.
+  const visibleTemplates = useMemo(() => {
+    if (activeCategories.size === 0) return TEMPLATE_OPTIONS;
+    return TEMPLATE_OPTIONS.filter(opt => activeCategories.has(opt.procedureCategory));
+  }, [activeCategories]);
+
   const { data: allAnamnesis = [], isLoading, refetch: refetchAll } = useQuery<any[]>({
     queryKey: [`/api/patients/${patientId}/anamnesis`],
+    enabled: canRead,
   });
 
   const mutation = useCreateAnamnesis();
 
-  const [template, setTemplate] = useState<AnamTemplate>("reabilitacao");
+  const [template, setTemplate] = useState<AnamTemplate>(
+    () => (visibleTemplates[0]?.value ?? "reabilitacao"),
+  );
+
+  // Mantém o template selecionado válido quando a lista de visíveis muda
+  useEffect(() => {
+    if (visibleTemplates.length === 0) return;
+    if (!visibleTemplates.some(opt => opt.value === template)) {
+      setTemplate(visibleTemplates[0].value);
+    }
+  }, [visibleTemplates, template]);
+
   const [form, setForm] = useState<AnamnesisForm>(emptyForm);
 
   const filledTypes = new Set(allAnamnesis.map((a: any) => a.templateType));
@@ -70,6 +126,7 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
   const toggle = (k: string) => setSections(p => ({ ...p, [k]: !p[k] }));
 
   const handleSave = () => {
+    if (!canEdit) return;
     mutation.mutate({ patientId, data: { ...form, templateType: template } as any }, {
       onSuccess: () => {
         toast({ title: "Salvo com sucesso", description: "Anamnese atualizada." });
@@ -81,6 +138,18 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
       onError: () => toast({ title: "Erro", description: "Não foi possível salvar.", variant: "destructive" }),
     });
   };
+
+  if (!canRead) {
+    return (
+      <Card className="border-none shadow-md">
+        <CardContent className="p-10 text-center text-slate-500">
+          <Lock className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+          <p className="text-sm font-semibold text-slate-700">Acesso restrito</p>
+          <p className="text-xs">Você não tem permissão para visualizar anamneses.</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading) return <div className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" /></div>;
 
@@ -110,22 +179,41 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
       </CardHeader>
       <CardContent className="p-6 space-y-5">
 
+        {/* ── Banner de somente leitura ── */}
+        {!canEdit && (
+          <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 px-3.5 py-2.5">
+            <Eye className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              <span className="font-semibold">Modo somente leitura.</span> A edição da anamnese é restrita a usuários com perfil <span className="font-semibold">Profissional</span>.
+            </p>
+          </div>
+        )}
+
         {/* ── Template Selector ── */}
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Tipo de Atendimento</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {TEMPLATE_OPTIONS.map(opt => {
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+            Tipo de Atendimento
+            {visibleTemplates.length < TEMPLATE_OPTIONS.length && (
+              <span className="ml-2 normal-case font-normal text-[10px] text-slate-400">
+                · filtrado pelas categorias de procedimento ativas na clínica
+              </span>
+            )}
+          </p>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${visibleTemplates.length >= 3 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-3`}>
+            {visibleTemplates.map(opt => {
               const isActive = template === opt.value;
               const isFilled = filledTypes.has(opt.value);
               const activeStyles: Record<AnamTemplate, string> = {
                 reabilitacao: "border-blue-500 bg-blue-50 text-blue-800 shadow-sm",
                 esteticaFacial: "border-rose-500 bg-rose-50 text-rose-800 shadow-sm",
                 esteticaCorporal: "border-violet-500 bg-violet-50 text-violet-800 shadow-sm",
+                pilates: "border-teal-500 bg-teal-50 text-teal-800 shadow-sm",
               };
               const iconStyles: Record<AnamTemplate, string> = {
                 reabilitacao: "bg-blue-100 text-blue-600",
                 esteticaFacial: "bg-rose-100 text-rose-600",
                 esteticaCorporal: "bg-violet-100 text-violet-600",
+                pilates: "bg-teal-100 text-teal-600",
               };
               return (
                 <button key={opt.value} type="button" onClick={() => setTemplate(opt.value)}
@@ -136,7 +224,7 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
                     isActive ? iconStyles[opt.value] : "bg-slate-100 text-slate-500"
                   }`}>{opt.icon}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <p className="text-sm font-bold leading-tight">{opt.label}</p>
                       {isFilled && !isActive && (
                         <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">
@@ -151,33 +239,44 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
               );
             })}
           </div>
+          {visibleTemplates.length === 0 && (
+            <p className="text-xs text-slate-500 mt-2">
+              Nenhuma categoria de procedimento ativa nesta clínica. Cadastre procedimentos para liberar os templates de anamnese correspondentes.
+            </p>
+          )}
         </div>
 
         {template === "reabilitacao" && (
-          <TemplateReabilitacao form={form} f={f} sv={sv} sections={sections} toggle={toggle} />
+          <TemplateReabilitacao form={form} f={f} sv={sv} sections={sections} toggle={toggle} readOnly={!canEdit} />
         )}
 
         {template === "esteticaFacial" && (
-          <TemplateEsteticaFacial form={form} setForm={setForm} f={f} sv={sv} sections={sections} toggle={toggle} />
+          <TemplateEsteticaFacial form={form} setForm={setForm} f={f} sv={sv} sections={sections} toggle={toggle} readOnly={!canEdit} />
         )}
 
         {template === "esteticaCorporal" && (
-          <TemplateEsteticaCorporal form={form} setForm={setForm} f={f} sv={sv} sections={sections} toggle={toggle} />
+          <TemplateEsteticaCorporal form={form} setForm={setForm} f={f} sv={sv} sections={sections} toggle={toggle} readOnly={!canEdit} />
+        )}
+
+        {template === "pilates" && (
+          <TemplatePilates form={form} f={f} sv={sv} sections={sections} toggle={toggle} readOnly={!canEdit} />
         )}
 
         {/* ── Exam Attachments ── */}
         <ExamAttachmentsSection patientId={patientId} />
 
-        {/* ── Floating/Bottom Save Bar ── */}
-        <div className="sticky bottom-16 lg:bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end z-10">
-          <Button variant="outline" onClick={() => setForm(emptyForm)} className="w-full sm:w-auto h-10 rounded-xl">
-            Limpar Campos
-          </Button>
-          <Button className="w-full sm:w-auto h-10 sm:px-8 rounded-xl gap-1.5" disabled={mutation.isPending} onClick={handleSave}>
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
-            Salvar Anamnese
-          </Button>
-        </div>
+        {/* ── Floating/Bottom Save Bar (apenas para profissional) ── */}
+        {canEdit && (
+          <div className="sticky bottom-16 lg:bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end z-10">
+            <Button variant="outline" onClick={() => setForm(emptyForm)} className="w-full sm:w-auto h-10 rounded-xl">
+              Limpar Campos
+            </Button>
+            <Button className="w-full sm:w-auto h-10 sm:px-8 rounded-xl gap-1.5" disabled={mutation.isPending} onClick={handleSave}>
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
+              Salvar Anamnese
+            </Button>
+          </div>
+        )}
 
       </CardContent>
     </Card>

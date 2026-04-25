@@ -61,6 +61,15 @@ export const anamnesisTable = pgTable("anamnesis", {
   bodyContraindications: text("body_contraindications"),
   previousBodyTreatments: text("previous_body_treatments"),
 
+  // ── Pilates fields ──
+  pilatesExperience: text("pilates_experience"),
+  pilatesGoals: text("pilates_goals"),
+  posturalAlterations: text("postural_alterations"),
+  pregnancyStatus: text("pregnancy_status"),
+  previousInjuries: text("previous_injuries"),
+  mobilityRestrictions: text("mobility_restrictions"),
+  respiratoryConditions: text("respiratory_conditions"),
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

@@ -56,14 +56,14 @@ router.use(asyncHandler(async (req: AuthRequest, _res, next: NextFunction) => {
 
 // ─── Anamnesis ────────────────────────────────────────────────────────────────
 
-router.get("/anamnesis", requirePermission("medical.read"), asyncHandler(async (req: Request<P>, res: Response) => {
+router.get("/anamnesis", requirePermission("anamnesis.read"), asyncHandler(async (req: Request<P>, res: Response) => {
   const patientId = patientIdParam(req);
   const { type, all } = req.query as { type?: string; all?: string };
   const data = await svc.getAnamnesisForPatient(patientId, { type, all: all === "true" });
   res.json(data);
 }));
 
-router.post("/anamnesis", requirePermission("medical.write"), asyncHandler(async (req: Request<P>, res: Response) => {
+router.post("/anamnesis", requirePermission("anamnesis.write"), asyncHandler(async (req: Request<P>, res: Response) => {
   const patientId = patientIdParam(req);
   const body = validateBody(anamnesisSchema, req.body, res);
   if (!body) return;
