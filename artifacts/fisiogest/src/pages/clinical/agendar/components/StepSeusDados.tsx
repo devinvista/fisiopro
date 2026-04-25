@@ -193,6 +193,10 @@ export function StepSeusDados({
               <Input
                 autoFocus={typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches}
                 required
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={14}
                 placeholder="000.000.000-00"
                 value={form.cpf}
                 onChange={(e) => handleCpfChange(e.target.value)}
@@ -215,6 +219,9 @@ export function StepSeusDados({
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <Input
                 required
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="(11) 99999-0000"
                 value={form.phone}
                 onChange={(e) => handlePhoneChange(e.target.value)}
@@ -249,6 +256,8 @@ export function StepSeusDados({
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <Input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 placeholder="seu@email.com (opcional)"
                 value={form.email}
                 onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}

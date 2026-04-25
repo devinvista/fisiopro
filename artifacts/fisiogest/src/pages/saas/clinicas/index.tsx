@@ -425,11 +425,13 @@ export default function Clinicas() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">CPF *</Label>
                   <Input placeholder="000.000.000-00" value={addUserForm.cpf}
+                    type="text" inputMode="numeric" autoComplete="off" maxLength={14}
                     onChange={(e) => setAddUserForm((p) => ({ ...p, cpf: maskCpf(e.target.value) }))} required />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">E-mail</Label>
-                  <Input type="email" placeholder="email@clinica.com" value={addUserForm.email}
+                  <Input type="email" inputMode="email" autoComplete="off"
+                    placeholder="email@clinica.com" value={addUserForm.email}
                     onChange={(e) => setAddUserForm((p) => ({ ...p, email: e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
@@ -541,7 +543,8 @@ export default function Clinicas() {
             </div>
             <div className="space-y-1.5">
               <Label>E-mail</Label>
-              <Input type="email" value={editUserForm.email}
+              <Input type="email" inputMode="email" autoComplete="off"
+                value={editUserForm.email}
                 onChange={(e) => setEditUserForm((p) => ({ ...p, email: e.target.value }))}
                 placeholder="Deixe em branco para manter" />
             </div>

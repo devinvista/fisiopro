@@ -585,6 +585,10 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             <Label>CPF *</Label>
             <Input
               required
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={14}
               value={formData.cpf}
               onChange={(e) => setFormData({ ...formData, cpf: maskCpf(e.target.value) })}
               placeholder="000.000.000-00"
@@ -595,6 +599,9 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             <Label>Telefone *</Label>
             <Input
               required
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
               placeholder="(11) 99999-0000"
@@ -607,6 +614,8 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             <Label>E-mail</Label>
             <Input
               type="email"
+              inputMode="email"
+              autoComplete="off"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="nome@exemplo.com"

@@ -398,6 +398,7 @@ export function UsuariosSection() {
                 id="user-cpf"
                 type="text"
                 inputMode="numeric"
+                autoComplete="off"
                 value={form.cpf}
                 onChange={(e) => setForm((p) => ({ ...p, cpf: maskCpf(e.target.value) }))}
                 placeholder="000.000.000-00"
@@ -414,6 +415,8 @@ export function UsuariosSection() {
               <Input
                 id="user-email"
                 type="email"
+                inputMode="email"
+                autoComplete="off"
                 value={form.email}
                 onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                 placeholder="usuario@clinica.com.br"

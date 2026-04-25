@@ -329,6 +329,9 @@ export function ClinicaSection() {
                 </Label>
                 <Input
                   id="clinic-cpf"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
                   value={formData.cpf}
                   onChange={(e) => setFormData((p) => ({ ...p, cpf: maskCpf(e.target.value) }))}
                   placeholder="000.000.000-00"
@@ -355,6 +358,10 @@ export function ClinicaSection() {
                 </Label>
                 <Input
                   id="clinic-cnpj"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={18}
                   value={formData.cnpj}
                   onChange={(e) => setFormData((p) => ({ ...p, cnpj: maskCnpj(e.target.value) }))}
                   placeholder="00.000.000/0001-00"
@@ -403,6 +410,9 @@ export function ClinicaSection() {
               </Label>
               <Input
                 id="clinic-phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData((p) => ({ ...p, phone: maskPhone(e.target.value) }))}
                 placeholder="(11) 99999-9999"
@@ -415,6 +425,8 @@ export function ClinicaSection() {
               <Input
                 id="clinic-email"
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 value={formData.email}
                 onChange={(e) => setFormData((p) => ({ ...p, email: e.target.value }))}
                 placeholder="contato@clinica.com"

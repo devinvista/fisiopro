@@ -387,6 +387,7 @@ export default function Register() {
               <Input
                 id="email"
                 type="email"
+                inputMode="email"
                 placeholder="seu@email.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}

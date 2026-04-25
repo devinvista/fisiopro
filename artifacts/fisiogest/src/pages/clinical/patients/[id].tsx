@@ -248,6 +248,10 @@ function EditPatientDialog({
                 <Input
                   required
                   disabled={!isAdmin}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={14}
                   value={form.cpf}
                   onChange={(e) => setForm({ ...form, cpf: maskCpf(e.target.value) })}
                   placeholder="000.000.000-00"
@@ -265,6 +269,9 @@ function EditPatientDialog({
                 <Label className="text-sm font-medium text-slate-700">Telefone *</Label>
                 <Input
                   required
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })}
                   placeholder="(11) 99999-0000"
@@ -275,6 +282,8 @@ function EditPatientDialog({
                 <Label className="text-sm font-medium text-slate-700">E-mail</Label>
                 <Input
                   type="email"
+                  inputMode="email"
+                  autoComplete="off"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   className="h-10"

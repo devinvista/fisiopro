@@ -117,6 +117,7 @@ export function ClinicForm({
           <div className="space-y-1.5">
             <Label className="text-xs flex items-center gap-1"><Hash className="h-3 w-3" /> CPF</Label>
             <Input value={formData.cpf}
+              type="text" inputMode="numeric" autoComplete="off"
               onChange={(e) => setFormData((p: any) => ({ ...p, cpf: maskCpf(e.target.value) }))}
               placeholder="000.000.000-00" maxLength={14} />
           </div>
@@ -132,6 +133,7 @@ export function ClinicForm({
           <div className="space-y-1.5">
             <Label className="text-xs flex items-center gap-1"><Hash className="h-3 w-3" /> CNPJ</Label>
             <Input value={formData.cnpj}
+              type="text" inputMode="numeric" autoComplete="off" maxLength={18}
               onChange={(e) => setFormData((p: any) => ({ ...p, cnpj: maskCnpj(e.target.value) }))}
               placeholder="00.000.000/0001-00" />
           </div>
@@ -156,12 +158,14 @@ export function ClinicForm({
         <div className="space-y-1.5">
           <Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone</Label>
           <Input value={formData.phone}
+            type="tel" inputMode="tel" autoComplete="off"
             onChange={(e) => setFormData((p: any) => ({ ...p, phone: maskPhone(e.target.value) }))}
             placeholder="(11) 99999-9999" />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3" /> E-mail</Label>
-          <Input type="email" value={formData.email}
+          <Input type="email" inputMode="email" autoComplete="off"
+            value={formData.email}
             onChange={(e) => setFormData((p: any) => ({ ...p, email: e.target.value }))}
             placeholder="contato@clinica.com" />
         </div>
