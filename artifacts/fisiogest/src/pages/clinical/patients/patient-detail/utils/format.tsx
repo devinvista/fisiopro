@@ -55,6 +55,13 @@ export function todayBRTDate(): Date {
   );
 }
 
+/** Retorna a data atual em BRT no formato "YYYY-MM-DD" (compatível com a API). */
+export function todayBRTString(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date());
+}
+
 export const statusConfig: Record<
   string,
   { label: string; color: string; icon: React.ReactNode }

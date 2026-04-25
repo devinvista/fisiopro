@@ -64,6 +64,7 @@ import {
   formatCurrency,
   fmtCur,
   todayBRTDate,
+  todayBRTString,
   InfoBlock,
 } from "../utils/format";
 import {
@@ -185,7 +186,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     setCreatingNew(true);
     try {
       const newPlan = await apiSendJson<any>(`/api/patients/${patientId}/treatment-plans`, "POST", {
-        startDate: todayBRTDate(),
+        startDate: todayBRTString(),
         status: "ativo",
       });
       queryClient.invalidateQueries({ queryKey: plansKey });

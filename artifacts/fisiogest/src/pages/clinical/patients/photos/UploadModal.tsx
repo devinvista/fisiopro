@@ -172,14 +172,43 @@ export function UploadModal({
     let successCount = 0;
     let firstErrorMessage: string | null = null;
 
+    const errorMessage = (err: unknown, fallback: string): string => {
+      if (err instanceof Error && err.message) return err.message;
+      if (typeof err === "string" && err) return err;
+      if (err && typeof err === "object") {
+        const anyErr = err as { message?: unknown; error?: unknown };
+        if (typeof anyErr.message === "string" && anyErr.message) return anyErr.message;
+        if (typeof anyErr.error === "string" && anyErr.error) return anyErr.error;
+      }
+      return fallback;
+    };
+
+    const NORMALIZED_MIME: Record<string, string> = {
+      "image/jpg": "image/jpeg",
+      "image/heic": "image/jpeg",
+      "image/heif": "image/jpeg",
+    };
+
     for (let i = 0; i < files.length; i++) {
       const entry = files[i];
       try {
         setFileProgress(i, "compressing", 0);
-        const compressed = await imageCompression(entry.file, COMPRESSION_OPTIONS);
+
+        // Compressão é "best effort". Falhas (ex.: HEIC sem decoder, blob corrompido)
+        // não devem bloquear o upload — usamos o arquivo original como fallback.
+        let toUpload: File | Blob = entry.file;
+        try {
+          const compressed = await imageCompression(entry.file, COMPRESSION_OPTIONS);
+          if (compressed && compressed.size > 0) toUpload = compressed;
+        } catch (compressionErr) {
+          console.warn(
+            `[upload] compressão falhou para "${entry.file.name}", enviando arquivo original.`,
+            compressionErr,
+          );
+        }
 
         const uploadForm = new FormData();
-        uploadForm.append("file", compressed, entry.file.name);
+        uploadForm.append("file", toUpload, entry.file.name);
         uploadForm.append("folder", `fisiogest/patients/${patientId}/photos`);
 
         setFileProgress(i, "uploading", 0);
@@ -188,7 +217,8 @@ export function UploadModal({
         });
 
         setFileProgress(i, "saving", 100);
-        const contentType = compressed.type === "image/jpg" ? "image/jpeg" : compressed.type;
+        const rawType = (toUpload as Blob).type || entry.file.type || "image/jpeg";
+        const contentType = NORMALIZED_MIME[rawType] ?? rawType;
         const payload: Record<string, unknown> = {
           objectPath: uploaded.secure_url,
           originalFilename: entry.file.name,
@@ -206,13 +236,14 @@ export function UploadModal({
         });
         if (!res.ok) {
           const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody?.error || errBody?.message || "Falha ao salvar foto");
+          throw new Error(errBody?.error || errBody?.message || `Falha ao salvar foto (HTTP ${res.status})`);
         }
 
         setFileProgress(i, "done", 100);
         successCount++;
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Erro ao enviar foto";
+        console.error(`[upload] falha no envio de "${entry.file.name}":`, err);
+        const message = errorMessage(err, "Erro ao enviar foto");
         setFileProgress(i, "error", 0, message);
         if (!firstErrorMessage) firstErrorMessage = message;
       }
