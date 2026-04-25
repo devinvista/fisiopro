@@ -378,7 +378,7 @@ export function AgendasSection() {
 
             <div className="space-y-2">
               <Label>Dias de funcionamento</Label>
-              <div className="flex gap-2 flex-wrap">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {DAYS_OF_WEEK.map((day) => {
                   const active = form.workingDays.includes(day.value);
                   return (
@@ -386,7 +386,7 @@ export function AgendasSection() {
                       key={day.value}
                       type="button"
                       onClick={() => toggleDay(day.value)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border
+                      className={`h-10 rounded-lg text-xs sm:text-sm font-medium transition-all border flex items-center justify-center
                         ${
                           active
                             ? "border-primary bg-primary text-primary-foreground"

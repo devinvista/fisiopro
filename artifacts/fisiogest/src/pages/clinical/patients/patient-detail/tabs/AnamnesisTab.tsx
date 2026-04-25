@@ -169,7 +169,7 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
         <ExamAttachmentsSection patientId={patientId} />
 
         {/* ── Floating/Bottom Save Bar ── */}
-        <div className="sticky bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end z-10">
+        <div className="sticky bottom-16 lg:bottom-0 pt-4 pb-2 bg-white/80 backdrop-blur-sm border-t border-slate-100 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end z-10">
           <Button variant="outline" onClick={() => setForm(emptyForm)} className="w-full sm:w-auto h-10 rounded-xl">
             Limpar Campos
           </Button>

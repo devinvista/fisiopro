@@ -201,18 +201,18 @@ export function ClinicsTab() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 border-b border-slate-100">
                 <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Clínica</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CNPJ</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plano</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden md:table-cell">CNPJ</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden sm:table-cell">Plano</TableHead>
                 <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Status</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Pagamento</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Mensalidade</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vencimento</TableHead>
-                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Ativa</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center hidden sm:table-cell">Pagamento</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right hidden md:table-cell">Mensalidade</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hidden lg:table-cell">Vencimento</TableHead>
+                <TableHead className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center hidden md:table-cell">Ativa</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -236,8 +236,8 @@ export function ClinicsTab() {
                         <p className="text-xs text-slate-400">{row.clinic.email ?? "—"}</p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-500 tabular-nums">{row.clinic.cnpj ?? "—"}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-sm text-slate-500 tabular-nums hidden md:table-cell">{row.clinic.cnpj ?? "—"}</TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {row.plan ? (
                         <div className="flex items-center gap-1.5">
                           <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ backgroundColor: tier.color + "18" }}>
@@ -261,16 +261,16 @@ export function ClinicsTab() {
                         </div>
                       ) : <span className="text-slate-400 text-xs">—</span>}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center hidden sm:table-cell">
                       {row.sub ? <PaymentBadge status={row.sub.paymentStatus} /> : <span className="text-slate-400 text-xs">—</span>}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums font-semibold text-slate-700 text-sm">
+                    <TableCell className="text-right tabular-nums font-semibold text-slate-700 text-sm hidden md:table-cell">
                       {row.sub?.amount ? fmtCurrency(row.sub.amount) : row.plan ? fmtCurrency(row.plan.price) : "—"}
                     </TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    <TableCell className="text-sm text-slate-500 hidden lg:table-cell">
                       {row.sub?.status === "trial" ? fmtDate(row.sub.trialEndDate) : fmtDate(row.sub?.currentPeriodEnd)}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center hidden md:table-cell">
                       <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${row.clinic.isActive ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"}`}>
                         {row.clinic.isActive ? "✓" : "✗"}
                       </span>

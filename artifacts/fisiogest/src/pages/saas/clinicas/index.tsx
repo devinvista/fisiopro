@@ -467,7 +467,7 @@ export default function Clinicas() {
                   Nenhum usuário nesta clínica
                 </div>
               ) : (
-                <div className="border border-border rounded-xl overflow-hidden">
+                <div className="border border-border rounded-xl overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">

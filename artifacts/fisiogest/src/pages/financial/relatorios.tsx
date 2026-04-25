@@ -251,6 +251,8 @@ export default function Relatorios() {
                     tick={{ fontSize: 11, fill: "#94a3b8" }}
                     axisLine={false}
                     tickLine={false}
+                    interval="preserveStartEnd"
+                    minTickGap={8}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: "#94a3b8" }}

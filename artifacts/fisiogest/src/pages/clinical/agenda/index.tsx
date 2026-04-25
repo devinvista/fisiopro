@@ -227,7 +227,7 @@ export default function Agenda() {
           )}
 
           {nav.view !== "month" && (
-            <>
+            <div className="overflow-x-auto">
               <WeekHeader
                 weekDays={nav.weekDays}
                 daysCount={nav.daysCount}
@@ -244,7 +244,10 @@ export default function Agenda() {
                 <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
                   <div
                     className="grid relative"
-                    style={{ gridTemplateColumns: `56px repeat(${nav.daysCount}, 1fr)` }}
+                    style={{
+                      gridTemplateColumns: `56px repeat(${nav.daysCount}, minmax(96px, 1fr))`,
+                      minWidth: nav.daysCount > 1 ? `${56 + nav.daysCount * 96}px` : undefined,
+                    }}
                   >
                     <div className="border-r border-slate-200">
                       {config.hours.map((h) => (
@@ -290,7 +293,7 @@ export default function Agenda() {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

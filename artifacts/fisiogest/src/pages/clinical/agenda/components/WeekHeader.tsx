@@ -22,7 +22,10 @@ export function WeekHeader({
   return (
     <div
       className="grid border-b border-slate-200 bg-slate-50/70"
-      style={{ gridTemplateColumns: `56px repeat(${daysCount}, 1fr)` }}
+      style={{
+        gridTemplateColumns: `56px repeat(${daysCount}, minmax(96px, 1fr))`,
+        minWidth: daysCount > 1 ? `${56 + daysCount * 96}px` : undefined,
+      }}
     >
       <div className="border-r border-slate-200" />
       {weekDays.map((day, i) => {
