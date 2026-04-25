@@ -45,7 +45,7 @@ export function OrcadoRealizadoTab({ month, year }: { month: number; year: numbe
       )}
 
       {/* Revenue comparison */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         {/* Revenue */}
         <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white">
           <CardHeader className="pb-3">

@@ -445,7 +445,7 @@ export default function Dashboard() {
         )}
 
         {/* ── Appointment Lists ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 min-w-0">
           {/* Today's Appointments */}
           <Card className="border border-slate-100 shadow-sm rounded-2xl overflow-hidden bg-white">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">

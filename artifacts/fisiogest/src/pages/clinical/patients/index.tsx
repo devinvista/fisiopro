@@ -241,7 +241,7 @@ export default function PatientsList() {
 
 function CardView({ patients }: { patients: Patient[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 min-w-0">
       {patients.map((patient) => {
         const age = calcAge(patient.birthDate);
         const initials = patient.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
