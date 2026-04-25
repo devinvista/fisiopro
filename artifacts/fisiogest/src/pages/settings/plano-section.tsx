@@ -110,7 +110,7 @@ export function PlanoSection() {
 
       {isLoading && (
         <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
+          <CardContent className="py-10 px-6 sm:p-12 text-center text-muted-foreground">
             Carregando planos...
           </CardContent>
         </Card>
@@ -118,7 +118,7 @@ export function PlanoSection() {
 
       {!isLoading && sortedPlans.length === 0 && (
         <Card>
-          <CardContent className="p-12 text-center text-muted-foreground">
+          <CardContent className="py-10 px-6 sm:p-12 text-center text-muted-foreground">
             Nenhum plano disponível no momento.
           </CardContent>
         </Card>

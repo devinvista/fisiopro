@@ -243,7 +243,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
           {/* History */}
           {records.length === 0 ? (
             <Card className="border-dashed border-2 border-slate-200">
-              <CardContent className="p-12 text-center text-slate-400">
+              <CardContent className="py-10 px-6 sm:p-12 text-center text-slate-400">
                 <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-40" />
                 <p className="font-medium">Nenhum lançamento registrado</p>
                 <p className="text-xs mt-1">As sessões confirmadas ou concluídas geram créditos automaticamente.</p>

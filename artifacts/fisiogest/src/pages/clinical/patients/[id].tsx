@@ -399,7 +399,7 @@ export default function PatientDetail() {
   if (isLoading) {
     return (
       <AppLayout title="Carregando…">
-        <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
+        <div className="flex justify-center py-20 px-6"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
       </AppLayout>
     );
   }
@@ -407,7 +407,7 @@ export default function PatientDetail() {
   if (!patient) {
     return (
       <AppLayout title="Paciente não encontrado">
-        <div className="flex flex-col items-center justify-center p-20 text-slate-400">
+        <div className="flex flex-col items-center justify-center py-16 px-6 sm:py-20 text-slate-400">
           <User className="w-16 h-16 mb-4 opacity-40" />
           <p className="text-lg font-medium">Paciente não encontrado</p>
         </div>

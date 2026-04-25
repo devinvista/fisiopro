@@ -135,7 +135,7 @@ export function EditRecordModal({ open, record, onClose, onSuccess }: {
             <Input value={description} onChange={e => setDescription(e.target.value)} className="rounded-xl" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Vencimento</Label>
               <DatePickerPTBR value={dueDate} onChange={(v) => setDueDate(v)} className="rounded-xl h-9" />

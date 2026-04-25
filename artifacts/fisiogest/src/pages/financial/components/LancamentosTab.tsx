@@ -345,7 +345,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
 
         {/* If no pie data, show a placeholder or nothing */}
         {pieData.length === 0 && areaData.length === 0 && (
-          <div className="xl:col-span-5 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center p-10 text-center bg-slate-50">
+          <div className="xl:col-span-5 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center py-8 px-6 sm:p-10 text-center bg-slate-50">
             <div>
               <BarChart3 className="w-8 h-8 mx-auto mb-2 text-slate-300" />
               <p className="text-sm text-slate-400 font-medium">Nenhum dado para exibir nos gráficos</p>

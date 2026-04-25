@@ -378,7 +378,7 @@ export function SubscriptionsTab() {
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-16 rounded-2xl bg-slate-100 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
+        <div className="bg-white rounded-2xl border border-slate-100 py-10 px-6 sm:p-12 text-center">
           <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
             <CreditCard className="w-6 h-6 text-slate-400" />
           </div>

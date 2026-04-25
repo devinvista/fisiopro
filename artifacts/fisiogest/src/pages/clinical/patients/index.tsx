@@ -205,7 +205,7 @@ export default function PatientsList() {
             ))}
           </div>
         ) : patients.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center shadow-sm">
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 py-12 px-6 sm:p-16 text-center shadow-sm">
             <div className="bg-primary/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
               <UserPlus className="w-10 h-10 text-primary" />
             </div>
