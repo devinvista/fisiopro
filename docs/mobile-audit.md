@@ -187,6 +187,30 @@ Aplicar em toda a base — economiza tempo a longo prazo:
 
 ---
 
+## Atualização — Correções aplicadas (rodada 3 — 26/04/2026)
+
+Fechamento dos itens pendentes restantes do audit:
+
+* **#3 SuperAdmin — tabela de clínicas** (`pages/saas/superadmin/components/ClinicsTab.tsx`): adicionada lista de cards `sm:hidden` (Clínica + e-mail + CNPJ no topo, badges de plano/status/pagamento na linha do meio, vencimento + valor no rodapé). Tabela permanece como `hidden sm:block`.
+* **#7 Banner de agendamento online** (`pages/dashboard.tsx:354`): container vira `flex-col sm:flex-row`; em mobile os botões "Copiar" e "Abrir" ocupam largura total (`flex-1 sm:flex-none`).
+* **#17 Lista de pacientes — colunas** (`pages/clinical/patients/index.tsx:354`): breakpoint da coluna de 140 px movido de `sm:` para `md:`.
+* **#19 Tabs do financeiro — fade** (`pages/financial/index.tsx:62`): wrapper `relative`, scroll interno com scrollbar oculta + `pr-6`, gradiente `bg-gradient-to-l from-background` na borda direita visível só em `<sm`.
+* **#22 Cards de tipo de estabelecimento** (`pages/settings/configuracoes/components/ClinicaSection.tsx:213`): em mobile vira layout horizontal compacto (`flex-row sm:flex-col`), padding reduzido (`p-3 sm:p-4`), ícone menor (`h-5 w-5 sm:h-6 sm:w-6`).
+* **#24 Mockup do dashboard na landing** (`components/landing/HeroSection.tsx:55`): mini-stats agora `grid-cols-2 sm:grid-cols-3`, terceiro card "Hoje" oculto em `<sm` para evitar aperto.
+
+Itens reavaliados que **já estavam corrigidos** (apesar do audit original):
+* **#6 e #11** — `KpiCard` já usa `text-lg sm:text-2xl tabular-nums break-words`, exatamente a recomendação.
+* **#13** — `ListView` do catálogo já usa `opacity-100 lg:opacity-0 lg:group-hover:opacity-100`.
+* **#14** — `PackageFormModal` já tem `flex flex-col` + body `flex-1 overflow-y-auto` + footer `shrink-0`.
+* **#18** — Form de novo paciente já usa `grid-cols-1 sm:grid-cols-2`.
+* **#20** — Slots de horário já usam `grid-cols-3 sm:grid-cols-4 md:grid-cols-6`.
+* **#21** — Login já tem `pr-20` no input com badge.
+* **#26** — Preço com risco usa `<span>` inline + `<span class="block">` discount, já empilhando.
+
+**Resultado final:** 26/26 itens do audit endereçados.
+
+---
+
 ## Atualização — Correções aplicadas (rodada 2)
 
 Padrões idênticos aos das telas Agenda/Histórico foram corrigidos em outras

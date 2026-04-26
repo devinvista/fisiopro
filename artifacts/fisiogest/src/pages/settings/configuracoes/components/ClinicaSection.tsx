@@ -207,18 +207,18 @@ export function ClinicaSection() {
           <CardDescription>Define o modelo jurídico e os campos de identificação exibidos nos documentos.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
             <button
               type="button"
               onClick={() => setFormData((p) => ({ ...p, type: "autonomo" }))}
-              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+              className={`flex flex-row sm:flex-col items-center gap-3 sm:gap-2 rounded-xl border-2 p-3 sm:p-4 transition-all cursor-pointer text-left sm:text-center ${
                 isAutonomo
                   ? "border-primary bg-primary/5 text-primary"
                   : "border-slate-200 hover:border-slate-300 text-slate-600"
               }`}
             >
-              <User2 className="h-6 w-6" />
-              <div className="text-center">
+              <User2 className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
+              <div className="min-w-0 sm:text-center">
                 <p className="text-sm font-semibold">Profissional Autônomo</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">CPF · CREFITO / CREF individual</p>
               </div>
@@ -226,14 +226,14 @@ export function ClinicaSection() {
             <button
               type="button"
               onClick={() => setFormData((p) => ({ ...p, type: "clinica" }))}
-              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all cursor-pointer ${
+              className={`flex flex-row sm:flex-col items-center gap-3 sm:gap-2 rounded-xl border-2 p-3 sm:p-4 transition-all cursor-pointer text-left sm:text-center ${
                 !isAutonomo
                   ? "border-primary bg-primary/5 text-primary"
                   : "border-slate-200 hover:border-slate-300 text-slate-600"
               }`}
             >
-              <Building2 className="h-6 w-6" />
-              <div className="text-center">
+              <Building2 className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
+              <div className="min-w-0 sm:text-center">
                 <p className="text-sm font-semibold">Clínica / Empresa</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">CNPJ · Responsável Técnico (RT)</p>
               </div>

@@ -348,7 +348,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Online Booking Portal (compact banner) ── */}
-        <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-2xl px-5 py-3.5 flex flex-wrap items-center gap-4 shadow-sm">
+        <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 shadow-sm">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="p-2 bg-white/20 rounded-xl shrink-0">
               <Globe className="w-4 h-4 text-white" />
@@ -358,21 +358,21 @@ export default function Dashboard() {
               <p className="text-xs text-teal-100 truncate hidden sm:block">{bookingUrl}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <Button
               size="sm"
               variant="secondary"
-              className="bg-white/20 hover:bg-white/30 text-white border-0 h-8 rounded-lg gap-1.5 text-xs"
+              className="bg-white/20 hover:bg-white/30 text-white border-0 h-8 rounded-lg gap-1.5 text-xs flex-1 sm:flex-none"
               onClick={copyBookingUrl}
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? "Copiado!" : "Copiar"}
             </Button>
-            <a href={bookingUrl} target="_blank" rel="noopener noreferrer">
+            <a href={bookingUrl} target="_blank" rel="noopener noreferrer" className="flex-1 sm:flex-none">
               <Button
                 size="sm"
                 variant="secondary"
-                className="bg-white/20 hover:bg-white/30 text-white border-0 h-8 rounded-lg gap-1.5 text-xs"
+                className="bg-white/20 hover:bg-white/30 text-white border-0 h-8 rounded-lg gap-1.5 text-xs w-full sm:w-auto"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 Abrir

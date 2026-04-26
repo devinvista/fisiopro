@@ -201,7 +201,75 @@ export function ClinicsTab() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          {/* Mobile: cards list */}
+          <ul className="sm:hidden divide-y divide-slate-100">
+            {filtered.map((row) => {
+              const tier = row.plan ? getTierConfig(row.plan.name) : getTierConfig("");
+              const TierIcon = tier.icon;
+              const trialExpiring = row.sub?.status === "trial" && row.sub.trialEndDate
+                ? differenceInDays(parseISO(row.sub.trialEndDate), new Date())
+                : null;
+              const rowBg =
+                row.sub?.status === "suspended" || row.sub?.status === "cancelled" ? "bg-red-50/40" :
+                row.sub?.paymentStatus === "overdue" ? "bg-amber-50/40" : "";
+              return (
+                <li key={row.clinic.id} className={`p-4 ${rowBg}`}>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-slate-800 text-sm truncate">{row.clinic.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{row.clinic.email ?? "—"}</p>
+                      {row.clinic.cnpj && (
+                        <p className="text-[11px] text-slate-400 tabular-nums mt-0.5">CNPJ: {row.clinic.cnpj}</p>
+                      )}
+                    </div>
+                    <span
+                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 ${
+                        row.clinic.isActive ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
+                      }`}
+                      title={row.clinic.isActive ? "Ativa" : "Inativa"}
+                    >
+                      {row.clinic.isActive ? "✓" : "✗"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {row.plan ? (
+                      <div
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium"
+                        style={{ backgroundColor: tier.color + "12", color: tier.color }}
+                      >
+                        <TierIcon className="w-3 h-3" />
+                        {row.plan.displayName}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">Sem plano</span>
+                    )}
+                    {row.sub && <StatusBadge status={row.sub.status} />}
+                    {row.sub && <PaymentBadge status={row.sub.paymentStatus} />}
+                    {trialExpiring !== null && trialExpiring <= 7 && (
+                      <span className={`text-[10px] font-bold ${trialExpiring <= 3 ? "text-red-500" : "text-amber-500"}`}>
+                        {trialExpiring < 0 ? "Trial expirado" : `Trial: ${trialExpiring}d`}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100">
+                    <span className="text-[11px] text-slate-400">
+                      {row.sub?.status === "trial" ? "Fim trial: " : "Vencimento: "}
+                      {fmtDate(row.sub?.status === "trial" ? row.sub?.trialEndDate : row.sub?.currentPeriodEnd)}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700 tabular-nums">
+                      {row.sub?.amount ? fmtCurrency(row.sub.amount) : row.plan ? fmtCurrency(row.plan.price) : "—"}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* ≥sm: tabela */}
+          <div className="hidden sm:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 border-b border-slate-100">
@@ -280,6 +348,7 @@ export function ClinicsTab() {
               })}
             </TableBody>
           </Table>
+          </div>
           <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
             <p className="text-xs text-slate-400">
               {filtered.length} de {rows.length} clínicas

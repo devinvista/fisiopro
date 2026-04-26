@@ -56,8 +56,9 @@ export default function Financial() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="mb-6 overflow-x-auto">
-          <TabsList className="inline-flex bg-slate-100/80 rounded-xl p-1 gap-1 h-auto min-w-max">
+        <div className="relative mb-6">
+          <div className="overflow-x-auto pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList className="inline-flex bg-slate-100/80 rounded-xl p-1 gap-1 h-auto min-w-max">
             {[
               { value: "lancamentos", icon: <Receipt className="w-3.5 h-3.5" />, label: "Lançamentos" },
               { value: "custos", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Custo/Procedimento" },
@@ -75,6 +76,8 @@ export default function Financial() {
               </TabsTrigger>
             ))}
           </TabsList>
+          </div>
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
         </div>
 
         <TabsContent value="lancamentos">

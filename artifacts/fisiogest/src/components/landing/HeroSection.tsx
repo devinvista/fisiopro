@@ -52,13 +52,13 @@ function DashboardMockup() {
             ))}
           </div>
           <div className="flex-1 p-4 overflow-hidden">
-            <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
               {[
-                { label: "Receita", value: "R$ 12.450", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-                { label: "Pacientes", value: "142", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10" },
-                { label: "Hoje", value: "8 atend.", icon: Calendar, color: "text-teal-400", bg: "bg-teal-500/10" },
+                { label: "Receita", value: "R$ 12.450", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", hideOnMobile: false },
+                { label: "Pacientes", value: "142", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10", hideOnMobile: false },
+                { label: "Hoje", value: "8 atend.", icon: Calendar, color: "text-teal-400", bg: "bg-teal-500/10", hideOnMobile: true },
               ].map((k, i) => (
-                <div key={i} className="bg-white/5 rounded-xl p-2.5 border border-white/5">
+                <div key={i} className={`bg-white/5 rounded-xl p-2.5 border border-white/5 ${k.hideOnMobile ? "hidden sm:block" : ""}`}>
                   <div className={`w-5 h-5 rounded-md ${k.bg} flex items-center justify-center mb-1.5`}>
                     <k.icon className={`w-3 h-3 ${k.color}`} />
                   </div>

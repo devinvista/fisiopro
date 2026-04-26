@@ -348,7 +348,7 @@ function PatientRow({ patient, isLast }: { patient: Patient; isLast: boolean }) 
       <div
         className={cn(
           "grid items-center px-4 py-3 hover:bg-primary/[0.03] transition-colors cursor-pointer group",
-          "grid-cols-[1fr_36px] sm:grid-cols-[1fr_140px_36px] lg:grid-cols-[2fr_110px_140px_160px_120px_36px]",
+          "grid-cols-[1fr_36px] md:grid-cols-[1fr_140px_36px] lg:grid-cols-[2fr_110px_140px_160px_120px_36px]",
           !isLast && "border-b border-slate-100"
         )}
       >
