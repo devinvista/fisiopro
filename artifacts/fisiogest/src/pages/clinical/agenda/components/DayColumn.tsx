@@ -1,6 +1,6 @@
 import { format, isToday, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Ban, Pencil, Loader2, CheckCircle, Globe, Calendar as CalIcon } from "lucide-react";
+import { Ban, Pencil, Loader2, CheckCircle, Globe, Calendar as CalIcon, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Appointment } from "@workspace/api-client-react";
 import { CurrentTimeLine } from "./CurrentTimeLine";
@@ -377,6 +377,15 @@ export function DayColumn({
                 style={{ backgroundColor: aptScheduleColor }}
                 title={schedules.find((s) => s.id === apt.scheduleId)?.name}
               />
+            )}
+            {((apt as any).rescheduleCount ?? 0) > 0 && !tiny && (
+              <div
+                className="absolute top-1 right-1 z-10 flex items-center gap-0.5 bg-white/25 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-sm"
+                title={`Remarcado ${(apt as any).rescheduleCount}×`}
+              >
+                <Repeat className="w-2.5 h-2.5" />
+                {(apt as any).rescheduleCount}×
+              </div>
             )}
             <div className="px-2.5 py-2 h-full flex flex-col text-white gap-0.5">
               {tiny ? (
