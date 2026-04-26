@@ -100,23 +100,37 @@ export interface UpdatePatientRequest {
   notes?: string;
 }
 
-export type ProcedureCategory = typeof ProcedureCategory[keyof typeof ProcedureCategory];
+export type ProcedureModalidade = typeof ProcedureModalidade[keyof typeof ProcedureModalidade];
 
 
-export const ProcedureCategory = {
-  fisioterapia: 'fisioterapia',
-  estetica: 'estetica',
-  pilates: 'pilates',
+export const ProcedureModalidade = {
+  individual: 'individual',
+  dupla: 'dupla',
+  grupo: 'grupo',
+} as const;
+
+export type ProcedureBillingType = typeof ProcedureBillingType[keyof typeof ProcedureBillingType];
+
+
+export const ProcedureBillingType = {
+  porSessao: 'porSessao',
+  mensal: 'mensal',
 } as const;
 
 export interface Procedure {
   id: number;
   name: string;
-  category: ProcedureCategory;
+  category: string;
+  modalidade?: ProcedureModalidade;
   durationMinutes: number;
   price: number;
   cost?: number;
-  description?: string;
+  description?: string | null;
+  maxCapacity?: number;
+  onlineBookingEnabled?: boolean;
+  billingType?: ProcedureBillingType;
+  monthlyPrice?: number | null;
+  billingDay?: number | null;
   createdAt: string;
 }
 
@@ -155,6 +169,9 @@ export interface Appointment {
   id: number;
   patientId: number;
   procedureId: number;
+  professionalId?: number | null;
+  scheduleId?: number | null;
+  source?: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -204,6 +221,8 @@ export const UpdateAppointmentRequestStatus = {
   concluido: 'concluido',
   cancelado: 'cancelado',
   faltou: 'faltou',
+  compareceu: 'compareceu',
+  remarcado: 'remarcado',
 } as const;
 
 export interface UpdateAppointmentRequest {
@@ -358,12 +377,20 @@ export interface CreateAnamnesisRequest {
 export interface Evaluation {
   id: number;
   patientId: number;
-  inspection?: string;
-  posture?: string;
-  rangeOfMotion?: string;
-  muscleStrength?: string;
-  orthopedicTests?: string;
-  functionalDiagnosis?: string;
+  inspection?: string | null;
+  palpation?: string | null;
+  gait?: string | null;
+  posture?: string | null;
+  rangeOfMotion?: string | null;
+  muscleStrength?: string | null;
+  orthopedicTests?: string | null;
+  functionalTests?: string | null;
+  functionalDiagnosis?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  painScale?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -532,6 +559,14 @@ export interface FinancialDashboard {
   revenueByCategory?: FinancialDashboardRevenueByCategoryItem[];
 }
 
+export interface DashboardBirthdayPatient {
+  id: number;
+  name: string;
+  birthDate?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
 export interface DashboardData {
   todayAppointments: AppointmentWithDetails[];
   upcomingAppointments: AppointmentWithDetails[];
@@ -539,6 +574,9 @@ export interface DashboardData {
   totalPatients: number;
   todayTotal: number;
   occupationRate: number;
+  noShowCount?: number;
+  noShowRate?: number;
+  birthdayPatients?: DashboardBirthdayPatient[];
 }
 
 export interface MonthlyRevenue {

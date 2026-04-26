@@ -6,11 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProcedureCategory = typeof ProcedureCategory[keyof typeof ProcedureCategory];
+export type ProcedureModalidade = typeof ProcedureModalidade[keyof typeof ProcedureModalidade];
 
 
-export const ProcedureCategory = {
-  fisioterapia: 'fisioterapia',
-  estetica: 'estetica',
-  pilates: 'pilates',
+export const ProcedureModalidade = {
+  individual: 'individual',
+  dupla: 'dupla',
+  grupo: 'grupo',
 } as const;

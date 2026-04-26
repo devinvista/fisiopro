@@ -158,7 +158,7 @@ router.post("/:id/reschedule", requirePermission("appointments.create"), async (
 });
 
 // ─── Reschedule history for a single appointment ────────────────────────────
-router.get("/:id/reschedules", requirePermission("appointments.view"), async (req: AuthRequest, res) => {
+router.get("/:id/reschedules", requirePermission("appointments.read"), async (req: AuthRequest, res) => {
   try {
     const id = parseIntParam(req.params.id, res, "ID do agendamento");
     if (id === null) return;
@@ -170,7 +170,7 @@ router.get("/:id/reschedules", requirePermission("appointments.view"), async (re
 });
 
 // ─── Reschedule history by patient ──────────────────────────────────────────
-router.get("/reschedules/by-patient/:patientId", requirePermission("appointments.view"), async (req: AuthRequest, res) => {
+router.get("/reschedules/by-patient/:patientId", requirePermission("appointments.read"), async (req: AuthRequest, res) => {
   try {
     const patientId = parseIntParam(req.params.patientId, res, "ID do paciente");
     if (patientId === null) return;

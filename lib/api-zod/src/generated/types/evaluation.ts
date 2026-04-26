@@ -9,12 +9,20 @@
 export interface Evaluation {
   id: number;
   patientId: number;
-  inspection?: string;
-  posture?: string;
-  rangeOfMotion?: string;
-  muscleStrength?: string;
-  orthopedicTests?: string;
-  functionalDiagnosis?: string;
+  inspection?: string | null;
+  palpation?: string | null;
+  gait?: string | null;
+  posture?: string | null;
+  rangeOfMotion?: string | null;
+  muscleStrength?: string | null;
+  orthopedicTests?: string | null;
+  functionalTests?: string | null;
+  functionalDiagnosis?: string | null;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  painScale?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }

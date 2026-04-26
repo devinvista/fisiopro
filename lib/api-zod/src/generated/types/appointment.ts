@@ -11,6 +11,9 @@ export interface Appointment {
   id: number;
   patientId: number;
   procedureId: number;
+  professionalId?: number | null;
+  scheduleId?: number | null;
+  source?: string;
   date: Date;
   startTime: string;
   endTime: string;

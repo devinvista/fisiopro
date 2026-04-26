@@ -15,10 +15,10 @@ const nonNegativeAmount = z
 export const procedureFormSchema = z
   .object({
     name: z.string().trim().min(1, "Nome é obrigatório"),
-    category: z.enum(categories, { errorMap: () => ({ message: "Categoria inválida" }) }),
+    category: z.enum(categories, { error: () => "Categoria inválida" }),
     modalidade: z.enum(modalidades),
     durationMinutes: z
-      .number({ invalid_type_error: "Duração inválida" })
+      .number({ error: (issue) => (issue.input === undefined ? undefined : "Duração inválida") })
       .int("Duração deve ser inteira")
       .min(5, "Mínimo 5 minutos")
       .max(480, "Máximo 8 horas"),
@@ -26,7 +26,7 @@ export const procedureFormSchema = z
     cost: nonNegativeAmount,
     description: z.string(),
     maxCapacity: z
-      .number({ invalid_type_error: "Capacidade inválida" })
+      .number({ error: (issue) => (issue.input === undefined ? undefined : "Capacidade inválida") })
       .int()
       .min(1, "Capacidade mínima 1"),
     onlineBookingEnabled: z.boolean(),

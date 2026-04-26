@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AppointmentWithDetails } from './appointmentWithDetails';
+import type { DashboardBirthdayPatient } from './dashboardBirthdayPatient';
 
 export interface DashboardData {
   todayAppointments: AppointmentWithDetails[];
@@ -14,4 +15,7 @@ export interface DashboardData {
   totalPatients: number;
   todayTotal: number;
   occupationRate: number;
+  noShowCount?: number;
+  noShowRate?: number;
+  birthdayPatients?: DashboardBirthdayPatient[];
 }

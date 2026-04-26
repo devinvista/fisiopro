@@ -1204,7 +1204,9 @@ components:
           type: string
         category:
           type: string
-          enum: [fisioterapia, estetica, pilates]
+        modalidade:
+          type: string
+          enum: [individual, dupla, grupo]
         durationMinutes:
           type: integer
         price:
@@ -1213,6 +1215,22 @@ components:
           type: number
         description:
           type: string
+          nullable: true
+        maxCapacity:
+          type: integer
+          default: 1
+        onlineBookingEnabled:
+          type: boolean
+          default: false
+        billingType:
+          type: string
+          enum: [porSessao, mensal]
+        monthlyPrice:
+          type: number
+          nullable: true
+        billingDay:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1255,6 +1273,14 @@ components:
           type: integer
         procedureId:
           type: integer
+        professionalId:
+          type: integer
+          nullable: true
+        scheduleId:
+          type: integer
+          nullable: true
+        source:
+          type: string
         date:
           type: string
           format: date
@@ -1382,7 +1408,7 @@ components:
           type: string
         status:
           type: string
-          enum: [agendado, confirmado, concluido, cancelado, faltou]
+          enum: [agendado, confirmado, concluido, cancelado, faltou, compareceu, remarcado]
         notes:
           type: string
 
@@ -1627,16 +1653,36 @@ components:
           type: integer
         inspection:
           type: string
+          nullable: true
+        palpation:
+          type: string
+          nullable: true
+        gait:
+          type: string
+          nullable: true
         posture:
           type: string
+          nullable: true
         rangeOfMotion:
           type: string
+          nullable: true
         muscleStrength:
           type: string
+          nullable: true
         orthopedicTests:
           type: string
+          nullable: true
+        functionalTests:
+          type: string
+          nullable: true
         functionalDiagnosis:
           type: string
+          nullable: true
+        painScale:
+          type: integer
+          minimum: 0
+          maximum: 10
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1917,6 +1963,27 @@ components:
         - totalAppointments
         - completedAppointments
 
+    DashboardBirthdayPatient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        birthDate:
+          type: string
+          format: date
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+
     DashboardData:
       type: object
       properties:
@@ -1936,6 +2003,14 @@ components:
           type: integer
         occupationRate:
           type: number
+        noShowCount:
+          type: integer
+        noShowRate:
+          type: number
+        birthdayPatients:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardBirthdayPatient"
       required:
         - todayAppointments
         - upcomingAppointments

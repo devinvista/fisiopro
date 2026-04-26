@@ -186,14 +186,23 @@ export const ListProceduresQueryParams = zod.object({
   "category": zod.enum(['fisioterapia', 'estetica', 'pilates']).optional()
 })
 
+export const listProceduresResponseMaxCapacityDefault = 1;
+export const listProceduresResponseOnlineBookingEnabledDefault = false;
+
 export const ListProceduresResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(listProceduresResponseMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(listProceduresResponseOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 })
 export const ListProceduresResponse = zod.array(ListProceduresResponseItem)
@@ -228,14 +237,23 @@ export const UpdateProcedureBody = zod.object({
   "description": zod.string().optional()
 })
 
+export const updateProcedureResponseMaxCapacityDefault = 1;
+export const updateProcedureResponseOnlineBookingEnabledDefault = false;
+
 export const UpdateProcedureResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(updateProcedureResponseMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(updateProcedureResponseOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 })
 
@@ -260,11 +278,16 @@ export const ListAppointmentsQueryParams = zod.object({
 })
 
 export const listAppointmentsResponseOneRescheduleCountDefault = 0;
+export const listAppointmentsResponseTwoProcedureMaxCapacityDefault = 1;
+export const listAppointmentsResponseTwoProcedureOnlineBookingEnabledDefault = false;
 
 export const ListAppointmentsResponseItem = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -292,11 +315,17 @@ export const ListAppointmentsResponseItem = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(listAppointmentsResponseTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(listAppointmentsResponseTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))
@@ -323,11 +352,16 @@ export const GetAppointmentParams = zod.object({
 })
 
 export const getAppointmentResponseOneRescheduleCountDefault = 0;
+export const getAppointmentResponseTwoProcedureMaxCapacityDefault = 1;
+export const getAppointmentResponseTwoProcedureOnlineBookingEnabledDefault = false;
 
 export const GetAppointmentResponse = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -355,11 +389,17 @@ export const GetAppointmentResponse = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(getAppointmentResponseTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(getAppointmentResponseTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))
@@ -377,16 +417,21 @@ export const UpdateAppointmentBody = zod.object({
   "procedureId": zod.number().optional(),
   "date": zod.date().optional(),
   "startTime": zod.string().optional(),
-  "status": zod.enum(['agendado', 'confirmado', 'concluido', 'cancelado', 'faltou']).optional(),
+  "status": zod.enum(['agendado', 'confirmado', 'concluido', 'cancelado', 'faltou', 'compareceu', 'remarcado']).optional(),
   "notes": zod.string().optional()
 })
 
 export const updateAppointmentResponseOneRescheduleCountDefault = 0;
+export const updateAppointmentResponseTwoProcedureMaxCapacityDefault = 1;
+export const updateAppointmentResponseTwoProcedureOnlineBookingEnabledDefault = false;
 
 export const UpdateAppointmentResponse = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -414,11 +459,17 @@ export const UpdateAppointmentResponse = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(updateAppointmentResponseTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(updateAppointmentResponseTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))
@@ -440,11 +491,16 @@ export const CompleteAppointmentParams = zod.object({
 })
 
 export const completeAppointmentResponseOneRescheduleCountDefault = 0;
+export const completeAppointmentResponseTwoProcedureMaxCapacityDefault = 1;
+export const completeAppointmentResponseTwoProcedureOnlineBookingEnabledDefault = false;
 
 export const CompleteAppointmentResponse = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -472,11 +528,17 @@ export const CompleteAppointmentResponse = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(completeAppointmentResponseTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(completeAppointmentResponseTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))
@@ -690,15 +752,24 @@ export const ListEvaluationsParams = zod.object({
   "patientId": zod.coerce.number()
 })
 
+export const listEvaluationsResponsePainScaleMin = 0;
+export const listEvaluationsResponsePainScaleMax = 10;
+
+
+
 export const ListEvaluationsResponseItem = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
-  "inspection": zod.string().optional(),
-  "posture": zod.string().optional(),
-  "rangeOfMotion": zod.string().optional(),
-  "muscleStrength": zod.string().optional(),
-  "orthopedicTests": zod.string().optional(),
-  "functionalDiagnosis": zod.string().optional(),
+  "inspection": zod.string().nullish(),
+  "palpation": zod.string().nullish(),
+  "gait": zod.string().nullish(),
+  "posture": zod.string().nullish(),
+  "rangeOfMotion": zod.string().nullish(),
+  "muscleStrength": zod.string().nullish(),
+  "orthopedicTests": zod.string().nullish(),
+  "functionalTests": zod.string().nullish(),
+  "functionalDiagnosis": zod.string().nullish(),
+  "painScale": zod.number().min(listEvaluationsResponsePainScaleMin).max(listEvaluationsResponsePainScaleMax).nullish(),
   "createdAt": zod.date(),
   "updatedAt": zod.date()
 })
@@ -739,15 +810,24 @@ export const UpdateEvaluationBody = zod.object({
   "functionalDiagnosis": zod.string().optional()
 })
 
+export const updateEvaluationResponsePainScaleMin = 0;
+export const updateEvaluationResponsePainScaleMax = 10;
+
+
+
 export const UpdateEvaluationResponse = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
-  "inspection": zod.string().optional(),
-  "posture": zod.string().optional(),
-  "rangeOfMotion": zod.string().optional(),
-  "muscleStrength": zod.string().optional(),
-  "orthopedicTests": zod.string().optional(),
-  "functionalDiagnosis": zod.string().optional(),
+  "inspection": zod.string().nullish(),
+  "palpation": zod.string().nullish(),
+  "gait": zod.string().nullish(),
+  "posture": zod.string().nullish(),
+  "rangeOfMotion": zod.string().nullish(),
+  "muscleStrength": zod.string().nullish(),
+  "orthopedicTests": zod.string().nullish(),
+  "functionalTests": zod.string().nullish(),
+  "functionalDiagnosis": zod.string().nullish(),
+  "painScale": zod.number().min(updateEvaluationResponsePainScaleMin).max(updateEvaluationResponsePainScaleMax).nullish(),
   "createdAt": zod.date(),
   "updatedAt": zod.date()
 })
@@ -1080,13 +1160,20 @@ export const GetScheduleOccupationResponse = zod.object({
  * @summary Main dashboard overview
  */
 export const getDashboardResponseTodayAppointmentsItemOneRescheduleCountDefault = 0;
+export const getDashboardResponseTodayAppointmentsItemTwoProcedureMaxCapacityDefault = 1;
+export const getDashboardResponseTodayAppointmentsItemTwoProcedureOnlineBookingEnabledDefault = false;
 export const getDashboardResponseUpcomingAppointmentsItemOneRescheduleCountDefault = 0;
+export const getDashboardResponseUpcomingAppointmentsItemTwoProcedureMaxCapacityDefault = 1;
+export const getDashboardResponseUpcomingAppointmentsItemTwoProcedureOnlineBookingEnabledDefault = false;
 
 export const GetDashboardResponse = zod.object({
   "todayAppointments": zod.array(zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -1114,11 +1201,17 @@ export const GetDashboardResponse = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(getDashboardResponseTodayAppointmentsItemTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(getDashboardResponseTodayAppointmentsItemTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))),
@@ -1126,6 +1219,9 @@ export const GetDashboardResponse = zod.object({
   "id": zod.number(),
   "patientId": zod.number(),
   "procedureId": zod.number(),
+  "professionalId": zod.number().nullish(),
+  "scheduleId": zod.number().nullish(),
+  "source": zod.string().optional(),
   "date": zod.date(),
   "startTime": zod.string(),
   "endTime": zod.string(),
@@ -1153,18 +1249,33 @@ export const GetDashboardResponse = zod.object({
   "procedure": zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "category": zod.enum(['fisioterapia', 'estetica', 'pilates']),
+  "category": zod.string(),
+  "modalidade": zod.enum(['individual', 'dupla', 'grupo']).optional(),
   "durationMinutes": zod.number(),
   "price": zod.number(),
   "cost": zod.number().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "maxCapacity": zod.number().default(getDashboardResponseUpcomingAppointmentsItemTwoProcedureMaxCapacityDefault),
+  "onlineBookingEnabled": zod.boolean().default(getDashboardResponseUpcomingAppointmentsItemTwoProcedureOnlineBookingEnabledDefault),
+  "billingType": zod.enum(['porSessao', 'mensal']).optional(),
+  "monthlyPrice": zod.number().nullish(),
+  "billingDay": zod.number().nullish(),
   "createdAt": zod.date()
 }).optional()
 }))),
   "monthlyRevenue": zod.number(),
   "totalPatients": zod.number(),
   "todayTotal": zod.number(),
-  "occupationRate": zod.number()
+  "occupationRate": zod.number(),
+  "noShowCount": zod.number().optional(),
+  "noShowRate": zod.number().optional(),
+  "birthdayPatients": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "birthDate": zod.date().nullish(),
+  "phone": zod.string().nullish(),
+  "email": zod.string().nullish()
+})).optional()
 })
 
 

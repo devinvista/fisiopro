@@ -15,4 +15,6 @@ export const UpdateAppointmentRequestStatus = {
   concluido: 'concluido',
   cancelado: 'cancelado',
   faltou: 'faltou',
+  compareceu: 'compareceu',
+  remarcado: 'remarcado',
 } as const;

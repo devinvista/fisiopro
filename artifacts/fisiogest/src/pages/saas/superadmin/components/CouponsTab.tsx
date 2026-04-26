@@ -139,7 +139,7 @@ export function CouponsTab() {
     handleSubmit: rhfHandleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<CouponFormValues>({
-    resolver: zodResolver(couponFormSchema),
+    resolver: zodResolver(couponFormSchema as never),
     defaultValues: { ...couponFormDefaults },
     mode: "onSubmit",
   });

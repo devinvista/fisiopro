@@ -5,15 +5,22 @@
  * FisioGest Pro API - Clinical management platform for physiotherapy, aesthetics and pilates
  * OpenAPI spec version: 0.1.0
  */
-import type { ProcedureCategory } from './procedureCategory';
+import type { ProcedureBillingType } from './procedureBillingType';
+import type { ProcedureModalidade } from './procedureModalidade';
 
 export interface Procedure {
   id: number;
   name: string;
-  category: ProcedureCategory;
+  category: string;
+  modalidade?: ProcedureModalidade;
   durationMinutes: number;
   price: number;
   cost?: number;
-  description?: string;
+  description?: string | null;
+  maxCapacity?: number;
+  onlineBookingEnabled?: boolean;
+  billingType?: ProcedureBillingType;
+  monthlyPrice?: number | null;
+  billingDay?: number | null;
   createdAt: Date;
 }

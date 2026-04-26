@@ -99,7 +99,7 @@ export function GlobalSearch() {
       query: {
         enabled: open && canSearchPatients && trimmedQuery.length >= 2,
         staleTime: 30_000,
-      },
+      } as never,
     },
   );
 
