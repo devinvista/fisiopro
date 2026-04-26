@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, numeric, boolean, timestamp, date, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, boolean, timestamp, date, jsonb, varchar, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { clinicsTable } from "./clinics";
 import { usersTable } from "./users";
 
@@ -38,9 +38,33 @@ export const clinicSubscriptionsTable = pgTable("clinic_subscriptions", {
   paidAt: timestamp("paid_at"),
   cancelledAt: timestamp("cancelled_at"),
   notes: text("notes"),
+  asaasCustomerId: varchar("asaas_customer_id", { length: 50 }),
+  asaasSubscriptionId: varchar("asaas_subscription_id", { length: 50 }),
+  asaasCheckoutUrl: text("asaas_checkout_url"),
+  billingMode: varchar("billing_mode", { length: 20 }).notNull().default("manual"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const asaasWebhookEventsTable = pgTable(
+  "asaas_webhook_events",
+  {
+    id: serial("id").primaryKey(),
+    eventId: varchar("event_id", { length: 100 }).notNull(),
+    eventType: varchar("event_type", { length: 50 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    relatedClinicId: integer("related_clinic_id"),
+    result: varchar("result", { length: 20 }).notNull(),
+    errorMsg: text("error_msg"),
+    processedAt: timestamp("processed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_asaas_webhook_events_event_id").on(table.eventId),
+    index("idx_asaas_webhook_events_event_type").on(table.eventType, table.createdAt),
+    index("idx_asaas_webhook_events_clinic_id").on(table.relatedClinicId),
+  ],
+);
 
 export const clinicPaymentHistoryTable = pgTable("clinic_payment_history", {
   id: serial("id").primaryKey(),
@@ -65,3 +89,5 @@ export type ClinicSubscription = typeof clinicSubscriptionsTable.$inferSelect;
 export type InsertClinicSubscription = typeof clinicSubscriptionsTable.$inferInsert;
 export type ClinicPaymentHistory = typeof clinicPaymentHistoryTable.$inferSelect;
 export type InsertClinicPaymentHistory = typeof clinicPaymentHistoryTable.$inferInsert;
+export type AsaasWebhookEvent = typeof asaasWebhookEventsTable.$inferSelect;
+export type InsertAsaasWebhookEvent = typeof asaasWebhookEventsTable.$inferInsert;

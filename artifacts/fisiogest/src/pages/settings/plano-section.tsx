@@ -1,10 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
-import { Check, Crown, Sparkles, Star, Zap } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, Crown, Sparkles, Star, Zap, CreditCard, ExternalLink, Loader2, AlertCircle } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { apiFetch } from "@/lib/api";
+import { useToast } from "@/lib/toast";
 import type { PlanTier } from "@/utils/plan-features";
 
 const BASE = import.meta.env.BASE_URL ?? "/";
@@ -25,6 +37,15 @@ interface PublicPlan {
   sortOrder: number;
 }
 
+interface BillingStatus {
+  billingMode: "manual" | "asaas_card";
+  asaasSubscriptionId: string | null;
+  asaasCheckoutUrl: string | null;
+  paymentStatus: string;
+  currentPeriodEnd: string | null;
+  status: string;
+}
+
 function normalizeFeatures(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((f): f is string => typeof f === "string");
@@ -40,24 +61,9 @@ const TIER_VISUAL: Record<
   PlanTier,
   { icon: React.ComponentType<{ className?: string }>; gradient: string; ring: string; chip: string }
 > = {
-  essencial: {
-    icon: Zap,
-    gradient: "from-slate-50 to-slate-100",
-    ring: "ring-slate-200",
-    chip: "bg-slate-200 text-slate-700",
-  },
-  profissional: {
-    icon: Star,
-    gradient: "from-blue-50 to-indigo-50",
-    ring: "ring-blue-300",
-    chip: "bg-blue-100 text-blue-700",
-  },
-  premium: {
-    icon: Crown,
-    gradient: "from-amber-50 to-orange-50",
-    ring: "ring-amber-300",
-    chip: "bg-amber-100 text-amber-800",
-  },
+  essencial: { icon: Zap, gradient: "from-slate-50 to-slate-100", ring: "ring-slate-200", chip: "bg-slate-200 text-slate-700" },
+  profissional: { icon: Star, gradient: "from-blue-50 to-indigo-50", ring: "ring-blue-300", chip: "bg-blue-100 text-blue-700" },
+  premium: { icon: Crown, gradient: "from-amber-50 to-orange-50", ring: "ring-amber-300", chip: "bg-amber-100 text-amber-800" },
 };
 
 function formatPrice(value: string): string {
@@ -68,6 +74,9 @@ function formatPrice(value: string): string {
 
 export function PlanoSection() {
   const { subscription, planName: currentPlanName } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const { data: plans = [], isLoading } = useQuery<PublicPlan[]>({
     queryKey: ["public-plans"],
@@ -79,12 +88,61 @@ export function PlanoSection() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const tierIdxOf = (name: string): number =>
-    isKnownTier(name) ? TIER_ORDER[name] : 99;
+  const { data: billing } = useQuery<BillingStatus | null>({
+    queryKey: ["saas-billing-mine"],
+    queryFn: async () => {
+      const res = await apiFetch(api("/saas-billing/mine"));
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
 
+  const subscribeMutation = useMutation({
+    mutationFn: async (planId: number) => {
+      const res = await apiFetch(api("/saas-billing/subscribe"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? "Falha ao iniciar cobrança");
+      }
+      return res.json() as Promise<{ checkoutUrl: string; subscriptionId: string }>;
+    },
+    onSuccess: (data) => {
+      toast({ title: "Pagamento criado", description: "Abrindo página segura do gateway…" });
+      qc.invalidateQueries({ queryKey: ["saas-billing-mine"] });
+      window.open(data.checkoutUrl, "_blank", "noopener,noreferrer");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao processar", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch(api("/saas-billing/cancel"), { method: "POST" });
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? "Falha ao cancelar cobrança");
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Cobrança automática cancelada", description: "Você pode reativar a qualquer momento." });
+      qc.invalidateQueries({ queryKey: ["saas-billing-mine"] });
+      setConfirmCancel(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Erro ao cancelar", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const tierIdxOf = (name: string): number => (isKnownTier(name) ? TIER_ORDER[name] : 99);
   const sortedPlans = [...plans].sort((a, b) => tierIdxOf(a.name) - tierIdxOf(b.name));
-
   const currentTierIdx = currentPlanName ? TIER_ORDER[currentPlanName] : -1;
+  const isAsaasManaged = billing?.billingMode === "asaas_card" && Boolean(billing?.asaasSubscriptionId);
+  const isOverdue = billing?.paymentStatus === "overdue" || billing?.paymentStatus === "expired";
 
   return (
     <div className="space-y-6">
@@ -104,9 +162,75 @@ export function PlanoSection() {
             {subscription.status === "trial" && (
               <Badge variant="outline" className="ml-1 text-[10px]">trial</Badge>
             )}
+            {isAsaasManaged && (
+              <Badge className="ml-1 bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">
+                cobrança automática
+              </Badge>
+            )}
           </div>
         )}
       </div>
+
+      {/* ── Status de cobrança automática ── */}
+      {billing && isAsaasManaged && (
+        <Card className="border-emerald-200 bg-emerald-50/40">
+          <CardContent className="py-4 px-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <CreditCard className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-emerald-900">Cobrança automática ativa</p>
+                <p className="text-emerald-700/80 text-xs mt-0.5">
+                  Seu cartão será cobrado mensalmente. Próximo vencimento:{" "}
+                  <strong>
+                    {billing.currentPeriodEnd
+                      ? new Date(billing.currentPeriodEnd).toLocaleDateString("pt-BR")
+                      : "—"}
+                  </strong>
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {billing.asaasCheckoutUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  asChild
+                  className="border-emerald-300 text-emerald-700"
+                >
+                  <a href={billing.asaasCheckoutUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> Abrir cobrança
+                  </a>
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmCancel(true)}
+                disabled={cancelMutation.isPending}
+                className="text-red-600 border-red-200 hover:bg-red-50"
+              >
+                Cancelar cobrança
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {billing && isOverdue && (
+        <Card className="border-amber-300 bg-amber-50/60">
+          <CardContent className="py-4 px-5 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-medium text-amber-900">Pagamento em aberto</p>
+              <p className="text-amber-700/80 text-xs mt-0.5">
+                {isAsaasManaged
+                  ? "Sua última fatura está pendente. Acesse a cobrança acima para regularizar."
+                  : "Sua assinatura está vencida. Contate o suporte para regularizar."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading && (
         <Card>
@@ -133,6 +257,7 @@ export function PlanoSection() {
           const isUpgrade = currentTierIdx >= 0 && tierIdx > currentTierIdx;
           const isDowngrade = currentTierIdx >= 0 && tierIdx < currentTierIdx;
           const planFeatures = normalizeFeatures(plan.features);
+          const isPending = subscribeMutation.isPending && subscribeMutation.variables === plan.id;
 
           return (
             <Card
@@ -147,9 +272,7 @@ export function PlanoSection() {
                 </div>
               )}
               <CardHeader className="pb-3">
-                <div
-                  className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${visual.chip}`}
-                >
+                <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${visual.chip}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <CardTitle className="text-xl mt-3 capitalize">{plan.displayName}</CardTitle>
@@ -163,9 +286,7 @@ export function PlanoSection() {
 
                 <ul className="space-y-2 text-sm">
                   {planFeatures.length === 0 ? (
-                    <li className="text-xs text-muted-foreground italic">
-                      Detalhes do plano em breve.
-                    </li>
+                    <li className="text-xs text-muted-foreground italic">Detalhes do plano em breve.</li>
                   ) : (
                     planFeatures.map((feat, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -176,21 +297,33 @@ export function PlanoSection() {
                   )}
                 </ul>
 
-                {isCurrent ? (
+                {isCurrent && !isAsaasManaged ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => subscribeMutation.mutate(plan.id)}
+                    disabled={subscribeMutation.isPending}
+                  >
+                    {isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Aguarde…</>
+                    ) : (
+                      <><CreditCard className="w-4 h-4 mr-2" /> Pagar com cartão</>
+                    )}
+                  </Button>
+                ) : isCurrent && isAsaasManaged ? (
                   <Button variant="outline" className="w-full" disabled>
                     Plano em uso
                   </Button>
                 ) : isUpgrade ? (
                   <Button
                     className="w-full"
-                    onClick={() => {
-                      window.open(
-                        `mailto:contato@fisiogestpro.com.br?subject=Upgrade para ${plan.displayName}`,
-                        "_blank",
-                      );
-                    }}
+                    onClick={() => subscribeMutation.mutate(plan.id)}
+                    disabled={subscribeMutation.isPending}
                   >
-                    Fazer upgrade
+                    {isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Aguarde…</>
+                    ) : (
+                      <><CreditCard className="w-4 h-4 mr-2" /> Fazer upgrade</>
+                    )}
                   </Button>
                 ) : isDowngrade ? (
                   <Button variant="outline" className="w-full" disabled>
@@ -208,11 +341,50 @@ export function PlanoSection() {
       </div>
 
       <Card className="border-dashed">
-        <CardContent className="p-4 text-xs text-muted-foreground">
-          Ao alterar de plano, novas regras de acesso entram em vigor imediatamente. Para mudanças
-          de plano e detalhes de cobrança, entre em contato com o suporte.
+        <CardContent className="p-4 text-xs text-muted-foreground space-y-1">
+          <p>
+            O pagamento é processado de forma segura pelo gateway Asaas. Seu cartão é cobrado
+            automaticamente todo mês. Você pode cancelar a cobrança automática a qualquer momento
+            sem perder o acesso ao período já pago.
+          </p>
+          <p>
+            Mudanças de plano seguem em vigor imediatamente. Para suporte, fale com{" "}
+            <a href="mailto:contato@fisiogestpro.com.br" className="text-primary underline">
+              contato@fisiogestpro.com.br
+            </a>
+            .
+          </p>
         </CardContent>
       </Card>
+
+      <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar cobrança automática?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A cobrança recorrente no cartão será encerrada. Você manterá o acesso até o fim do
+              período já pago. Para reativar, basta clicar em "Pagar com cartão" novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                cancelMutation.mutate();
+              }}
+              disabled={cancelMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {cancelMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Cancelando…</>
+              ) : (
+                "Sim, cancelar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

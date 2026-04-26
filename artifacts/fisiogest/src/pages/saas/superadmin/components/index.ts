@@ -1,5 +1,6 @@
 export * from "./ClinicsTab";
 export * from "./CouponsTab";
+export * from "./InadimplenciaTab";
 export * from "./KpiCard";
 export * from "./PainelTab";
 export * from "./PaymentBadge";

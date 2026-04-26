@@ -32,6 +32,10 @@ import reportsRouter from "./financial/reports/reports.routes.js";
 // SaaS (plans, billing of the platform itself)
 import saasPlanRouter from "./saas/saas-plans/saas-plans.routes.js";
 import couponsRouter from "./saas/coupons/coupons.routes.js";
+import saasBillingRouter from "./saas/billing/billing.routes.js";
+
+// Webhooks (no auth, validated by gateway-specific tokens)
+import webhooksRouter from "./webhooks/webhooks.routes.js";
 
 // Admin / governance
 import clinicsRouter from "./admin/clinics/clinics.routes.js";
@@ -79,5 +83,9 @@ router.use("/storage", storageRouter);
 // SaaS (mounted at root because they declare their own paths)
 router.use("/", couponsRouter);
 router.use("/", saasPlanRouter);
+router.use("/", saasBillingRouter);
+
+// Webhooks (sem auth — token validado dentro do handler)
+router.use("/webhooks", webhooksRouter);
 
 export default router;

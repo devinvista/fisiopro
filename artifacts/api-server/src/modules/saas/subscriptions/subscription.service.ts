@@ -82,7 +82,12 @@ export async function runSubscriptionCheck(): Promise<SubscriptionCheckResult> {
         // 2. Renovação automática: assinatura ativa + paga com período vencido
         // Ao expirar current_period_end de uma assinatura já paga, avança automaticamente
         // o período e marca o novo ciclo como "overdue" aguardando confirmação do próximo pagamento.
+        //
+        // ⚠ Pulado para clínicas em billingMode='asaas_card' — nesse modo, quem dita
+        // pagamento/vencimento são os webhooks PAYMENT_CONFIRMED/PAYMENT_OVERDUE
+        // do Asaas. O job só atua como safety net (passo 4: suspender pós-carência).
         if (
+          sub.billingMode !== "asaas_card" &&
           sub.status === "active" &&
           sub.paymentStatus === "paid" &&
           sub.currentPeriodEnd &&
@@ -115,7 +120,11 @@ export async function runSubscriptionCheck(): Promise<SubscriptionCheckResult> {
         // recebido (pending/expired/etc., mas ainda não marcado como overdue) e
         // período vencido → marcar como overdue. Não faz `continue` — deixa
         // cair para o passo 4 caso já tenha excedido o grace period.
+        //
+        // ⚠ Pulado para billingMode='asaas_card' — quem marca overdue é o webhook
+        // PAYMENT_OVERDUE do Asaas; o job só dispara o passo 4 (suspend) abaixo.
         if (
+          sub.billingMode !== "asaas_card" &&
           sub.status === "active" &&
           sub.paymentStatus !== "paid" &&
           sub.paymentStatus !== "free" &&
