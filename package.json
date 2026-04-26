@@ -23,6 +23,7 @@
     "typecheck": "pnpm run build:libs && tsc --noEmit -p artifacts/fisiogest/tsconfig.json && tsc --noEmit -p artifacts/api-server/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:mobile": "playwright test --config tests/mobile/playwright.config.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -75,6 +76,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@hookform/resolvers": "^5.2.2",
+    "@playwright/test": "^1.59.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",

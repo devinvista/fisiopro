@@ -243,3 +243,31 @@ páginas/abas:
   (`b.reason`) ocupa toda a linha em mobile (`basis-full sm:basis-auto
   sm:flex-1`) com `break-words`. Hora e ícone permanecem juntos com
   `whitespace-nowrap`.
+
+---
+
+## Suíte de testes mobile automatizada (Playwright)
+
+Adicionada em **26/04/2026**. Cobre cada uma das telas listadas neste audit
+com um teste E2E em viewport **375 × 812** (iPhone 13). Cada teste valida:
+
+1. HTTP < 400 ao navegar.
+2. Nenhum overflow horizontal (`scrollWidth > clientWidth`).
+3. Nenhum erro de console JS (network 401/403/404/429 são ignorados, pois
+   são esperados em features opcionais por papel).
+4. Anexa screenshot full-page ao relatório.
+
+### Como rodar
+
+```bash
+pnpm test:mobile                       # toda a suíte
+pnpm test:mobile --project=public      # só telas públicas
+pnpm test:mobile --project=admin       # só superadmin
+pnpm test:mobile --project=profissional
+pnpm test:mobile --grep "Dashboard"
+```
+
+Pré-requisitos: dev server rodando em `:3000`, banco semeado com
+`pnpm db:seed-demo` (ou ao menos `admin@fisiogest.com.br` /
+`fisio@fisiogest.com.br`, ambos com senha `123456`). Ver
+`tests/mobile/README.md` para detalhes.

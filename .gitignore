@@ -63,3 +63,9 @@ attached_assets/
 /.agents/skills/brainstorming/scripts/stop-server.sh
 /.vs/
 deploy/
+
+# Playwright (mobile audit)
+tests/mobile/.results/
+tests/mobile/test-results/
+tests/mobile/playwright-report/
+

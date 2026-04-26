@@ -373,3 +373,34 @@ Diagnóstico atual: `pnpm typecheck` passa com **0 erros**, `pnpm lint` retorna 
 8. **Rate limiting** — `express-rate-limit` já em uso (`publicLimiter`). Considerar limites mais estritos em `/api/auth/login` para mitigar brute-force.
 9. **Observabilidade** — Sentry está integrado (DSN opcional). Habilitar em produção definindo `SENTRY_DSN`.
 10. **Backups** — agendar dump diário do PostgreSQL (Neon já oferece point-in-time; em outros provedores, criar `pg_dump` cron).
+
+---
+
+## Testes visuais mobile (Playwright)
+
+Suíte adicionada em **26/04/2026** que valida cada tela do `docs/mobile-audit.md`
+em viewport **375 × 812** (iPhone 13). Comando:
+
+```bash
+pnpm test:mobile                       # toda a suíte (3 projetos)
+pnpm test:mobile --project=public      # /, /login, /register
+pnpm test:mobile --project=admin       # /superadmin
+pnpm test:mobile --project=profissional # /dashboard, /agenda, /pacientes, /financeiro, /financeiro/relatorios, /configuracoes, /catalogo/procedimentos
+```
+
+* **Arquivos:** `tests/mobile/playwright.config.ts`, `global-setup.ts`,
+  `_shared.ts`, `mobile-audit.{public,admin,profissional}.spec.ts`,
+  `README.md`.
+* **Browser:** usa o `chromium` do **Nix** (`/nix/store/...-chromium-138/bin/chromium`)
+  porque o binário baixado pelo Playwright não roda em NixOS. O caminho
+  é resolvido via `command -v chromium` (override com
+  `PLAYWRIGHT_CHROMIUM_PATH`).
+* **Auth:** `globalSetup` faz login uma vez para admin e profissional via
+  `POST /api/auth/login`, persiste cookie httpOnly + `localStorage` em
+  `tests/mobile/.auth/*.json` e cada projeto reusa esse `storageState`
+  (evita esbarrar no rate-limit `auth` de 20/15min).
+* **Asserts por tela:** HTTP < 400, sem overflow horizontal, sem erros de
+  console (401/403/404/429 ignorados), screenshot full-page anexado.
+* **Pré-requisitos:** dev server em `:3000`, `pnpm db:seed-demo` rodado
+  (admin `admin@fisiogest.com.br` / `123456` e profissional
+  `fisio@fisiogest.com.br` / `123456` em uma clínica).
