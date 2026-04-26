@@ -39,22 +39,21 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-ui": [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-select",
-            "@radix-ui/react-tabs",
-            "@radix-ui/react-popover",
-            "@radix-ui/react-tooltip",
-            "@radix-ui/react-accordion",
-            "@radix-ui/react-alert-dialog",
-          ],
-          "vendor-charts": ["recharts"],
-          "vendor-motion": ["framer-motion"],
-          "vendor-forms": ["react-hook-form", "@hookform/resolvers", "zod"],
-          "vendor-query": ["@tanstack/react-query"],
-          "vendor-date": ["date-fns", "react-day-picker"],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@radix-ui/")) return "vendor-ui";
+          if (id.includes("/recharts/")) return "vendor-charts";
+          if (id.includes("/framer-motion/")) return "vendor-motion";
+          if (
+            id.includes("/react-hook-form/") ||
+            id.includes("/@hookform/resolvers/") ||
+            id.includes("/zod/")
+          )
+            return "vendor-forms";
+          if (id.includes("/@tanstack/react-query/")) return "vendor-query";
+          if (id.includes("/date-fns/") || id.includes("/react-day-picker/"))
+            return "vendor-date";
+          return undefined;
         },
       },
     },
