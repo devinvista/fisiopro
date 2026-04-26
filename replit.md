@@ -302,6 +302,15 @@ intencionais: rotas públicas `agendar/*` (sem auth) e uploads `photos/*` (FormD
 
 ## Refatorações recentes (estrutura)
 
+- **Sprint 7.2 + 7.4 (abr/2026)** — **Cobrança SaaS via Asaas + painel de inadimplência** ✅
+  - Schema: estendido `clinic_subscriptions` com `asaas_customer_id`, `asaas_subscription_id`, `asaas_checkout_url`, `billing_mode`; criada `asaas_webhook_events` com UNIQUE `event_id` (idempotência).
+  - Backend: `lib/asaas/` (cliente HTTP), `modules/saas/billing/` (subscribe/cancel/status/listDelinquent/sendDunningReminder/processWebhookEvent), `modules/webhooks/asaas.routes.ts` (POST `/api/webhooks/asaas` autenticado por `asaas-access-token` constant-time).
+  - Webhook montado **antes** dos roteadores SaaS no `modules/index.ts` para escapar do `authMiddleware` aplicado nos routers `/`.
+  - `subscription.service.ts` pula renew/markOverdue para clínicas em `billingMode = 'asaas_card'` (gateway é fonte de verdade); suspensão após grace continua como rede de segurança.
+  - Frontend: `pages/settings/plano-section.tsx` com botão "Pagar com cartão" + status + cancel; nova aba "Inadimplência" no superadmin (`pages/saas/superadmin/components/InadimplenciaTab.tsx`).
+  - Segredos: `ASAAS_API_KEY` + `ASAAS_WEBHOOK_TOKEN` (configurados); `ASAAS_BASE_URL` opcional para sandbox.
+  - Itens 7.1 (gateway de pacientes) e 7.3 (reconciliação PIX) **adiados** — cobrança ao paciente continua manual.
+  - Detalhes em [`docs/financial.md#saas-billing-asaas`](docs/financial.md#saas-billing-asaas).
 - **Sprint 2 (abr/2026)** — quebrados todos os 7 arquivos > 750 linhas:
   - `print-html.tsx` (961 → 14 barrel) → 7 arquivos em `utils/print/`
   - `FinancialTab.tsx` (877 → 369) → pasta `FinancialTab/` (Subscriptions/Credits/Wallet sections + constants)

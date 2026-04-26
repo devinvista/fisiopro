@@ -164,17 +164,66 @@ Fase 4 — Assinatura via gateway (Asaas/Stripe)
 
 ### Variáveis de ambiente necessárias (quando integrar)
 
-| Variável | Gateway | Descrição |
-|---|---|---|
-| `ASAAS_API_KEY` | Asaas | Chave de API (sandbox: `$aact_*`) |
-| `ASAAS_WEBHOOK_TOKEN` | Asaas | Token de validação de webhooks |
-| `EFI_CLIENT_ID` | Efí | Client ID OAuth |
-| `EFI_CLIENT_SECRET` | Efí | Client Secret OAuth |
-| `EFI_PIX_KEY` | Efí | Chave PIX da conta da clínica |
-| `STRIPE_SECRET_KEY` | Stripe | Secret key (`sk_live_*`) |
-| `STRIPE_WEBHOOK_SECRET` | Stripe | Signing secret para webhooks |
+| Variável | Gateway | Descrição | Status |
+|---|---|---|---|
+| `ASAAS_API_KEY` | Asaas | Chave de API (sandbox: `$aact_*`) | ✅ configurada (Sprint 7.2) |
+| `ASAAS_WEBHOOK_TOKEN` | Asaas | Token de validação de webhooks | ✅ configurada (Sprint 7.2) |
+| `ASAAS_BASE_URL` | Asaas | URL base; vazio = produção; `https://sandbox.asaas.com/api/v3` para testes | opcional |
+| `EFI_CLIENT_ID` | Efí | Client ID OAuth | pendente |
+| `EFI_CLIENT_SECRET` | Efí | Client Secret OAuth | pendente |
+| `EFI_PIX_KEY` | Efí | Chave PIX da conta da clínica | pendente |
+| `STRIPE_SECRET_KEY` | Stripe | Secret key (`sk_live_*`) | pendente |
+| `STRIPE_WEBHOOK_SECRET` | Stripe | Signing secret para webhooks | pendente |
 
-> **Nota:** Nenhuma dessas variáveis existe ainda. Quando integrar, usar o skill `environment-secrets` para adicioná-las via painel do Replit.
+---
+
+<a id="saas-billing-asaas"></a>
+## SaaS Billing — Asaas (Sprint 7.2 + 7.4) ✅
+
+A cobrança da mensalidade da própria FisioGest Pro (clínica → plataforma) é
+processada pelo gateway **Asaas** via cartão recorrente em checkout hospedado.
+A cobrança ao paciente continua manual (Sprint 7.1/7.3 adiados).
+
+### Fluxo end-to-end
+
+1. **Admin da clínica** acessa Configurações → Plano e clica em "Pagar com cartão".
+2. Backend (`POST /api/saas-billing/subscribe`) cria customer + subscription no Asaas e devolve `checkoutUrl`. Marca `clinic_subscriptions.billingMode = 'asaas_card'` e salva `asaas_customer_id`, `asaas_subscription_id`, `asaas_checkout_url`.
+3. Cliente conclui o pagamento no domínio do Asaas (PCI-compliant — não tocamos no número do cartão).
+4. Asaas envia webhooks para `POST /api/webhooks/asaas` autenticados via header `asaas-access-token` (comparação constant-time contra `ASAAS_WEBHOOK_TOKEN`).
+5. Eventos são gravados em `asaas_webhook_events` com `UNIQUE(event_id)` → idempotência absoluta (retry do gateway é descartado).
+6. `PAYMENT_CONFIRMED` / `PAYMENT_RECEIVED` → `applyPaymentToSubscription()` rola o período +30 dias e marca `paymentStatus = 'paid'`.
+7. `PAYMENT_OVERDUE` → marca `paymentStatus = 'overdue'`. O scheduler diário (`subscriptionCheck`) suspende após 7 dias de grace.
+8. `SUBSCRIPTION_DELETED` → limpa os campos Asaas e volta a clínica para `billingMode = 'manual'`.
+
+### Painel "Inadimplência" (superadmin)
+
+`pages/saas/superadmin` → aba **Inadimplência** lista clínicas com `paymentStatus ∈ {overdue, expired, suspended}` e mostra os últimos 30 eventos do gateway com resultado (`applied` / `duplicate` / `no_match` / `error`). Ações disponíveis por linha:
+
+- **Reenviar lembrete** (`POST /api/saas-billing/clinic-subscriptions/:clinicId/remind`) → dispara dunning via gateway.
+- **Cancelar cobrança** (`POST /api/saas-billing/clinic-subscriptions/:clinicId/cancel`) → encerra subscription no Asaas e volta para manual.
+- **Abrir checkout** → link externo direto para o Asaas.
+
+### Configuração no painel do Asaas
+
+1. Em **Integrações** → gere uma chave de API e salve como `ASAAS_API_KEY`.
+2. Em **Notificações → Webhooks** → cadastre `https://<seu-dominio>/api/webhooks/asaas` com:
+   - **Token de autenticação:** mesmo valor de `ASAAS_WEBHOOK_TOKEN`
+   - **Eventos:** `PAYMENT_CONFIRMED`, `PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_REFUNDED`, `PAYMENT_DELETED`, `SUBSCRIPTION_DELETED`
+3. Para testar use sandbox: defina `ASAAS_BASE_URL=https://sandbox.asaas.com/api/v3` e cartão de teste `5162306219378829` / 12/2030 / CVV 123.
+
+### Tabelas envolvidas
+
+- `clinic_subscriptions` (estendida): `asaas_customer_id`, `asaas_subscription_id`, `asaas_checkout_url`, `billing_mode`
+- `asaas_webhook_events` (nova): `event_id` UNIQUE, `event_type`, `payload`, `result`, `error_msg`, `related_clinic_id`, `created_at`, `processed_at`
+
+### Arquivos-chave
+
+- `lib/asaas/{client,types,index}.ts` — cliente HTTP com timeout + retry
+- `modules/saas/billing/{billing.routes,billing.service,billing.schemas}.ts`
+- `modules/webhooks/{asaas,webhooks}.routes.ts`
+- `modules/saas/subscriptions/subscription.service.ts` — scheduler pula renovação/overdue para clínicas em `asaas_card` (gateway é a fonte de verdade)
+- `pages/settings/plano-section.tsx` (UI clínica)
+- `pages/saas/superadmin/components/InadimplenciaTab.tsx` (UI superadmin)
 
 ---
 

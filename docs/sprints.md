@@ -81,10 +81,10 @@ Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
 | # | Item | Status | Notas |
 |---|---|---|---|
-| 7.1 | Integração com gateway (Stripe BR / Mercado Pago / Pagar.me) com webhooks | ⬜ | Pendente — ver `docs/financial.md` |
-| 7.2 | Cobrança automática de mensalidade SaaS via cartão recorrente | ⬜ | Pendente |
-| 7.3 | Reconciliação automática de pagamentos PIX recebidos | ⬜ | Pendente |
-| 7.4 | Painel financeiro de inadimplência com régua de cobrança | ⬜ | Pendente |
+| 7.1 | Integração com gateway (Stripe BR / Mercado Pago / Pagar.me) com webhooks | ⬜ | Adiado — cobrança ao paciente continua manual; ver `docs/financial.md` |
+| 7.2 | Cobrança automática de mensalidade SaaS via cartão recorrente | ✅ | Asaas (sandbox/prod) — checkout hospedado + webhook idempotente; ver `docs/financial.md#saas-billing-asaas` |
+| 7.3 | Reconciliação automática de pagamentos PIX recebidos | ⬜ | Adiado — cobrança ao paciente continua manual |
+| 7.4 | Painel financeiro de inadimplência com régua de cobrança | ✅ | Aba "Inadimplência" no superadmin com lista, log de eventos e ações remind/cancelar |
 
 ---
 

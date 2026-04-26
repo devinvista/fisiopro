@@ -48,6 +48,12 @@ router.use(healthRouter);
 router.use("/public", publicRouter);
 router.use("/auth", authRouter);
 
+// Webhooks (sem auth — token validado dentro do handler).
+// IMPORTANTE: precisa vir antes dos roteadores que aplicam authMiddleware no
+// próprio router (ex.: saasBillingRouter montado em "/"), senão a auth global
+// intercepta e o webhook nunca chega ao handler.
+router.use("/webhooks", webhooksRouter);
+
 // Admin
 router.use("/clinics", clinicsRouter);
 router.use("/users", usersRouter);
@@ -84,8 +90,5 @@ router.use("/storage", storageRouter);
 router.use("/", couponsRouter);
 router.use("/", saasPlanRouter);
 router.use("/", saasBillingRouter);
-
-// Webhooks (sem auth — token validado dentro do handler)
-router.use("/webhooks", webhooksRouter);
 
 export default router;
