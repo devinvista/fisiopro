@@ -316,6 +316,7 @@ intencionais: rotas públicas `agendar/*` (sem auth) e uploads `photos/*` (FormD
   - Componentes: `AgendaToolbar`, `AgendaSidebar`, `WeekHeader`, `DayColumn` (290 linhas isoladas)
 - **`_shared` → `shared`** — pastas renomeadas em `modules/` e `modules/financial/`; 11 arquivos de imports atualizados.
 - **Limpeza de configuração (abr/2026)** — removidos `tsconfig.json` e `tsconfig.server.json` da raiz (legados, apontavam para diretórios inexistentes) e `scripts/package.json` (declarava `@workspace/scripts` mas a pasta não está no `pnpm-workspace.yaml`). Adicionado script `db:seed-financial` em `package.json`. `pnpm -r exec tsc --noEmit` agora passa em todos os 7 pacotes.
+- **Bug fix `AnamnesisTab` (abr/2026)** — campos de input/select da Anamnese sumiam ao digitar. Causa: `useQuery` sem `queryFn` → `data = undefined` → default `[]` criava nova referência a cada render → `useEffect [template, allAnamnesis]` chamava `setForm(emptyForm)` a cada tecla. Correção: adicionada `queryFn` que busca `GET /api/patients/{id}/anamnesis?all=true` (endpoint suporta `?all=true` para devolver array em vez de registro único) + constante estável `EMPTY_ANAMNESIS` fora do componente como default.
 
 ## Documentação completa
 

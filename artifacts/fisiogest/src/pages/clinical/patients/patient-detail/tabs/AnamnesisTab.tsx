@@ -4,6 +4,7 @@ import {
   useListProcedures,
 } from "@workspace/api-client-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetchJson } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Loader2, Clock, CheckCircle, Check, Lock, Eye,
@@ -21,6 +22,11 @@ import { TemplateReabilitacao } from "./anamnesis/TemplateReabilitacao";
 import { TemplateEsteticaFacial } from "./anamnesis/TemplateEsteticaFacial";
 import { TemplateEsteticaCorporal } from "./anamnesis/TemplateEsteticaCorporal";
 import { TemplatePilates } from "./anamnesis/TemplatePilates";
+
+// Referência estável para o default do useQuery: evita criar novo `[]` a cada
+// render, o que dispararia o useEffect [template, allAnamnesis] a cada tecla
+// digitada e zeraria o formulário.
+const EMPTY_ANAMNESIS: any[] = [];
 
 export function AnamnesisTab({ patientId }: { patientId: number }) {
   const { toast } = useToast();
@@ -69,8 +75,9 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
     return TEMPLATE_OPTIONS.filter(opt => activeCategories.has(opt.procedureCategory));
   }, [activeCategories]);
 
-  const { data: allAnamnesis = [], isLoading, refetch: refetchAll } = useQuery<any[]>({
-    queryKey: [`/api/patients/${patientId}/anamnesis`],
+  const { data: allAnamnesis = EMPTY_ANAMNESIS, isLoading, refetch: refetchAll } = useQuery<any[]>({
+    queryKey: [`/api/patients/${patientId}/anamnesis`, { all: true }],
+    queryFn: () => apiFetchJson<any[]>(`/api/patients/${patientId}/anamnesis?all=true`),
     enabled: canRead,
   });
 
