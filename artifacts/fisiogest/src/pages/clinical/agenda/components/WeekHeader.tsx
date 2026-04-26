@@ -46,39 +46,41 @@ export function WeekHeader({
           <div
             key={i}
             className={cn(
-              "py-1.5 px-2 border-r border-slate-200 last:border-r-0 flex items-center justify-center gap-1.5 min-w-0",
+              "py-2 px-2 text-center border-r border-slate-200 last:border-r-0 min-w-0",
               today && "bg-primary/5",
             )}
             title={dayAppts.length > 0 ? `${dayAppts.length} consulta${dayAppts.length !== 1 ? "s" : ""}` : undefined}
           >
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 shrink-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               {format(day, "EEE", { locale: ptBR })}
             </p>
-            <span
-              className={cn(
-                "min-w-7 h-7 px-1.5 rounded-full inline-flex items-center justify-center text-sm font-bold shrink-0 transition-colors",
-                today ? "bg-primary text-white" : "text-slate-800",
-              )}
-            >
-              {format(day, "d")}
-            </span>
-            {schedulesOnDay.length > 0 && (
-              <div className="flex items-center gap-0.5 shrink-0">
-                {schedulesOnDay.map((s) => (
-                  <span
-                    key={s.id}
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: s.color }}
-                    title={s.name}
-                  />
-                ))}
-              </div>
-            )}
-            {dayAppts.length > 0 && (
-              <span className="text-[10px] font-semibold text-slate-400 tabular-nums shrink-0">
-                {dayAppts.length}
+            <div className="flex items-center justify-center gap-1.5 mt-0.5">
+              <span
+                className={cn(
+                  "min-w-7 h-7 px-1.5 rounded-full inline-flex items-center justify-center text-base font-bold transition-colors",
+                  today ? "bg-primary text-white" : "text-slate-800",
+                )}
+              >
+                {format(day, "d")}
               </span>
-            )}
+              {schedulesOnDay.length > 0 && (
+                <div className="flex items-center gap-0.5">
+                  {schedulesOnDay.map((s) => (
+                    <span
+                      key={s.id}
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: s.color }}
+                      title={s.name}
+                    />
+                  ))}
+                </div>
+              )}
+              {dayAppts.length > 0 && (
+                <span className="text-[10px] font-semibold text-slate-400 tabular-nums">
+                  {dayAppts.length}
+                </span>
+              )}
+            </div>
           </div>
         );
       })}
