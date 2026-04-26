@@ -24,6 +24,14 @@ env = { "CI" = "true" }
 localPort = 5000
 externalPort = 5000
 
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 8081
+
 [userenv]
 
 [userenv.shared]
