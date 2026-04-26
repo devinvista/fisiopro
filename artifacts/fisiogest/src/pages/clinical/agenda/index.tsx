@@ -230,7 +230,7 @@ export default function Agenda() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
+              <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
                 <div
                   style={{
                     minWidth: nav.daysCount > 1 ? `${56 + nav.daysCount * 96}px` : undefined,

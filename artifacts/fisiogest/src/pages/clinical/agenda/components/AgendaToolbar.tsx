@@ -2,7 +2,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Calendar as CalIcon,
   Loader2,
   CheckCircle,
   Lock,
@@ -65,13 +64,9 @@ export function AgendaToolbar({
   onOpenNew,
 }: Props) {
   return (
-    <div className="mb-4 space-y-3 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-3 lg:flex-wrap">
-      {/* ── Title + filters ── */}
+    <div className="mb-3 space-y-2 lg:space-y-0 lg:flex lg:items-center lg:justify-between lg:gap-2 lg:flex-wrap">
+      {/* ── Filters (no redundant title — page already shows "Agenda") ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <CalIcon className="w-5 h-5 text-primary" />
-          <span className="text-base sm:text-lg font-bold font-display text-slate-800">Calendário</span>
-        </div>
         {activeSchedules.length >= 2 && (
           <div className="flex items-center gap-1.5 min-w-0">
             <select
@@ -139,14 +134,14 @@ export function AgendaToolbar({
         <span
           className={cn(
             "text-xs sm:text-sm font-semibold text-slate-700 truncate flex-1 lg:flex-none",
-            view === "day" ? "capitalize lg:min-w-[260px]" : "lg:min-w-[200px]",
+            view === "day" ? "capitalize lg:min-w-[220px]" : "lg:min-w-[180px]",
           )}
         >
           {weekLabel}
         </span>
       </div>
 
-      {/* ── View toggle + actions (mobile: stack rows) ── */}
+      {/* ── View toggle + actions ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs font-medium flex-1 sm:flex-none">
           {(["day", "fullweek", "month"] as ViewMode[]).map((v, idx) => (
@@ -181,14 +176,31 @@ export function AgendaToolbar({
             <span>({todayCompareceuCount})</span>
           </Button>
         )}
-      </div>
 
-      {/* ── Primary actions (always full-width pair on mobile) ── */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
         <Button
           size="sm"
           variant="outline"
-          className="w-full sm:w-auto h-10 sm:h-9 px-3 sm:px-3 rounded-xl sm:rounded-lg border-slate-300 text-slate-600 hover:bg-slate-100 text-sm font-semibold gap-1.5"
+          className="hidden sm:inline-flex h-9 px-3 rounded-lg border-slate-300 text-slate-600 hover:bg-slate-100 text-xs font-semibold gap-1.5"
+          onClick={onOpenBlock}
+        >
+          <Lock className="w-3.5 h-3.5 shrink-0" /> Bloquear
+        </Button>
+
+        <Button
+          size="sm"
+          className="hidden sm:inline-flex h-9 px-3 rounded-lg shadow-md shadow-primary/20 text-xs font-semibold gap-1.5"
+          onClick={onOpenNew}
+        >
+          <Plus className="w-3.5 h-3.5 shrink-0" /> Novo
+        </Button>
+      </div>
+
+      {/* ── Mobile-only primary actions ── */}
+      <div className="grid grid-cols-2 gap-2 sm:hidden">
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full h-10 px-3 rounded-xl border-slate-300 text-slate-600 hover:bg-slate-100 text-sm font-semibold gap-1.5"
           onClick={onOpenBlock}
         >
           <Lock className="w-4 h-4 shrink-0" /> Bloquear
@@ -196,12 +208,10 @@ export function AgendaToolbar({
 
         <Button
           size="sm"
-          className="w-full sm:w-auto h-10 sm:h-9 px-3 sm:px-4 rounded-xl sm:rounded-lg shadow-md shadow-primary/20 text-sm font-semibold gap-1.5"
+          className="w-full h-10 px-3 rounded-xl shadow-md shadow-primary/20 text-sm font-semibold gap-1.5"
           onClick={onOpenNew}
         >
-          <Plus className="w-4 h-4 shrink-0" />
-          <span className="sm:hidden">Agendar</span>
-          <span className="hidden sm:inline">Novo</span>
+          <Plus className="w-4 h-4 shrink-0" /> Agendar
         </Button>
       </div>
     </div>
