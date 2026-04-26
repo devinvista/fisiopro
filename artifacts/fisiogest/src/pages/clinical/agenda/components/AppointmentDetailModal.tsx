@@ -497,7 +497,7 @@ export function AppointmentDetailModal({
                       <RefreshCw className="w-3.5 h-3.5 mr-1" /> Reativar
                     </Button>
                   )}
-                  {(appointment.status === "cancelado" || appointment.status === "faltou") && (
+                  {(appointment.status === "agendado" || appointment.status === "confirmado" || appointment.status === "cancelado" || appointment.status === "faltou") && (
                     <Button size="sm" variant="outline" className="rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50"
                       onClick={() => setIsRescheduling(true)} disabled={isBusy}>
                       <Repeat className="w-3.5 h-3.5 mr-1" /> Remarcar
