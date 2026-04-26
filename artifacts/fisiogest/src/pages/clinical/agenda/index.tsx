@@ -53,7 +53,6 @@ export default function Agenda() {
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
   const [editingBlock, setEditingBlock] = useState<BlockedSlot | null>(null);
-  const [showRemarcado, setShowRemarcado] = useState(false);
 
   // Buscar schedules primeiro (sem nav ainda) para derivar config visual
   const initialQueries = useAgendaQueries({
@@ -98,8 +97,7 @@ export default function Agenda() {
 
   const filteredAppointments = appointments
     .filter((a) => !selectedScheduleId || a.scheduleId === selectedScheduleId)
-    .filter((a) => !selectedProfessionalId || a.professionalId === selectedProfessionalId)
-    .filter((a) => showRemarcado || a.status !== "remarcado");
+    .filter((a) => !selectedProfessionalId || a.professionalId === selectedProfessionalId);
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const todayCompareceu = filteredAppointments.filter(
@@ -186,8 +184,6 @@ export default function Agenda() {
         todayCompareceuCount={todayCompareceu.length}
         batchCompleting={batchCompleting}
         onBatchComplete={handleBatchComplete}
-        showRemarcado={showRemarcado}
-        setShowRemarcado={setShowRemarcado}
         onOpenBlock={() => setIsBlockModalOpen(true)}
         onOpenNew={() => {
           setSelectedSlot(null);

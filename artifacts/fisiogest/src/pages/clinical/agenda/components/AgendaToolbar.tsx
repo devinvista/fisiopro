@@ -39,9 +39,6 @@ interface Props {
   batchCompleting: boolean;
   onBatchComplete: () => void;
 
-  showRemarcado: boolean;
-  setShowRemarcado: (v: boolean | ((prev: boolean) => boolean)) => void;
-
   onOpenBlock: () => void;
   onOpenNew: () => void;
 }
@@ -64,8 +61,6 @@ export function AgendaToolbar({
   todayCompareceuCount,
   batchCompleting,
   onBatchComplete,
-  showRemarcado,
-  setShowRemarcado,
   onOpenBlock,
   onOpenNew,
 }: Props) {
@@ -186,22 +181,6 @@ export function AgendaToolbar({
             <span>({todayCompareceuCount})</span>
           </Button>
         )}
-
-        <button
-          className={cn(
-            "h-9 px-3 rounded-lg text-xs font-medium border transition-colors shrink-0",
-            showRemarcado
-              ? "border-purple-300 bg-purple-50 text-purple-700"
-              : "border-slate-200 text-slate-400 hover:bg-slate-50",
-          )}
-          onClick={() => setShowRemarcado((v) => !v)}
-          title={showRemarcado ? "Ocultar remarcados" : "Mostrar remarcados"}
-        >
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
-            Remarcados
-          </span>
-        </button>
       </div>
 
       {/* ── Primary actions (always full-width pair on mobile) ── */}
