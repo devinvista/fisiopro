@@ -414,3 +414,57 @@ pnpm test:mobile --project=profissional # /dashboard, /agenda, /pacientes, /fina
 * **Pré-requisitos:** dev server em `:3000`, `pnpm db:seed-demo` rodado
   (admin `admin@fisiogest.com.br` / `123456` e profissional
   `fisio@fisiogest.com.br` / `123456` em uma clínica).
+
+---
+
+## LGPD — Política versionada com aceite e portabilidade
+
+Implementado em **26/04/2026** (req. 9.1 e 9.2 da auditoria de
+conformidade).
+
+### Backend
+
+* **Tabelas:** `policy_documents` (versão vigente por tipo) e
+  `user_policy_acceptances` (carimbo IP/UA por usuário×documento).
+  Criadas via SQL direto (`scripts/create-lgpd-tables.ts`) porque
+  `drizzle-kit push` exige TTY interativo.
+* **Módulo:** `artifacts/api-server/src/modules/lgpd/` com
+  `lgpd.routes.ts`, `lgpd.service.ts`, `lgpd.repository.ts`,
+  `lgpd.schemas.ts`. Registrado em `app.ts` sob `/api/lgpd`:
+  - `GET /api/lgpd/policies/current` — todas as políticas vigentes (público).
+  - `GET /api/lgpd/policies/:type/current` — uma política (público).
+  - `POST /api/lgpd/policies/accept` — registra aceite (autenticado).
+  - `GET /api/lgpd/me/pending` — políticas pendentes do usuário logado.
+  - `GET /api/lgpd/patients/:id/export` — JSON portabilidade (Content-Disposition).
+* **Audit log:** todo aceite e exportação grava em `audit_log`.
+* **Auth integrado:** `registerSchema` aceita `privacyDocumentId` e
+  `termsDocumentId`; `register()` insere aceites com IP/UA (best-effort).
+  `getMe()` retorna `lgpd: { pendingPolicies, hasPending }`.
+* **Seed:** `scripts/seed-lgpd.ts` insere privacy v1.0.0 (id=1) e
+  terms v1.0.0 (id=2) com Markdown completo em pt-BR.
+
+### Frontend
+
+* `src/lib/lgpd.ts` — cliente fetch para os endpoints.
+* `src/components/lgpd/markdown-view.tsx` — renderer próprio (sem deps).
+* `src/components/lgpd/policy-acceptance-modal.tsx` — modal force-open
+  (não fecha por ESC/clique fora) com checkbox obrigatório, montado
+  em `AppLayout` quando `user.lgpd.hasPending`.
+* `src/pages/politica-de-privacidade.tsx` e
+  `src/pages/termos-de-uso.tsx` — públicas, lazy-loaded em `App.tsx`.
+* `src/pages/register.tsx` — checkbox obrigatório de aceite + envio
+  de `privacyDocumentId`/`termsDocumentId` no payload.
+* `ExportLgpdButton` em `PatientDetail` — baixa JSON com todos dados
+  do paciente (portabilidade — art. 18, V LGPD).
+
+### Notas técnicas
+
+* **Zod v4 + `partial()`:** Zod v4 proíbe `.partial()` em objetos com
+  `.refine()`. Quando precisar de schema "create" com refinement +
+  schema "update" parcial, declare a base sem refine, depois aplique
+  `.refine()` no create e `.partial()` na base. Padrão aplicado em
+  `procedures.schemas.ts` (corrigido em 26/04/2026 após upgrade Zod).
+* **DialogContent sem prop `hideCloseButton`:** modal LGPD usa
+  `className="[&>button[aria-label='Fechar diálogo']]:hidden"` +
+  `onPointerDownOutside`/`onEscapeKeyDown` com `preventDefault()`
+  para bloquear fechamento.

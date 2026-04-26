@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Checkbox } from "@/components/ui/checkbox";
+import { getCurrentPolicies, type PolicyDocument } from "@/lib/lgpd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +78,29 @@ export default function Register() {
   const [couponState, setCouponState] = useState<CouponState>({ status: "idle" });
   const couponTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // LGPD — IDs das versões correntes das políticas e checkbox de aceite
+  const [policies, setPolicies] = useState<{ privacy: PolicyDocument | null; terms: PolicyDocument | null }>(
+    { privacy: null, terms: null },
+  );
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentPolicies()
+      .then((res) => {
+        if (cancelled) return;
+        setPolicies({
+          privacy: res.items.find((p) => p.type === "privacy") ?? null,
+          terms: res.items.find((p) => p.type === "terms") ?? null,
+        });
+      })
+      .catch(() => {
+        // se falhar, o aceite ficará a cargo do modal pós-login
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const registerMutation = useRegister();
   const { login } = useAuth();
   const { toast } = useToast();
@@ -146,6 +171,14 @@ export default function Register() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedPolicies) {
+      toast({
+        variant: "destructive",
+        title: "Aceite obrigatório",
+        description: "Você precisa concordar com a Política de Privacidade e os Termos de Uso para criar sua conta.",
+      });
+      return;
+    }
     registerMutation.mutate(
       {
         data: {
@@ -155,6 +188,8 @@ export default function Register() {
           profileType,
           planName,
           couponCode: couponState.status === "valid" ? couponCode.trim() : undefined,
+          privacyDocumentId: policies.privacy?.id,
+          termsDocumentId: policies.terms?.id,
         } as any,
       },
       {
@@ -411,10 +446,35 @@ export default function Register() {
               />
             </div>
 
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 cursor-pointer">
+              <Checkbox
+                checked={acceptedPolicies}
+                onCheckedChange={(v) => setAcceptedPolicies(v === true)}
+                className="mt-0.5"
+              />
+              <span className="text-xs leading-snug text-slate-700">
+                Li e concordo com a{" "}
+                <Link
+                  href="/politica-de-privacidade"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  Política de Privacidade
+                </Link>{" "}
+                e os{" "}
+                <Link
+                  href="/termos-de-uso"
+                  className="font-semibold text-primary underline-offset-2 hover:underline"
+                >
+                  Termos de Uso
+                </Link>{" "}
+                do FisioGest Pro.
+              </span>
+            </label>
+
             <Button
               type="submit"
               className="w-full h-12 rounded-xl text-base font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all mt-4"
-              disabled={registerMutation.isPending}
+              disabled={registerMutation.isPending || !acceptedPolicies}
             >
               {registerMutation.isPending ? (
                 <Loader2 className="animate-spin w-5 h-5" />

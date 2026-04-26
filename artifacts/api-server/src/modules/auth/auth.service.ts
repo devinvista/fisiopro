@@ -4,6 +4,7 @@ import { generateToken } from "../../middleware/auth.js";
 import { todayBRT } from "../../utils/dateUtils.js";
 import { authRepository } from "./auth.repository.js";
 import { generateResetToken, hashToken, passwordResetRepository } from "./password-reset.js";
+import { lgpdRepository } from "../lgpd/lgpd.repository.js";
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -40,8 +41,19 @@ function isCpf(value: string) {
 }
 
 export const authService = {
-  async register(input: RegisterInput) {
-    const { name, email, cpf, password, clinicName, profileType, planName, couponCode } = input;
+  async register(input: RegisterInput & { ip?: string | null; userAgent?: string | null }) {
+    const {
+      name,
+      email,
+      cpf,
+      password,
+      clinicName,
+      profileType,
+      planName,
+      couponCode,
+      privacyDocumentId,
+      termsDocumentId,
+    } = input;
     const normalizedCpf = normalizeCpf(cpf);
     if (normalizedCpf.length !== 11) {
       throw badRequest("CPF inválido. Informe os 11 dígitos.");
@@ -87,6 +99,28 @@ export const authService = {
 
     const assignedRoles: Role[] =
       profileType === "autonomo" ? ["admin", "profissional"] : ["admin"];
+
+    // LGPD — registra aceite das versões correntes (best-effort: não falha o
+    // cadastro se a inserção do aceite der erro pontual)
+    const acceptanceIds = [privacyDocumentId, termsDocumentId].filter(
+      (id): id is number => typeof id === "number" && id > 0,
+    );
+    for (const docId of acceptanceIds) {
+      try {
+        await lgpdRepository.insertAcceptance({
+          userId: user.id,
+          policyDocumentId: docId,
+          ip: input.ip ?? null,
+          userAgent: input.userAgent ?? null,
+        });
+      } catch (err) {
+        console.warn(
+          `[auth.register] aceite LGPD doc=${docId} user=${user.id} falhou:`,
+          err,
+        );
+      }
+    }
+
     const token = generateToken(user.id, assignedRoles, clinic.id, false, user.name);
 
     return {
@@ -266,6 +300,21 @@ export const authService = {
       ? Array.from(resolveFeatures(subscription.planName))
       : [];
 
+    // LGPD — calcula políticas pendentes para este usuário
+    const [currentPolicies, acceptances] = await Promise.all([
+      lgpdRepository.listAllCurrent(),
+      lgpdRepository.findUserAcceptances(user.id),
+    ]);
+    const acceptedIds = new Set(acceptances.map((a) => a.policyDocumentId));
+    const pendingPolicies = currentPolicies
+      .filter((doc) => !acceptedIds.has(doc.id))
+      .map((doc) => ({
+        id: doc.id,
+        type: doc.type,
+        version: doc.version,
+        title: doc.title,
+      }));
+
     return {
       id: user.id,
       name: user.name,
@@ -277,6 +326,10 @@ export const authService = {
       subscription,
       features,
       createdAt: user.createdAt,
+      lgpd: {
+        pendingPolicies,
+        hasPending: pendingPolicies.length > 0,
+      },
     };
   },
 };

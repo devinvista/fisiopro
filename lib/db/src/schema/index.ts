@@ -22,4 +22,5 @@ export * from "./saas-plans";
 export * from "./coupons";
 export * from "./patient-wallet";
 export * from "./accounting";
+export * from "./lgpd";
 export * from "../plan-features";

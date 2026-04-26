@@ -37,6 +37,9 @@ import saasBillingRouter from "./saas/billing/billing.routes.js";
 // Webhooks (no auth, validated by gateway-specific tokens)
 import webhooksRouter from "./webhooks/webhooks.routes.js";
 
+// LGPD (políticas versionadas + portabilidade de dados)
+import lgpdRouter from "./lgpd/lgpd.routes.js";
+
 // Admin / governance
 import clinicsRouter from "./admin/clinics/clinics.routes.js";
 import usersRouter from "./admin/users/users.routes.js";
@@ -53,6 +56,11 @@ router.use("/auth", authRouter);
 // próprio router (ex.: saasBillingRouter montado em "/"), senão a auth global
 // intercepta e o webhook nunca chega ao handler.
 router.use("/webhooks", webhooksRouter);
+
+// LGPD — endpoints públicos de leitura de política + autenticados (aceite e
+// portabilidade). O router internamente aplica authMiddleware após as rotas
+// públicas.
+router.use("/lgpd", lgpdRouter);
 
 // Admin
 router.use("/clinics", clinicsRouter);

@@ -9,6 +9,10 @@ export const registerSchema = z.object({
   profileType: z.enum(["clinica", "autonomo"]).optional().default("clinica"),
   planName: z.string().optional().default("essencial"),
   couponCode: z.string().optional().nullable(),
+  // LGPD — IDs das versões correntes de Política de Privacidade e Termos de Uso
+  // aceitas no momento do cadastro (consentimento explícito, art. 8º LGPD).
+  privacyDocumentId: z.number().int().positive().optional().nullable(),
+  termsDocumentId: z.number().int().positive().optional().nullable(),
 });
 
 export const loginSchema = z.object({

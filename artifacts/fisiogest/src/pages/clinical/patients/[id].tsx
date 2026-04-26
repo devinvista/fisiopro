@@ -1,5 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
+import { downloadPatientExport } from "@/lib/lgpd";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetPatient,
@@ -367,6 +368,50 @@ function EditPatientDialog({
   );
 }
 
+// ─── LGPD Export Button ─────────────────────────────────────────────────────────
+
+function ExportLgpdButton({ patientId }: { patientId: number }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleExport() {
+    setLoading(true);
+    try {
+      await downloadPatientExport(patientId);
+      toast({
+        title: "Exportação iniciada",
+        description: "O arquivo JSON com os dados do paciente foi baixado.",
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Falha na exportação",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full h-9 rounded-xl text-sm border-slate-200 text-slate-700 hover:bg-slate-50"
+      onClick={handleExport}
+      disabled={loading}
+      title="LGPD Art. 18, V — direito à portabilidade dos dados"
+    >
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+      ) : (
+        <Download className="w-3.5 h-3.5 mr-2" />
+      )}
+      Exportar dados (LGPD)
+    </Button>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function PatientDetail() {
@@ -541,6 +586,11 @@ export default function PatientDetail() {
               {/* ── Export PDF ── */}
               <div className="mt-4 pt-4 border-t border-slate-100">
                 <ExportProntuarioButton patientId={patientId} patient={patient} />
+              </div>
+
+              {/* ── LGPD: portabilidade de dados (art. 18, V) ── */}
+              <div className="mt-3">
+                <ExportLgpdButton patientId={patientId} />
               </div>
 
               {/* ── Action buttons ── */}

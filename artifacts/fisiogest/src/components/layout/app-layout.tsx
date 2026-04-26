@@ -34,6 +34,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ClinicSwitcher } from "@/components/layout/clinic-switcher";
 import { GlobalSearch } from "@/components/layout/global-search";
+import { PolicyAcceptanceModal } from "@/components/lgpd/policy-acceptance-modal";
 import { ROLE_LABELS } from "@/utils/permissions";
 import type { Permission, Role } from "@/utils/permissions";
 import type { Feature } from "@/utils/plan-features";
@@ -464,6 +465,15 @@ export function AppLayout({ children, title }: AppLayoutProps) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // LGPD — políticas pendentes (vem do /api/auth/me)
+  const initialPending: number[] = (((user as any)?.lgpd?.pendingPolicies as Array<{ id: number }> | undefined) ?? [])
+    .map((p) => p.id);
+  const [lgpdPending, setLgpdPending] = useState<number[]>(initialPending);
+  useEffect(() => {
+    setLgpdPending(initialPending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(user as any)?.lgpd?.pendingPolicies?.map?.((p: { id: number }) => p.id).join?.(",")]);
+
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
@@ -566,6 +576,11 @@ export function AppLayout({ children, title }: AppLayoutProps) {
         location={location}
         hasPermission={hasPermission}
         onOpenMenu={() => setMobileOpen(true)}
+      />
+
+      <PolicyAcceptanceModal
+        pendingIds={lgpdPending}
+        onAllAccepted={() => setLgpdPending([])}
       />
     </div>
   );

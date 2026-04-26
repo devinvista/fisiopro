@@ -5,8 +5,11 @@ export const procedureCategoryEnum = z.enum(["Reabilitação", "Estética", "Pil
 export const procedureModalidadeEnum = z.enum(["individual", "dupla", "grupo"]);
 export const procedureBillingTypeEnum = z.enum(["porSessao", "mensal"]);
 
-export const createProcedureSchema = z
-  .object({
+/**
+ * Base sem refinements — necessário para podermos derivar `updateProcedureSchema`
+ * com `.partial()` (Zod v4 proíbe `partial()` em schemas com refine).
+ */
+const procedureBaseSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório").max(200),
     category: procedureCategoryEnum,
     modalidade: procedureModalidadeEnum.default("individual"),
@@ -47,12 +50,16 @@ export const createProcedureSchema = z
       )
       .optional()
       .nullable(),
-  })
-  .refine((d) => d.billingType !== "mensal" || (d.monthlyPrice && d.billingDay), {
-    message: "Para cobrança mensal, monthlyPrice e billingDay são obrigatórios",
   });
 
-export const updateProcedureSchema = createProcedureSchema.partial();
+export const createProcedureSchema = procedureBaseSchema.refine(
+  (d) => d.billingType !== "mensal" || (d.monthlyPrice && d.billingDay),
+  {
+    message: "Para cobrança mensal, monthlyPrice e billingDay são obrigatórios",
+  },
+);
+
+export const updateProcedureSchema = procedureBaseSchema.partial();
 
 export const updateProcedureCostsSchema = z.object({
   priceOverride: optionalPositiveNumber,

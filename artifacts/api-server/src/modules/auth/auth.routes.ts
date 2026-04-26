@@ -33,7 +33,16 @@ router.post(
   handle(async (req, res) => {
     const body = validateBody(registerSchema, req.body, res);
     if (!body) return;
-    const result = await authService.register(body);
+    const xff = req.headers["x-forwarded-for"];
+    const ip =
+      typeof xff === "string" && xff.length > 0
+        ? xff.split(",")[0]!.trim()
+        : (req.ip ?? null);
+    const result = await authService.register({
+      ...body,
+      ip,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
     setAuthCookie(res, result.token);
     res.status(201).json(result);
   }),
