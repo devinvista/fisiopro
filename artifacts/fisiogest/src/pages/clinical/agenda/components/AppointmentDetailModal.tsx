@@ -343,7 +343,7 @@ export function AppointmentDetailModal({
             {isGroupSession && !isEditing && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pacientes da Sessão</p>
-                <div className="space-y-2 max-h-[320px] overflow-y-auto pr-0.5">
+                <div className="space-y-2 sm:max-h-[320px] sm:overflow-y-auto sm:pr-0.5">
                   {allSessionMembers.map((member) => {
                     const mCfg = STATUS_CONFIG[member.status] || STATUS_CONFIG.agendado;
                     const isCurrent = member.id === appointment.id;
