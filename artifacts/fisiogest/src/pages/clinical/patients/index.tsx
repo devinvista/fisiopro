@@ -126,20 +126,23 @@ export default function PatientsList() {
         </div>
 
         {/* ── Stats strip ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {[
-            { label: "Total de Pacientes", value: total, icon: <Users className="w-4 h-4" />, accent: "#6366f1" },
-            { label: "Exibidos Agora", value: patients.length, icon: <Search className="w-4 h-4" />, accent: "#0ea5e9" },
-            { label: "Com E-mail", value: patients.filter(p => p.email).length, icon: <Mail className="w-4 h-4" />, accent: "#10b981" },
+            { label: "Total de Pacientes", shortLabel: "Total", value: total, icon: <Users className="w-4 h-4" />, accent: "#6366f1" },
+            { label: "Exibidos Agora", shortLabel: "Exibidos", value: patients.length, icon: <Search className="w-4 h-4" />, accent: "#0ea5e9" },
+            { label: "Com E-mail", shortLabel: "Com e-mail", value: patients.filter(p => p.email).length, icon: <Mail className="w-4 h-4" />, accent: "#10b981" },
           ].map((s, i) => (
-            <div key={i} className="relative bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div key={i} className="relative bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden min-w-0">
               <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: s.accent }} />
-              <div className="pl-4 pr-4 py-3.5 flex items-center gap-3">
-                <div className="p-2 rounded-xl shrink-0" style={{ backgroundColor: `${s.accent}18`, color: s.accent }}>
+              <div className="pl-3 pr-3 sm:pl-4 sm:pr-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl shrink-0" style={{ backgroundColor: `${s.accent}18`, color: s.accent }}>
                   {s.icon}
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{s.label}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide sm:tracking-widest leading-tight">
+                    <span className="sm:hidden">{s.shortLabel}</span>
+                    <span className="hidden sm:inline">{s.label}</span>
+                  </p>
                   {isLoading
                     ? <div className="h-6 w-10 bg-slate-100 animate-pulse rounded mt-1" />
                     : <p className="text-xl font-extrabold text-slate-900 tabular-nums">{s.value}</p>
