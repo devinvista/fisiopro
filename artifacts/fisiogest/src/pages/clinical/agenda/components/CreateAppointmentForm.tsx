@@ -116,6 +116,26 @@ export function CreateAppointmentForm({
   const mutation = useCreateAppointment();
   const { toast } = useToast();
 
+  // ── Agenda obrigatória ────────────────────────────────────────
+  const { data: availableSchedules = [] } = useQuery<{ id: number; name: string; isActive?: boolean }[]>({
+    queryKey: ["schedules"],
+    queryFn: () => apiFetch("/api/schedules").then((r) => r.json()),
+    staleTime: 60_000,
+    enabled: !scheduleId,
+  });
+  const activeSchedules = useMemo(
+    () => availableSchedules.filter((s) => s.isActive !== false),
+    [availableSchedules],
+  );
+  const [internalScheduleId, setInternalScheduleId] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!scheduleId && internalScheduleId === undefined && activeSchedules.length === 1) {
+      setInternalScheduleId(activeSchedules[0].id);
+    }
+  }, [scheduleId, internalScheduleId, activeSchedules]);
+  const effectiveScheduleId = scheduleId ?? internalScheduleId;
+  const needsScheduleSelector = !scheduleId && activeSchedules.length > 1;
+
   // Quando um paciente é selecionado, buscamos individualmente para garantir
   // que ele apareça em `selectedPatient` mesmo se a lista atual (filtrada/paginada)
   // não o contiver.
@@ -183,16 +203,16 @@ export function CreateAppointmentForm({
     [procedures, formData.procedureId]
   );
 
-  const canFetchSlots = !!(formData.date && formData.procedureId);
+  const canFetchSlots = !!(formData.date && formData.procedureId && effectiveScheduleId);
   const { data: slotsData, isFetching: slotsFetching } = useQuery({
-    queryKey: ["available-slots", formData.date, formData.procedureId, scheduleId ?? null],
+    queryKey: ["available-slots", formData.date, formData.procedureId, effectiveScheduleId ?? null],
     queryFn: async () => {
       const params = new URLSearchParams({
         date: formData.date,
         procedureId: formData.procedureId,
       });
-      if (scheduleId) {
-        params.set("scheduleId", String(scheduleId));
+      if (effectiveScheduleId) {
+        params.set("scheduleId", String(effectiveScheduleId));
       } else {
         params.set("clinicStart", clinicStart || "07:00");
         params.set("clinicEnd", clinicEnd || "20:00");
@@ -236,6 +256,10 @@ export function CreateAppointmentForm({
       toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
       return;
     }
+    if (!effectiveScheduleId) {
+      toast({ variant: "destructive", title: "Selecione uma agenda antes de continuar." });
+      return;
+    }
     if (canSelectProfessional && professionals.length > 1 && !parsed.data.professionalId) {
       toast({ variant: "destructive", title: "Selecione o profissional atendente." });
       return;
@@ -258,7 +282,7 @@ export function CreateAppointmentForm({
           credentials: "include",
           body: JSON.stringify(
             buildRecurringAppointmentPayload(
-              { values: parsed.data, canSelectProfessional, scheduleId },
+              { values: parsed.data, canSelectProfessional, scheduleId: effectiveScheduleId },
               parsedRecur.data,
             ),
           ),
@@ -287,7 +311,7 @@ export function CreateAppointmentForm({
         data: buildAppointmentPayload({
           values: parsed.data,
           canSelectProfessional,
-          scheduleId,
+          scheduleId: effectiveScheduleId,
         }) as any,
       },
       {
@@ -371,6 +395,31 @@ export function CreateAppointmentForm({
               Trocar
             </button>
           </div>
+
+          {/* ── Agenda (obrigatória quando há mais de uma) ── */}
+          {needsScheduleSelector && (
+            <div className="space-y-1.5">
+              <Label>Agenda *</Label>
+              <Select
+                value={internalScheduleId ? String(internalScheduleId) : ""}
+                onValueChange={(v) => {
+                  setInternalScheduleId(Number(v));
+                  setFormData((prev) => ({ ...prev, startTime: "" }));
+                }}
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Selecione a agenda..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeSchedules.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* ── Data + Horário (always shown first) ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -64,13 +64,16 @@ export function buildAppointmentPayload({
   canSelectProfessional,
   scheduleId,
 }: BuildAppointmentPayloadOptions) {
+  if (!scheduleId) {
+    throw new Error("Selecione uma agenda antes de criar o agendamento.");
+  }
   return {
     patientId: Number(values.patientId),
     procedureId: Number(values.procedureId),
     date: values.date,
     startTime: values.startTime,
     notes: values.notes || undefined,
-    ...(scheduleId ? { scheduleId } : {}),
+    scheduleId,
     ...(canSelectProfessional && values.professionalId
       ? { professionalId: Number(values.professionalId) }
       : {}),

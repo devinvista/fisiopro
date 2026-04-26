@@ -33,7 +33,7 @@ export const createAppointmentSchema = z.object({
   procedureId: z.number({ error: "procedureId deve ser um número" }).int().positive(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date deve estar no formato YYYY-MM-DD"),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "startTime deve estar no formato HH:MM"),
-  scheduleId: z.number().int().positive().optional().nullable(),
+  scheduleId: z.number({ error: "scheduleId é obrigatório" }).int().positive(),
   notes: z.string().max(2000).optional().nullable(),
   professionalId: z.number().int().positive().optional().nullable(),
 });
