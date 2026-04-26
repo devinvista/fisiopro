@@ -21,8 +21,8 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [[ports]]
-localPort = 3000
-externalPort = 3000
+localPort = 5000
+externalPort = 5000
 
 [userenv]
 
@@ -50,7 +50,7 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm run dev"
-waitForPort = 3000
+waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "console"
