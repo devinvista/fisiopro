@@ -21,7 +21,7 @@ interface TemplateEsteticaFacialProps {
 
 export function TemplateEsteticaFacial({ form, setForm, f, sv, sections, toggle, readOnly = false }: TemplateEsteticaFacialProps) {
   return (
-    <fieldset disabled={readOnly} className="contents">
+    <fieldset disabled={readOnly} className="contents min-w-0">
       <AnamSection title="Queixa Principal e Histórico" subtitle="Motivo da consulta e histórico do problema" icon={<ClipboardList className="w-4 h-4" />} colorClass="rose" open={sections.s1} onToggle={() => toggle("s1")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">

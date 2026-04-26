@@ -18,7 +18,7 @@ interface TemplatePilatesProps {
 
 export function TemplatePilates({ form, f, sv, sections, toggle, readOnly = false }: TemplatePilatesProps) {
   return (
-    <fieldset disabled={readOnly} className="contents">
+    <fieldset disabled={readOnly} className="contents min-w-0">
       <AnamSection title="Perfil e Experiência" subtitle="Ocupação, prática anterior e gestação" icon={<ClipboardList className="w-4 h-4" />} colorClass="teal" open={sections.s1} onToggle={() => toggle("s1")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
