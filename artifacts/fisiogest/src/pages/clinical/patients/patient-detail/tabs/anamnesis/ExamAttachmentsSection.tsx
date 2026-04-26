@@ -148,17 +148,17 @@ export function ExamAttachmentsSection({ patientId }: ExamAttachmentsSectionProp
 
   return (
     <div className="space-y-3 pt-4 border-t border-slate-100">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Paperclip className="w-4 h-4 text-slate-500" />
-          <span className="text-sm font-semibold text-slate-700">Anexos e Exames Complementares</span>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <Paperclip className="w-4 h-4 text-slate-500 shrink-0" />
+          <span className="text-sm font-semibold text-slate-700 truncate">Anexos e Exames Complementares</span>
           {attachments.length > 0 && (
-            <span className="bg-slate-100 text-slate-500 text-xs font-medium px-2 py-0.5 rounded-full">
+            <span className="bg-slate-100 text-slate-500 text-xs font-medium px-2 py-0.5 rounded-full shrink-0">
               {attachments.length}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <Button
             variant={addMode === "text" ? "default" : "outline"}
             size="sm"
