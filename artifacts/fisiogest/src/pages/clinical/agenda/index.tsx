@@ -199,7 +199,6 @@ export default function Agenda() {
             onMiniCalMonthChange={nav.setMiniCalMonth}
             onSelectDate={(d) => nav.setCurrentDate(d)}
             weekDays={nav.weekDays}
-            activeSchedules={activeSchedules}
           />
         </div>
 
