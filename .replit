@@ -30,6 +30,9 @@ externalPort = 5000
 JWT_SECRET = "a3237b075a5721e66b3c8cf8897251043962541b3982f5cd6f3ddee1a585c3f46b213866a610742eb04845cc0bdade6e7eba6a6e1e9b840b80b3d98cf64505d6"
 DATABASE_URL = "postgresql://neondb_owner:npg_reJWXCu5S4yY@ep-ancient-wave-ac5u4qk7-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 CLOUDINARY_URL = "cloudinary://531994692338197:5BA95Y2ONBVgWfQUPuD81o_tmZM@dqsg4f7uv"
+ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjMyMDA5MGU2LWU4YzUtNGZhYS04MzU0LWVkYTEzYjYyNzYxMzo6JGFhY2hfOTg0YzE2YTktNzQyYS00OTY4LTk0MGEtMTcwZGY2MzUxMzI5"
+ASAAS_WEBHOOK_TOKEN= "whsec_3MuteylBKb1QRx"
+
 
 [workflows]
 runButton = "Project"
