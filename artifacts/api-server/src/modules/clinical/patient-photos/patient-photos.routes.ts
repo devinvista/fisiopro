@@ -21,7 +21,7 @@ const createPhotoSchema = z.object({
   contentType: z.enum(ALLOWED_IMAGE_TYPES as [string, ...string[]]).optional(),
   fileSize: z.number().int().positive().max(MAX_PHOTO_SIZE).optional(),
   viewType: z.enum(VIEW_TYPES),
-  takenAt: z.string().datetime().optional(),
+  takenAt: z.iso.datetime().optional(),
   sessionLabel: z.string().max(100).nullable().optional(),
   notes: z.string().max(1000).nullable().optional(),
   appointmentId: z.number().int().positive().nullable().optional(),
