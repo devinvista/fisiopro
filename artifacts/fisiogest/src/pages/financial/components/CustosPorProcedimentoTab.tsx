@@ -108,7 +108,7 @@ export function CustosPorProcedimentoTab({ month, year }: { month: number; year:
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Procedimento</th>
+                    <th className="sticky left-0 z-20 bg-slate-50 py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[160px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)]">Procedimento</th>
                     <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Preço</th>
                     <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Custo Direto</th>
                     <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right hidden md:table-cell">Overhead Est.</th>
@@ -125,8 +125,8 @@ export function CustosPorProcedimentoTab({ month, year }: { month: number; year:
                     const marginOk = p.estimatedMarginPct >= 30;
                     const marginWarn = p.estimatedMarginPct >= 10 && p.estimatedMarginPct < 30;
                     return (
-                      <tr key={p.procedureId} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3 px-4">
+                      <tr key={p.procedureId} className="group border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                        <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 py-3 px-4 min-w-[160px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)]">
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{p.name}</p>
                             <p className="text-[11px] text-slate-400">{p.category} · {p.durationMinutes}min</p>

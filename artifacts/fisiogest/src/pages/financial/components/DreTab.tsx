@@ -48,9 +48,14 @@ export function DreTab({ month, year }: { month: number; year: number }) {
   }) {
     const pctChange = previous && previous !== 0 ? ((current - previous) / Math.abs(previous)) * 100 : 0;
     const executionPct = estimated && estimated !== 0 ? (current / estimated) * 100 : null;
+    const stickyBgClass = isTotal
+      ? "bg-indigo-50 group-hover:bg-indigo-50"
+      : isSubtotal
+        ? "bg-slate-100 group-hover:bg-slate-100"
+        : "bg-white group-hover:bg-slate-50";
     return (
-      <tr className={`border-b border-slate-50 ${isTotal ? "bg-primary/5" : isSubtotal ? "bg-slate-50/80" : "hover:bg-slate-50/40"} transition-colors`}>
-        <td className={`py-3 px-5 text-sm ${indent ? "pl-10 text-slate-400 font-normal" : isTotal ? "font-extrabold text-slate-900" : isSubtotal ? "font-bold text-slate-700" : "text-slate-600"}`}>
+      <tr className={`group border-b border-slate-50 ${isTotal ? "bg-primary/5" : isSubtotal ? "bg-slate-50/80" : "hover:bg-slate-50/40"} transition-colors`}>
+        <td className={`sticky left-0 z-10 ${stickyBgClass} py-3 px-5 text-sm min-w-[140px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] ${indent ? "pl-10 text-slate-400 font-normal" : isTotal ? "font-extrabold text-slate-900" : isSubtotal ? "font-bold text-slate-700" : "text-slate-600"}`}>
           {label}
         </td>
         {estimated !== undefined && (
@@ -132,7 +137,7 @@ export function DreTab({ month, year }: { month: number; year: number }) {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200">
-                  <th className="py-2.5 px-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item</th>
+                  <th className="sticky left-0 z-20 bg-slate-50 py-2.5 px-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest min-w-[140px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)]">Item</th>
                   {hasEstimated && <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Orçado</th>}
                   {hasPrev && <th className="py-2.5 px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Mês Ant.</th>}
                   <th className="py-2.5 px-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Realizado</th>

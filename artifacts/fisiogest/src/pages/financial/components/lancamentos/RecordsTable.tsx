@@ -93,7 +93,101 @@ export function RecordsTable({
             <p className="text-xs text-slate-400 mt-1">Adicione receitas e despesas para visualizar os lançamentos</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* Mobile card list (<sm) — padrão Stripe/Nubank */}
+            <ul className="sm:hidden divide-y divide-slate-100">
+              {records.map((record) => {
+                const rec = record as any;
+                const recStatus: string = rec.status ?? "pago";
+                const dueDate = rec.dueDate ? new Date(rec.dueDate + "T12:00:00") : null;
+                const paymentDate = rec.paymentDate ? new Date(rec.paymentDate + "T12:00:00") : null;
+                const displayDate = paymentDate ?? dueDate ?? new Date(record.createdAt);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const daysOverdue = (recStatus === "pendente" && dueDate)
+                  ? Math.floor((today.getTime() - dueDate.getTime()) / 86400000)
+                  : 0;
+                const isOverdue = daysOverdue > 0;
+                const statusInfo = isOverdue
+                  ? { label: `Vencido há ${daysOverdue}d`, dot: "bg-red-500", text: "text-red-700", bg: "bg-red-50" }
+                  : (STATUS_CFG[recStatus] ?? { label: recStatus, dot: "bg-slate-300", text: "text-slate-500", bg: "bg-slate-50" });
+                return (
+                  <li key={record.id} className={`px-4 py-3 ${isOverdue ? "bg-red-50/30" : ""}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 tabular-nums mb-1 flex-wrap">
+                          <span className="font-medium">{format(displayDate, "dd/MM/yy")}</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${statusInfo.bg} ${statusInfo.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot}`} />
+                            {statusInfo.label}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800 break-words">{record.description}</p>
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                          {rec.procedureName ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">
+                              <Link2 className="w-2.5 h-2.5" />
+                              {rec.procedureName}
+                            </span>
+                          ) : record.category ? (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                              {record.category}
+                            </span>
+                          ) : null}
+                          {rec.paymentMethod && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                              {rec.paymentMethod}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <p className={`text-sm font-bold whitespace-nowrap tabular-nums ${record.type === "receita" ? "text-emerald-600" : "text-red-600"}`}>
+                          {record.type === "receita" ? "+" : "−"}{formatCurrency(Number(record.amount))}
+                        </p>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => onEdit(record)}
+                            className="p-1.5 rounded-lg hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-all"
+                            title="Editar"
+                          >
+                            <PenLine className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onDelete({ id: record.id, description: record.description, amount: Number(record.amount) })}
+                            className="p-1.5 rounded-lg hover:bg-red-100 text-slate-400 hover:text-red-500 transition-all"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+              {/* Mobile totals */}
+              <li className="px-4 py-3 bg-slate-50">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Totais do período</p>
+                  <div className="text-right">
+                    {typeFilter !== "despesa" && (
+                      <p className="text-sm font-bold text-emerald-600 tabular-nums">+{formatCurrency(totalReceitas)}</p>
+                    )}
+                    {typeFilter !== "receita" && (
+                      <p className="text-sm font-bold text-red-600 tabular-nums">−{formatCurrency(totalDespesas)}</p>
+                    )}
+                    {typeFilter === "all" && (
+                      <p className={`text-sm font-extrabold mt-0.5 tabular-nums ${totalReceitas - totalDespesas >= 0 ? "text-indigo-600" : "text-red-700"}`}>
+                        {formatCurrency(totalReceitas - totalDespesas)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            </ul>
+
+            {/* Desktop table (≥sm) */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-100">
@@ -229,7 +323,8 @@ export function RecordsTable({
                 </tfoot>
               )}
             </table>
-          </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
