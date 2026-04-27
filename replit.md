@@ -13,7 +13,7 @@ FisioGest Pro é uma plataforma SaaS de gestão clínica completa para fisiotera
 - Superadmin após login: redireciona para `/superadmin`
 - `/usuarios` e `/agendas` → redirecionam para `/configuracoes#usuarios` e `/configuracoes#agendas`
 
-> **Convenção de importação:** sempre importar `useAuth` de `@/lib/use-auth`. O `auth-context.tsx` exporta apenas `AuthProvider` e `AuthContext`.
+> **Convenção de importação:** sempre importar `useAuth` de `@/hooks/use-auth`. O `auth-context.tsx` exporta apenas `AuthProvider` e `AuthContext`. O hook `useAuth` agora expõe `refreshUser()` para rebuscar `/api/auth/me` e atualizar o usuário no contexto (usado, por exemplo, após o aceite das políticas LGPD para que o modal não reapareça em cada navegação de página).
 
 O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefatos (frontend + API + mockup-sandbox) servidos pelo proxy reverso compartilhado do Replit na porta 80.
 
@@ -297,7 +297,7 @@ intencionais: rotas públicas `agendar/*` (sem auth) e uploads `photos/*` (FormD
 
 - Cliente HTTP: hooks gerados pelo Orval em `@workspace/api-client-react`
 - Tipos compartilhados: `@workspace/api-zod` e `@workspace/db`
-- `useAuth`: sempre `@/utils/use-auth` (o `auth-context.tsx` exporta apenas `AuthProvider` e `AuthContext`)
+- `useAuth`: sempre `@/hooks/use-auth` (o `auth-context.tsx` exporta apenas `AuthProvider` e `AuthContext`)
 
 ---
 
@@ -458,12 +458,25 @@ conformidade).
 * `src/components/lgpd/policy-acceptance-modal.tsx` — modal force-open
   (não fecha por ESC/clique fora) com checkbox obrigatório, montado
   em `AppLayout` quando `user.lgpd.hasPending`.
+  - **Estado lido diretamente do `AuthContext`** (não há mais cópia local
+    no `AppLayout`). Após o aceite, o componente chama `refreshUser()`
+    do `useAuth`, que rebusca `/api/auth/me` e atualiza `pendingPolicies`
+    para `[]` no contexto. Assim o modal fecha em todas as instâncias do
+    `AppLayout` e **não reaparece** ao navegar entre páginas (atestados,
+    plano de tratamento, etc.). Bug fixado em 27/04/2026 — antes o estado
+    era duplicado dentro do `AppLayout` e cada navegação remontava o
+    layout, lendo a lista pendente "antiga" do user e reabrindo o modal.
 * `src/pages/politica-de-privacidade.tsx` e
   `src/pages/termos-de-uso.tsx` — públicas, lazy-loaded em `App.tsx`.
 * `src/pages/register.tsx` — checkbox obrigatório de aceite + envio
   de `privacyDocumentId`/`termsDocumentId` no payload.
 * `ExportLgpdButton` em `PatientDetail` — baixa JSON com todos dados
   do paciente (portabilidade — art. 18, V LGPD).
+  **Visível apenas para `isSuperAdmin`** (gating em 27/04/2026).
+* **Aba "Auditoria"** do paciente (log de acessos LGPD) — também
+  restrita a `isSuperAdmin`, tanto na barra de abas quanto no parser
+  do `?tab=auditoria` (usuários comuns que abrirem a URL caem na aba
+  "Jornada").
 
 ### Notas técnicas
 

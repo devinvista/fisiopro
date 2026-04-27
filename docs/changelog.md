@@ -1,5 +1,62 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão 27/abril/2026 (tarde) — Bundle de produção, remarcar em grupo, restrição LGPD ao superadmin, modal de termos persistente
+
+**Contexto:** Sessão pós-import do Replit. Quatro entregas independentes:
+(1) montar pacote zip pronto para deploy em hospedagem Hostinger Node.js;
+(2) habilitar remarcação de paciente individual dentro de uma sessão em grupo;
+(3) esconder botões/abas LGPD para perfis não-superadmin;
+(4) corrigir bug em que o modal de aceite de termos LGPD reaparecia em
+toda navegação de página.
+
+**Implementado:**
+
+1. **Pacote de produção (`artifacts/downloads/fisiogest-pro-prod.zip`, ~2,6 MB, 168 arquivos):**
+   - `artifacts/api-server/src/app.ts`: a rota `app.get("/")` que devolvia `{ ok: true, service: "fisiogest-api" }` agora é montada **somente em desenvolvimento** (`if (NODE_ENV !== "production")`). Em produção quem responde `/` é o `express.static`, servindo `index.html` da SPA.
+   - `publicDir` agora resolve via múltiplos candidatos (`process.cwd()`, `__dirname`, etc.) usando `fs.existsSync`, para que o bundle CJS funcione tanto rodando da raiz do zip quanto de subpasta arbitrária.
+   - Validado end-to-end com `NODE_ENV=production node server/index.cjs` em `:9090` contra o Neon real: `GET /api/health` 200 com `db.ok:true`, `GET /` HTML correto, `GET /assets/*.js` MIME correto, `GET /dashboard` cai no fallback SPA, `GET /api/auth/me` 401.
+   - Estrutura do zip: `server/index.cjs` (bundle esbuild), `artifacts/fisiogest/dist/public/` (SPA Vite), `package.json` só com deps de runtime (allowlist do esbuild + externals), `.env.example`, `README.md`.
+2. **Remarcar paciente individual em sessão em grupo (`AppointmentDetailModal.tsx`):**
+   - Estado `isRescheduling: boolean` substituído por `reschedulingId: string | null` (qual paciente da sessão está sendo remarcado).
+   - Helpers `startReschedule(target)` e `cancelReschedule()`; `reschedulingMember` derivado de `[appointment, ...sessionSiblings]`.
+   - O formulário pré-preenche data/hora do paciente selecionado e mostra o nome dele.
+   - `handleReschedule` faz `POST /api/appointments/{reschedulingId}/reschedule` (ID correto do paciente, não mais o âncora) e **não fecha o modal** em sessões em grupo, para o usuário continuar gerenciando os outros pacientes.
+   - Adicionado botão "Remarcar" roxo per-paciente no bloco de grupo (linha ~448), ao lado dos botões de Confirmar/Compareceu/Faltou/Cancelar/Concluir.
+3. **Restrição LGPD a superadmin (`pages/clinical/patients/[id].tsx`):**
+   - `ExportLgpdButton` agora envolto em `{isSuperAdmin && (...)}`.
+   - Acesso direto via `?tab=auditoria` bloqueado para perfis comuns: o `validTabs` inicial agora é `isSuperAdmin ? [...baseTabs, "auditoria"] : baseTabs`. Tentativa de abrir cai em "Jornada".
+   - Triggers de aba "Auditoria" mobile e desktop já estavam atrás de `{isSuperAdmin && (...)}`.
+   - Mantidos públicos (LGPD exige): modal de aceite de políticas, páginas `/politica-de-privacidade`, `/termos-de-uso`, links no rodapé da landing.
+4. **Modal de termos persistente (bug crítico):**
+   - **Sintoma:** após o usuário aceitar, o modal voltava a aparecer em cada nova página (atestados, plano de tratamento, etc.). A página "bugava" porque o modal `force-open` bloqueia cliques externos.
+   - **Causa raiz:** `AppLayout` é renderizado dentro de cada página; quando o usuário navega, o layout é desmontado e remontado. O estado `lgpdPending` era inicializado a partir de `user.lgpd.pendingPolicies` no contexto de auth — mas esse objeto **nunca era atualizado** após o aceite. O `acceptPolicy()` gravava no backend, `setLgpdPending([])` fechava o modal **só naquela instância**, e a próxima navegação reabria com a lista antiga.
+   - **Correção:**
+     - Adicionado método `refreshUser(): Promise<void>` ao `AuthContext` (`artifacts/fisiogest/src/contexts/auth-context.tsx`). Rebusca `/api/auth/me` via `getCurrentUser()` e atualiza `user`, `subscription`, `features`, `clinicId`, `clinics`, `isSuperAdmin` no estado.
+     - `AppLayout` agora **deriva `lgpdPending` direto de `user.lgpd.pendingPolicies`** (sem `useState`/`useEffect` espelho). Após o aceite, `onAllAccepted` chama `void refreshUser()`. O backend devolve a lista atualizada (vazia), o modal fecha por reatividade do contexto, e em qualquer remontagem subsequente a lista já vem vazia.
+     - Removido `useEffect` órfão e import não usado de `react`.
+
+**Inconsistências corrigidas em `replit.md`:**
+- Convenção de import do `useAuth` apontava para `@/lib/use-auth` (linha 16) e `@/utils/use-auth` (linha 300) — ambos inexistentes. Caminho real: `@/hooks/use-auth`.
+- Adicionada nota sobre `refreshUser()` na convenção de auth.
+- Seção LGPD documenta gating de superadmin e correção do modal persistente.
+
+**Arquivos alterados:**
+- `artifacts/api-server/src/app.ts`
+- `artifacts/fisiogest/src/pages/clinical/agenda/components/AppointmentDetailModal.tsx`
+- `artifacts/fisiogest/src/pages/clinical/patients/[id].tsx`
+- `artifacts/fisiogest/src/contexts/auth-context.tsx`
+- `artifacts/fisiogest/src/components/layout/app-layout.tsx`
+- `replit.md`
+- `docs/changelog.md`
+- novo: `artifacts/downloads/fisiogest-pro-prod.zip`
+
+**Validação:**
+- `pnpm run build` ✅ (bundle 1.6 MB, sem erros).
+- Workflow `Start application` reiniciado, sem erros nos logs do servidor; erros de "Invalid hook call" no console do browser são stale (Fast Refresh do HMR durante a edição do `AuthContext`, que exporta provider + contexto no mesmo arquivo — limitação conhecida do `@vitejs/plugin-react`, sem efeito em produção).
+- Servidor de produção testado manualmente em sessão anterior (porta 9090) com Neon real.
+
+---
+
 ### Sessão 27/abril/2026 — Hardening de tipos backend, a11y de Dialog, datepicker livre
 
 **Contexto:** Após tornar `appointments.schedule_id` NOT NULL no banco (sessão anterior), 3 caminhos de criação ainda permitiam `scheduleId: null` no nível TypeScript, gerando 3 erros de typecheck. Além disso, `CommandDialog` (busca global) renderizava sem `DialogTitle`, disparando avisos de acessibilidade do Radix em todo build dev. O datepicker pt-BR estava travado no mês corrente porque `onMonthChange` era no-op e `toYear` limitava a 31/dez do ano atual.
