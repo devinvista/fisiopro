@@ -62,8 +62,10 @@ controle sobre orçamento e metas.
 - [x] Snapshot dos preços vigentes em `frozen_prices_json` no momento da aceitação.
 - [x] Após aceito: bloquear `PUT` que altere preço/desconto/procedimentos (retorna 409 com
       mensagem de "renegociação necessária"). Status, objetivos e notas continuam editáveis.
-- [ ] Geração de **receita estimada** (projeção em `treatment_plan_estimates` — próxima iteração).
-- [ ] Endpoint `POST /api/.../treatment-plans/:planId/renegotiate` para versionar via `parent_plan_id`.
+- [x] Endpoint `POST /api/.../treatment-plans/:planId/renegotiate` para versionar via `parent_plan_id`
+      (clona procedimentos, encerra plano anterior como `concluido`, novo plano nasce sem aceite).
+- [ ] Geração de **receita estimada** agregada em `treatment_plan_estimates` para alimentar
+      o fluxo de caixa projetado (próxima iteração — Sprint 3 T7 já cobre via snapshot).
 
 ### T5. Configurações financeiras da clínica
 - [ ] Nova tabela `clinic_financial_settings`:

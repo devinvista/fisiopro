@@ -179,6 +179,27 @@ router.post(
   }),
 );
 
+// Sprint 2 — renegociação de plano aceito:
+// cria nova versão (parent_plan_id), clona procedimentos, encerra o anterior.
+// Body opcional: campos top-level a sobrescrever (frequency, estimatedSessions, startDate, etc).
+router.post(
+  "/treatment-plans/:planId/renegotiate",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
+    const planId = parseInt(req.params.planId);
+    const body = validateBody(updateTreatmentPlanSchema, req.body ?? {}, res);
+    if (!body) return;
+    const result = await svc.renegotiatePatientTreatmentPlan(
+      patientId,
+      planId,
+      body,
+      getCtx(req as AuthRequest),
+    );
+    res.status(201).json(result);
+  }),
+);
+
 // ─── Treatment Plan (compat, single ativo) ────────────────────────────────────
 
 router.get("/treatment-plan", requirePermission("medical.read"), asyncHandler(async (req: Request<P>, res: Response) => {

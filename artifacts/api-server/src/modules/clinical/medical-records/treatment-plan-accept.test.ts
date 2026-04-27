@@ -7,6 +7,8 @@ const repoMock = vi.hoisted(() => {
     listTreatmentPlanProceduresWithCatalog: vi.fn(),
     acceptTreatmentPlan: vi.fn(),
     updateTreatmentPlan: vi.fn(),
+    createTreatmentPlan: vi.fn(),
+    cloneTreatmentPlanProcedures: vi.fn(),
   };
 });
 
@@ -22,6 +24,7 @@ vi.mock("../../../utils/cloudinary.js", () => ({
 const {
   acceptPatientTreatmentPlan,
   updatePatientTreatmentPlanById,
+  renegotiatePatientTreatmentPlan,
 } = await import("./medical-records.service.js");
 
 const ctx = { userId: 99 };
@@ -259,5 +262,123 @@ describe("updatePatientTreatmentPlanById com plano aceito (T4 - bloqueio)", () =
     );
     expect(result).toBeDefined();
     expect(repoMock.updateTreatmentPlan).toHaveBeenCalledOnce();
+  });
+});
+
+describe("renegotiatePatientTreatmentPlan (T4 - versionamento)", () => {
+  beforeEach(() => {
+    repoMock.getTreatmentPlan.mockReset();
+    repoMock.createTreatmentPlan.mockReset();
+    repoMock.cloneTreatmentPlanProcedures.mockReset();
+    repoMock.updateTreatmentPlan.mockReset();
+  });
+
+  function acceptedPlan(overrides: Record<string, unknown> = {}) {
+    return planFixture({
+      id: 10,
+      acceptedAt: new Date("2026-04-01T10:00:00Z"),
+      acceptedBy: 50,
+      frozenPricesJson: '{"items":[]}',
+      frequency: "2x/semana",
+      estimatedSessions: 10,
+      startDate: "2026-04-15",
+      objectives: "obj antigo",
+      ...overrides,
+    });
+  }
+
+  it("cria novo plano apontando parent_plan_id, clona procedimentos e encerra o anterior", async () => {
+    const previous = acceptedPlan();
+    repoMock.getTreatmentPlan.mockResolvedValue(previous);
+    repoMock.createTreatmentPlan.mockImplementation(async (_pid, _cid, data) => ({
+      id: 11,
+      patientId: 7,
+      clinicId: 1,
+      ...data,
+    }));
+    repoMock.cloneTreatmentPlanProcedures.mockResolvedValue([{ id: 100 }, { id: 101 }]);
+    repoMock.updateTreatmentPlan.mockResolvedValue({ ...previous, status: "concluido" });
+
+    const result = await renegotiatePatientTreatmentPlan(7, 10, {}, ctx);
+
+    // Novo plano criado com parentPlanId apontando pro anterior
+    expect(repoMock.createTreatmentPlan).toHaveBeenCalledOnce();
+    const [, , createPayload] = repoMock.createTreatmentPlan.mock.calls[0];
+    expect(createPayload).toMatchObject({
+      parentPlanId: 10,
+      status: "ativo",
+      frequency: "2x/semana", // herda do anterior quando sem override
+      estimatedSessions: 10,
+      startDate: "2026-04-15",
+      objectives: "obj antigo",
+    });
+    // Não pode herdar acceptedAt — novo plano nasce sem aceite
+    expect(createPayload).not.toHaveProperty("acceptedAt");
+    expect(createPayload).not.toHaveProperty("frozenPricesJson");
+
+    // Procedimentos clonados do antigo (10) para o novo (11)
+    expect(repoMock.cloneTreatmentPlanProcedures).toHaveBeenCalledWith(10, 11);
+
+    // Plano antigo marcado como concluído
+    expect(repoMock.updateTreatmentPlan).toHaveBeenCalledWith(10, 7, { status: "concluido" });
+
+    expect(result.next.id).toBe(11);
+    expect(result.previous.status).toBe("concluido");
+  });
+
+  it("aplica overrides nos campos comerciais ao renegociar", async () => {
+    repoMock.getTreatmentPlan.mockResolvedValue(acceptedPlan());
+    repoMock.createTreatmentPlan.mockImplementation(async (_p, _c, data) => ({ id: 11, ...data }));
+    repoMock.cloneTreatmentPlanProcedures.mockResolvedValue([]);
+    repoMock.updateTreatmentPlan.mockResolvedValue({});
+
+    await renegotiatePatientTreatmentPlan(
+      7,
+      10,
+      { frequency: "3x/semana", estimatedSessions: 20, startDate: "2026-05-01" },
+      ctx,
+    );
+
+    const [, , createPayload] = repoMock.createTreatmentPlan.mock.calls[0];
+    expect(createPayload).toMatchObject({
+      frequency: "3x/semana",
+      estimatedSessions: 20,
+      startDate: "2026-05-01",
+      parentPlanId: 10,
+    });
+  });
+
+  it("rejeita renegociação de plano NÃO aceito", async () => {
+    repoMock.getTreatmentPlan.mockResolvedValue(planFixture()); // acceptedAt null
+
+    await expect(renegotiatePatientTreatmentPlan(7, 10, {}, ctx)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining("ainda não foi aceito"),
+    });
+    expect(repoMock.createTreatmentPlan).not.toHaveBeenCalled();
+  });
+
+  it("rejeita renegociação de plano com status diferente de ativo", async () => {
+    repoMock.getTreatmentPlan.mockResolvedValue(acceptedPlan({ status: "concluido" }));
+
+    await expect(renegotiatePatientTreatmentPlan(7, 10, {}, ctx)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(repoMock.createTreatmentPlan).not.toHaveBeenCalled();
+  });
+
+  it("rejeita renegociação sem usuário autenticado", async () => {
+    await expect(renegotiatePatientTreatmentPlan(7, 10, {}, {})).rejects.toMatchObject({
+      status: 401,
+    });
+    expect(repoMock.getTreatmentPlan).not.toHaveBeenCalled();
+  });
+
+  it("retorna 404 quando o plano não existe", async () => {
+    repoMock.getTreatmentPlan.mockResolvedValue(null);
+
+    await expect(renegotiatePatientTreatmentPlan(7, 10, {}, ctx)).rejects.toMatchObject({
+      status: 404,
+    });
   });
 });

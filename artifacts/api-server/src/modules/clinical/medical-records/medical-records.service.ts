@@ -468,6 +468,93 @@ export async function acceptPatientTreatmentPlan(
   return updated;
 }
 
+/**
+ * Renegocia um plano de tratamento já aceito.
+ *
+ * Cria um NOVO plano (status="ativo", `parent_plan_id` apontando para o anterior)
+ * com os procedimentos clonados do plano original. Campos comerciais (`frequency`,
+ * `estimatedSessions`, `startDate`, etc.) podem ser sobrescritos via `overrides`.
+ *
+ * O plano original é finalizado (status="concluido") preservando o snapshot de aceite
+ * para fins fiscais — toda a história fica auditada via `parent_plan_id`.
+ *
+ * Pré-requisitos:
+ *  - Plano deve estar **aceito** (caso contrário use o PUT direto, sem versionar).
+ *  - Plano deve estar com status `ativo` (não pode renegociar plano já concluído/cancelado).
+ *
+ * O NOVO plano nasce **sem aceite** — precisa ser revisado e aceito separadamente para
+ * congelar o novo snapshot de preços.
+ */
+export async function renegotiatePatientTreatmentPlan(
+  patientId: number,
+  planId: number,
+  overrides: Record<string, unknown>,
+  ctx: AuthCtx,
+) {
+  if (!ctx.userId) throw HttpError.unauthorized("Usuário não autenticado");
+
+  const previous = await repo.getTreatmentPlan(planId, patientId);
+  if (!previous) throw HttpError.notFound("Plano de tratamento não encontrado");
+  if (!previous.acceptedAt) {
+    throw HttpError.conflict(
+      "Plano ainda não foi aceito — edite os campos diretamente via PUT em vez de renegociar.",
+    );
+  }
+  if (previous.status !== "ativo") {
+    throw HttpError.conflict(
+      `Apenas planos com status "ativo" podem ser renegociados (status atual: "${previous.status}").`,
+    );
+  }
+
+  // Campos clonados do plano anterior + overrides do payload.
+  const overrideFields = normalizeTreatmentPlan({
+    objectives: overrides.objectives !== undefined ? overrides.objectives : previous.objectives,
+    techniques: overrides.techniques !== undefined ? overrides.techniques : previous.techniques,
+    frequency: overrides.frequency !== undefined ? overrides.frequency : previous.frequency,
+    estimatedSessions:
+      overrides.estimatedSessions !== undefined
+        ? overrides.estimatedSessions
+        : previous.estimatedSessions,
+    startDate:
+      overrides.startDate !== undefined
+        ? overrides.startDate
+        : previous.startDate
+          ? typeof previous.startDate === "string"
+            ? previous.startDate
+            : new Date(previous.startDate as unknown as string).toISOString().slice(0, 10)
+          : null,
+    responsibleProfessional:
+      overrides.responsibleProfessional !== undefined
+        ? overrides.responsibleProfessional
+        : previous.responsibleProfessional,
+    status: "ativo", // novo plano sempre nasce ativo
+  });
+
+  const newPlan = await repo.createTreatmentPlan(patientId, previous.clinicId, {
+    ...overrideFields,
+    parentPlanId: previous.id,
+  });
+  if (!newPlan) throw HttpError.notFound("Falha ao criar novo plano");
+
+  // Clona o "carrinho" de procedimentos para o novo plano (preços vigentes serão
+  // recalculados/snapshotados quando o paciente aceitar o novo plano).
+  await repo.cloneTreatmentPlanProcedures(previous.id, newPlan.id);
+
+  // Encerra o plano anterior (continua acessível para histórico/relatórios fiscais).
+  await repo.updateTreatmentPlan(previous.id, patientId, { status: "concluido" });
+
+  await logAudit({
+    userId: ctx.userId,
+    patientId,
+    action: "renegotiate",
+    entityType: "treatment_plan",
+    entityId: newPlan.id,
+    summary: `Plano renegociado (versionado a partir do plano #${previous.id})`,
+  });
+
+  return { previous: { ...previous, status: "concluido" as const }, next: newPlan };
+}
+
 export async function deletePatientTreatmentPlan(
   patientId: number,
   planId: number,

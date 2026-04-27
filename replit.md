@@ -116,7 +116,8 @@ O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano
 - Após aceito: `PUT /treatment-plans/:planId` só aceita alterar campos "soft" (`status`, `objectives`, `techniques`, `responsibleProfessional`). Tentativas de alterar `frequency`, `estimatedSessions`, `startDate` retornam `409 Conflict` exigindo renegociação.
 - Endpoint é idempotente (chamar duas vezes não reescreve o snapshot).
 - O snapshot inclui `totalEstimatedRevenue` para alimentar projeção de receita futura.
-- Coluna `parent_plan_id` permite versionamento via "renegociação" (endpoint na próxima iteração de Sprint 2).
+- `POST /api/patients/:patientId/treatment-plans/:planId/renegotiate` — gera nova versão do plano: clona os procedimentos, aplica overrides do payload (campos top-level — `frequency`, `estimatedSessions`, `startDate`, `objectives`, `techniques`, `responsibleProfessional`), aponta `parent_plan_id` para o anterior e marca o anterior como `concluido`. O novo plano nasce **sem aceite** — precisa ser revisado e aceito separadamente para congelar o novo snapshot. Exige plano anterior `aceito` + `status='ativo'` (HTTP 409 caso contrário).
+- Histórico fiscal: o plano original mantém `frozen_prices_json` intacto após renegociação; toda a árvore de versões é navegável via `parent_plan_id` (índice `idx_treatment_plans_parent`).
 
 ### Diferenciação por plano SaaS (Sprint 2 — T6)
 
