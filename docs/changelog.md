@@ -1,5 +1,98 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão 27/abril/2026 (tarde) — UX/Mobile: diálogos centralizados + máscara de nome de paciente
+
+**Bug reportado:** Em telas mobile (Chrome Android), o diálogo "Sessão em
+Grupo" (e similares abertos pela agenda) aparecia colado no topo da tela, com
+espaço vazio na parte inferior, em vez de centralizado.
+
+**Causa raiz:** A base `DialogContent` em
+`artifacts/fisiogest/src/components/ui/dialog.tsx` definia `inset-0 max-h-dvh
+rounded-none` no mobile (full-screen) e só centralizava em telas `sm:`. Os
+diálogos da agenda (e ~30 outros) sobrescreviam apenas a largura
+(`w-[calc(100vw-2rem)]`) e altura (`max-h-[90dvh]`) sem resetar o `inset-0`,
+fazendo com que o modal ficasse fixado em `top:0; left:0` com largura menor
+que a viewport — encostado no canto superior esquerdo.
+
+**Correção (1 arquivo, comportamento global):**
+
+- `artifacts/fisiogest/src/components/ui/dialog.tsx`: base de `DialogContent`
+  reescrita para centralizar em **todos os tamanhos** (mesmo padrão do
+  `AlertDialogContent`):
+  - `left-[50%] top-[50%] translate-x-[-50%] translate-y-[-50%]` (sem `inset-0`)
+  - `w-[calc(100vw-2rem)] sm:w-full sm:max-w-lg` (largura mobile com margem,
+    desktop com largura padrão sobrescrevível)
+  - `max-h-[90dvh] rounded-lg` (sem mais `rounded-none` no mobile)
+  - Animações de `slide-in/out` aplicadas em todas as breakpoints (antes só `sm:`).
+
+**Impacto:** corrige de uma só vez todos os diálogos do app que usavam o
+padrão `w-[calc(100vw-2rem)] sm:max-w-...` (≥ 30 ocorrências em
+agenda, financeiro, catálogo, configurações, prontuário, super-admin etc.).
+Diálogos que já passavam classes próprias permanecem compatíveis — `cn` usa
+`tailwind-merge` e a classe do filho continua tendo prioridade.
+
+**Validação:** typecheck ✅, 98/98 testes ✅.
+
+---
+
+### Sessão 27/abril/2026 (tarde) — Title Case + máscara em nome de paciente
+
+**Pedido:** Padronizar nomes existentes em Title Case e adicionar máscara no
+campo para evitar erros de preenchimento (ex.: CAIXA ALTA, dígitos colados).
+
+**Implementado:**
+
+- `artifacts/fisiogest/src/utils/masks.ts`: adicionados helpers
+  `toTitleCaseName` e `maskName` com regras pt-BR (partículas `de`, `da`,
+  `do`, `das`, `dos`, `e`, `di`, `du`, `del`, `von`, `van`, `der`, `la`,
+  `le`, `y` em minúsculas no meio do nome; primeira palavra sempre
+  capitalizada). Trata acentos (`toLocaleUpperCase("pt-BR")`), hífen e
+  apóstrofo. `maskName` adicionalmente remove dígitos e caracteres
+  inválidos enquanto o usuário digita.
+- `artifacts/fisiogest/src/pages/clinical/patients/index.tsx`: input de
+  "Nome Completo" agora aplica `maskName` em `onChange` (live) e `onBlur`
+  (limpeza final). Adicionados `placeholder="Ex.: Maria da Silva"` e
+  `autoComplete="name"`.
+- `artifacts/fisiogest/src/schemas/patient.schema.ts`: defesa em
+  profundidade — `.refine()` rejeita caracteres inválidos no submit e
+  `.transform()` reaplica Title Case mesmo que o request venha sem passar
+  pelo input.
+- Backfill no banco: dos 45 pacientes cadastrados, 1 estava fora do padrão
+  (id 68: "FABIANE SANTINON" → "Fabiane Santinon"). Os demais 44 já estavam
+  corretos.
+
+**Cobertura de testes:**
+- Novo `artifacts/fisiogest/src/utils/__tests__/masks.test.ts` com 23 casos
+  (CPF/telefone/CNPJ + Title Case + máscara de nome em todos os cenários).
+- `patient.schema.test.ts` ganhou 5 novos testes (Title Case, partículas,
+  acentos, hífen, rejeição de inválidos).
+- **Resultado: 98/98 testes ✅, typecheck ✅.**
+
+---
+
+### Sessão 27/abril/2026 (tarde) — Backfill de preços com plano de tratamento
+
+**Bug:** 9 lançamentos financeiros (R$ 300,00 sobrecobrados no total) foram
+criados com preço de tabela mesmo quando o paciente tinha plano de
+tratamento ativo cobrindo o procedimento. Causa: agendamentos confirmados
+antes da Sprint 1 (que introduziu `resolveEffectivePrice`) ou via fluxo que
+não invocava o helper.
+
+**Correção aplicada (transacional):**
+- 9 `financial_records` atualizados para o valor correto (preço plano –
+  desconto), com campos de auditoria (`price_source`, `original_unit_price`,
+  `original_amount`, `treatment_plan_id`) zerados conforme solicitado.
+- 6 linhas em 3 entradas contábeis (entries 54, 94, 111) atualizadas
+  in-place de R$ 80,00 para R$ 70,00 (recognition + receivable + settlement
+  do registro pago 1115). Partidas dobradas validadas: débito = crédito em
+  todas as entradas, diferença 0,00.
+- Sem créditos em carteira de paciente — correção direta nos lançamentos
+  conforme orientação do dono do produto.
+- Validação final: 0 divergências restantes (preço de tabela em paciente
+  com plano ativo).
+
+---
+
 ### Sessão 27/abril/2026 (madrugada) — Import para Replit + revisão pós-Sprint 3 (testes, lint, tipos, docs)
 
 **Contexto:** Migração do projeto para o ambiente Replit + análise completa
