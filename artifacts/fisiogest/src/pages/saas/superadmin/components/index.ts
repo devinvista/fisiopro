@@ -1,0 +1,11 @@
+export { ClinicsTab } from "./ClinicsTab";
+export { CouponsTab } from "./CouponsTab";
+export { InadimplenciaTab } from "./InadimplenciaTab";
+export { KpiCard } from "./KpiCard";
+export { PainelTab } from "./PainelTab";
+export { PaymentBadge } from "./PaymentBadge";
+export { PaymentsTab } from "./PaymentsTab";
+export { PlansTab } from "./PlansTab";
+export { RegisterPaymentDialog } from "./RegisterPaymentDialog";
+export { StatusBadge } from "./StatusBadge";
+export { SubscriptionsTab } from "./SubscriptionsTab";

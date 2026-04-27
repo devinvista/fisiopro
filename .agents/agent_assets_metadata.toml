@@ -6,3 +6,9 @@ id = "JJ9N4KKkaMEitUmm004ag"
 uri = "file://fisiogest-prod.zip"
 type = "unspecified"
 title = "fisiogest-prod.zip — corrigido"
+
+[[outputs]]
+id = "0SmL6lKgkFnGdaKqLslOp"
+uri = "file://artifacts/downloads/fisiogest-pro-prod.zip"
+type = "unspecified"
+title = "FisioGest Pro — Produção (Hostinger)"
