@@ -106,15 +106,19 @@ controle sobre orçamento e metas.
 **Objetivo:** ferramenta de gestão de capital de giro inexistente nos concorrentes
 + melhorias finais de qualidade/auditoria.
 
-### T7. Fluxo de Caixa Projetado
-- [ ] Endpoint `GET /api/financial/cash-flow-projection?days=30`.
-- [ ] Saída: `[{ date, opening, expectedIn, expectedOut, closing, alert? }]`.
-- [ ] Considerar:
-  - Saldo inicial = soma de `cash` no plano de contas
-  - Entradas = `financial_records` `receita pendente` por `due_date`
-  - Saídas = `financial_records` `despesa pendente` + `recurring_expenses` projetadas
-- [ ] Nova aba "Fluxo de Caixa" no frontend com gráfico de área e tabela.
-- [ ] Linha vermelha = `cash_reserve_target` configurado.
+### T7. Fluxo de Caixa Projetado ✅
+- [x] Endpoint `GET /api/financial/cash-flow-projection?days=30` (1..180 dias),
+      com `requireFeature("financial.view.cash_flow")` + `requirePermission("financial.read")`.
+- [x] Saída: `{ openingBalance, cashReserveTarget, totals, breachesReserve, series: [{ date, opening, expectedIn, expectedOut, adhocOut, recurringOut, closing, alert }] }`.
+- [x] Implementado:
+  - Saldo inicial = `getAccountingBalances()` na conta `1.1.1` (Caixa/Banco) — débito − crédito.
+  - Entradas = `financial_records` `type=receita` `status=pendente` em `RECEIVABLE_TYPES`, agregadas por `due_date`.
+  - Saídas = `financial_records` `type=despesa` `status=pendente` por `due_date` + projeção de `recurring_expenses` (mensal: dia equivalente do `createdAt`; semanal: cada 7 dias; anual: aniversário).
+  - Alerta `negative` quando `closing < 0` e `below_reserve` quando `closing < cashReserveTarget`.
+- [x] Nova aba "Fluxo de Caixa" no frontend (`CashFlowTab.tsx`) com seletor 15/30/60/90 dias.
+- [x] Gráfico (recharts ComposedChart): área de saldo + barras de entradas/saídas.
+- [x] Linha vermelha tracejada = `cash_reserve_target` configurado em `clinic_financial_settings`; CTA pra configurar quando ausente.
+- [x] Banner de alerta + tabela diária com badges de status (OK/Abaixo reserva/Negativo).
 
 ### T8. Categorização contábil por procedimento
 - [ ] Adicionar `accounting_account_id` em `procedures`.

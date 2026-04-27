@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Receipt, BarChart3, Target, Activity, Settings2 } from "lucide-react";
+import { CalendarDays, Receipt, BarChart3, Target, Activity, Settings2, Wallet } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -11,6 +11,7 @@ import { CustosPorProcedimentoTab } from "./components/CustosPorProcedimentoTab"
 import { OrcadoRealizadoTab } from "./components/OrcadoRealizadoTab";
 import { DreTab } from "./components/DreTab";
 import { DespesasFixasTab } from "./components/DespesasFixasTab";
+import { CashFlowTab } from "./components/CashFlowTab";
 import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
@@ -26,6 +27,7 @@ const ALL_TABS: TabDef[] = [
   { value: "lancamentos",     icon: <Receipt className="w-3.5 h-3.5" />,    label: "Lançamentos",          feature: "financial.view.simple" },
   { value: "custos",          icon: <BarChart3 className="w-3.5 h-3.5" />,  label: "Custo/Procedimento",   feature: "financial.cost_per_procedure" },
   { value: "orcado",          icon: <Target className="w-3.5 h-3.5" />,     label: "Orçado vs Realizado",  feature: "financial.view.budget" },
+  { value: "fluxo-caixa",     icon: <Wallet className="w-3.5 h-3.5" />,     label: "Fluxo de Caixa",       feature: "financial.view.cash_flow" },
   { value: "dre",             icon: <Activity className="w-3.5 h-3.5" />,   label: "DRE Mensal",           feature: "financial.view.dre" },
   { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,  label: "Despesas Fixas",       feature: "module.recurring_expenses" },
 ];
@@ -107,6 +109,11 @@ export default function Financial() {
         {hasFeature("financial.view.budget") && (
           <TabsContent value="orcado">
             <OrcadoRealizadoTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.cash_flow") && (
+          <TabsContent value="fluxo-caixa">
+            <CashFlowTab />
           </TabsContent>
         )}
         {hasFeature("financial.view.dre") && (
