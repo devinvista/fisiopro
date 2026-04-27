@@ -2,7 +2,7 @@ import { db } from "@workspace/db";
 import {
   appointmentsTable, financialRecordsTable, sessionCreditsTable, clinicsTable,
   patientSubscriptionsTable, patientWalletTable, patientWalletTransactionsTable,
-  patientPackagesTable, procedureCostsTable,
+  patientPackagesTable,
 } from "@workspace/db";
 import { eq, and, gt, sql, desc } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
@@ -13,6 +13,7 @@ import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,
 } from "./appointments.repository.js";
+import { resolveEffectivePrice } from "./appointments.pricing.js";
 import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
 import type { AppointmentStatus } from "@workspace/shared-constants";
 
@@ -55,23 +56,18 @@ export async function applyBillingRules(
   }
   const dueDatePorSessao = addDaysToDate(appointmentDate, clinicDueDays);
 
-  // Resolve effective price: clinic override takes precedence over base procedure price
-  let effectivePrice = String(procedure.price);
-  if (resolvedClinicId && procedureId) {
-    const [clinicCostRow] = await db
-      .select({ priceOverride: procedureCostsTable.priceOverride })
-      .from(procedureCostsTable)
-      .where(
-        and(
-          eq(procedureCostsTable.procedureId, procedureId),
-          eq(procedureCostsTable.clinicId, resolvedClinicId)
-        )
-      )
-      .limit(1);
-    if (clinicCostRow?.priceOverride) {
-      effectivePrice = String(clinicCostRow.priceOverride);
-    }
-  }
+  // Resolve effective price aplicando a hierarquia oficial:
+  //   1) plano de tratamento ativo do paciente (com desconto)
+  //   2) override de preço da clínica (procedure_costs.priceOverride)
+  //   3) preço de tabela do procedimento
+  // Ver: artifacts/api-server/src/modules/clinical/appointments/appointments.pricing.ts
+  const priceResolution = await resolveEffectivePrice(patientId, procedureId, resolvedClinicId);
+  const effectivePrice = priceResolution.effectivePrice;
+  const priceAuditFields = {
+    priceSource: priceResolution.priceSource,
+    originalUnitPrice: priceResolution.originalUnitPrice,
+    treatmentPlanId: priceResolution.treatmentPlanId,
+  };
 
   // ── BILLING: attendance → billing logic by type ────────────────────────────
   if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
@@ -132,6 +128,7 @@ export async function applyBillingRules(
           dueDate:         appointmentDate,
           subscriptionId:  consolidatedSub.id,
           clinicId:        resolvedClinicId,
+          ...priceAuditFields,
         }).returning();
 
         const entry = await postReceivableRevenue({
@@ -206,6 +203,7 @@ export async function applyBillingRules(
             status:          "pago",
             dueDate:         today,
             clinicId:        resolvedClinicId,
+            ...priceAuditFields,
           }).returning();
 
           if (credit.patientPackageId) {
@@ -276,6 +274,7 @@ export async function applyBillingRules(
               status:          "pago",
               dueDate:         today,
               clinicId:        resolvedClinicId,
+              ...priceAuditFields,
             }).returning();
 
             const [walletTransaction] = await tx.insert(patientWalletTransactionsTable).values({
@@ -336,6 +335,7 @@ export async function applyBillingRules(
             status:          "pendente",
             dueDate:         dueDatePorSessao,
             clinicId:        resolvedClinicId,
+            ...priceAuditFields,
           }).returning();
 
           const entry = await postReceivableRevenue({

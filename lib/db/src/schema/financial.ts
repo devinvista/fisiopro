@@ -24,6 +24,14 @@ export const financialRecordsTable = pgTable("financial_records", {
   accountingEntryId: integer("accounting_entry_id"),
   recognizedEntryId: integer("recognized_entry_id"),
   settlementEntryId: integer("settlement_entry_id"),
+  // ── Auditoria de preço (Sprint 1) ─────────────────────────────────────────
+  // Origem do valor cobrado: "tabela" | "override_clinica" | "plano_tratamento"
+  priceSource: text("price_source"),
+  // Preço de tabela vigente no momento do lançamento — útil para auditoria
+  // fiscal e para mostrar o desconto efetivamente aplicado.
+  originalUnitPrice: numeric("original_unit_price", { precision: 10, scale: 2 }),
+  // Plano de tratamento que ditou o preço (NULL quando origem = tabela/override).
+  treatmentPlanId: integer("treatment_plan_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_financial_records_clinic_id").on(table.clinicId),
