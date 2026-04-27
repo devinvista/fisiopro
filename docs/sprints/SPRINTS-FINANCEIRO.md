@@ -5,10 +5,15 @@
 
 ---
 
-## Sprint 1 — Correção crítica de preço (1 dia) 🔴
+## Sprint 1 — Correção crítica de preço (1 dia) ✅ ENTREGUE 2026-04-27
 
 **Objetivo:** parar o sangramento de receita causado pelo bug em que o preço de tabela é
 usado mesmo quando o paciente tem plano de tratamento ativo com preço diferenciado.
+
+**Status:** todas as tarefas concluídas, 13/13 testes passando.
+**Commits:** `1193bd6` (helper + colunas) · `17fe262` (testes preço acima da tabela).
+**Cobertura adicional:** preço negociado **acima** da tabela também é cobrado (sem teto), com
+`originalUnitPrice` preservado para auditoria de margem.
 
 ### T1. Resolver preço com hierarquia correta
 - [x] Criar helper `resolveEffectivePrice(patientId, procedureId, clinicId)` em
@@ -46,17 +51,19 @@ usado mesmo quando o paciente tem plano de tratamento ativo com preço diferenci
 
 ---
 
-## Sprint 2 — Plano como venda + configuração financeira (3-4 dias) 🟡
+## Sprint 2 — Plano como venda + configuração financeira (3-4 dias) 🟡 EM ANDAMENTO
 
 **Objetivo:** transformar o plano de tratamento em uma "venda formal" e dar à clínica
 controle sobre orçamento e metas.
 
 ### T4. Aceitação de plano de tratamento
-- [ ] Adicionar `accepted_at`, `accepted_by`, `frozen_prices_json` em `treatment_plans`.
-- [ ] Endpoint `POST /api/treatment-plans/:id/accept`.
-- [ ] Quando aceito: snapshot dos preços vigentes e geração de **receita estimada**
-      (não contábil — projeção em `treatment_plan_estimates`).
-- [ ] Após aceito: alterar preço requer "renegociação" (versionar plano com `parent_id`).
+- [x] Adicionar `accepted_at`, `accepted_by`, `frozen_prices_json`, `parent_plan_id` em `treatment_plans`.
+- [x] Endpoint `POST /api/patients/:patientId/treatment-plans/:planId/accept`.
+- [x] Snapshot dos preços vigentes em `frozen_prices_json` no momento da aceitação.
+- [x] Após aceito: bloquear `PUT` que altere preço/desconto/procedimentos (retorna 409 com
+      mensagem de "renegociação necessária"). Status, objetivos e notas continuam editáveis.
+- [ ] Geração de **receita estimada** (projeção em `treatment_plan_estimates` — próxima iteração).
+- [ ] Endpoint `POST /api/.../treatment-plans/:planId/renegotiate` para versionar via `parent_plan_id`.
 
 ### T5. Configurações financeiras da clínica
 - [ ] Nova tabela `clinic_financial_settings`:
@@ -69,15 +76,15 @@ controle sobre orçamento e metas.
 - [ ] Migration `0002_clinic_financial_settings.sql`.
 
 ### T6. Diferenciação simplificada vs avançada por plano SaaS
-- [ ] Adicionar features em `lib/shared-constants/src/plan-features.ts`:
+- [x] Adicionar features em `lib/shared-constants/src/plan-features.ts`:
   - `financial.view.simple` (todos)
   - `financial.view.cash_flow` (profissional+)
   - `financial.view.dre` (profissional+)
   - `financial.view.budget` (profissional+)
   - `financial.view.accounting` (premium)
   - `financial.cost_per_procedure` (profissional+)
-- [ ] Esconder abas no frontend via `<FeatureGate />`.
-- [ ] Proteger rotas no backend via `requireFeature()`.
+- [ ] Esconder abas no frontend via `<FeatureGate />` (próxima iteração).
+- [ ] Proteger rotas no backend via `requireFeature()` (próxima iteração).
 
 ### Critérios de aceite
 - Plano aceito não permite mais alterar preço sem versionar.

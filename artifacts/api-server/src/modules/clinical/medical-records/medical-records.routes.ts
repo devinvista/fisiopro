@@ -166,6 +166,19 @@ router.delete("/treatment-plans/:planId", requirePermission("medical.write"), as
   res.status(204).send();
 }));
 
+// Sprint 2 — aceite formal do plano (vira "venda"):
+// snapshot dos preços vigentes + bloqueio de edição de valores comerciais.
+router.post(
+  "/treatment-plans/:planId/accept",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
+    const planId = parseInt(req.params.planId);
+    const plan = await svc.acceptPatientTreatmentPlan(patientId, planId, getCtx(req as AuthRequest));
+    res.json(plan);
+  }),
+);
+
 // ─── Treatment Plan (compat, single ativo) ────────────────────────────────────
 
 router.get("/treatment-plan", requirePermission("medical.read"), asyncHandler(async (req: Request<P>, res: Response) => {

@@ -3,6 +3,7 @@ import {
   anamnesisTable,
   evaluationsTable,
   treatmentPlansTable,
+  treatmentPlanProceduresTable,
   evolutionsTable,
   dischargeSummariesTable,
   financialRecordsTable,
@@ -145,6 +146,59 @@ export async function deleteTreatmentPlan(planId: number, patientId: number) {
   if (!existing) return false;
   await db.delete(treatmentPlansTable).where(eq(treatmentPlansTable.id, planId));
   return true;
+}
+
+// ─── Treatment Plan: aceitação (Sprint 2) ─────────────────────────────────────
+
+/**
+ * Lê os procedimentos do plano para gerar o snapshot de preços no aceite.
+ * Resolve `tablePrice` (preço de catálogo vigente) por procedimento via JOIN.
+ */
+export async function listTreatmentPlanProceduresWithCatalog(planId: number) {
+  return db
+    .select({
+      id: treatmentPlanProceduresTable.id,
+      procedureId: treatmentPlanProceduresTable.procedureId,
+      packageId: treatmentPlanProceduresTable.packageId,
+      unitPrice: treatmentPlanProceduresTable.unitPrice,
+      discount: treatmentPlanProceduresTable.discount,
+      totalSessions: treatmentPlanProceduresTable.totalSessions,
+      sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
+      tablePrice: proceduresTable.price,
+      procedureName: proceduresTable.name,
+    })
+    .from(treatmentPlanProceduresTable)
+    .leftJoin(proceduresTable, eq(treatmentPlanProceduresTable.procedureId, proceduresTable.id))
+    .where(eq(treatmentPlanProceduresTable.treatmentPlanId, planId));
+}
+
+/**
+ * Marca o plano como aceito, gravando snapshot e auditoria.
+ * Idempotente: se já aceito, retorna o plano existente sem sobrescrever o snapshot.
+ */
+export async function acceptTreatmentPlan(
+  planId: number,
+  patientId: number,
+  acceptedBy: number,
+  frozenPricesJson: string,
+) {
+  const [existing] = await db
+    .select()
+    .from(treatmentPlansTable)
+    .where(and(eq(treatmentPlansTable.id, planId), eq(treatmentPlansTable.patientId, patientId)));
+  if (!existing) return null;
+  if (existing.acceptedAt) return existing;
+  const [updated] = await db
+    .update(treatmentPlansTable)
+    .set({
+      acceptedAt: new Date(),
+      acceptedBy,
+      frozenPricesJson,
+      updatedAt: new Date(),
+    })
+    .where(eq(treatmentPlansTable.id, planId))
+    .returning();
+  return updated;
 }
 
 export async function getPatientClinicId(patientId: number) {

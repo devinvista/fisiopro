@@ -100,6 +100,39 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 - `faturaConsolidada` funciona como agrupador/cobrança oficial; a receita de competência é reconhecida pelos atendimentos/itens, sem duplicar no fechamento da fatura.
 - Pagamentos manuais baixam títulos existentes via `receivable_allocations`; quando não há título pendente, viram recebimento direto.
 
+### Resolução de preço (Sprint 1 — `appointments.pricing.ts`)
+
+Toda cobrança de atendimento passa pelo helper `resolveEffectivePrice(patientId, procedureId, clinicId)` em `artifacts/api-server/src/modules/clinical/appointments/appointments.pricing.ts`. A hierarquia é:
+
+1. **Plano de tratamento ativo** do paciente (`treatment_plan_procedures.unitPrice − discount`, com clamp em 0 — desconto é valor absoluto em R$, não percentual). Plano mais recente vence se houver mais de um.
+2. **Override da clínica** (`procedure_costs.priceOverride`).
+3. **Tabela** (`procedures.price`).
+
+O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano é respeitado sem teto. Para auditoria, `financial_records` grava `price_source` (`tabela | override_clinica | plano_tratamento`), `original_unit_price` (preço de catálogo na época) e `treatment_plan_id`.
+
+### Plano de tratamento como "venda formal" (Sprint 2 — T4)
+
+- `POST /api/patients/:patientId/treatment-plans/:planId/accept` — aceita o plano: gera snapshot dos preços vigentes em `treatment_plans.frozen_prices_json` (estrutura `FrozenPricesSnapshot`) e marca `accepted_at` / `accepted_by`.
+- Após aceito: `PUT /treatment-plans/:planId` só aceita alterar campos "soft" (`status`, `objectives`, `techniques`, `responsibleProfessional`). Tentativas de alterar `frequency`, `estimatedSessions`, `startDate` retornam `409 Conflict` exigindo renegociação.
+- Endpoint é idempotente (chamar duas vezes não reescreve o snapshot).
+- O snapshot inclui `totalEstimatedRevenue` para alimentar projeção de receita futura.
+- Coluna `parent_plan_id` permite versionamento via "renegociação" (endpoint na próxima iteração de Sprint 2).
+
+### Diferenciação por plano SaaS (Sprint 2 — T6)
+
+Catálogo de features financeiras em `lib/shared-constants/src/plan-features.ts`:
+
+| Feature | Plano mínimo |
+|---|---|
+| `financial.view.simple` (caixa entrada/saída) | essencial |
+| `financial.view.cash_flow` (fluxo projetado) | profissional |
+| `financial.view.dre` | profissional |
+| `financial.view.budget` (orçado vs realizado) | profissional |
+| `financial.cost_per_procedure` | profissional |
+| `financial.view.accounting` (plano de contas completo) | premium |
+
+Use `requireFeature(feature)` no backend e `<FeatureGate feature="...">` no frontend. Aplicação dos gates nas telas/rotas é a próxima iteração de Sprint 2.
+
 ---
 
 

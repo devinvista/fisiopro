@@ -34,6 +34,20 @@ export const FEATURES = [
   "module.api_integration",
   "module.whitelabel",
   "module.dedicated_support",
+
+  // ─── Financeiro (Sprint 2) ────────────────────────────────────────────────
+  // "Caixa simples": entradas/saídas básicas. Disponível em todos os planos.
+  "financial.view.simple",
+  // Fluxo de Caixa Projetado (próximos 30/60/90 dias).
+  "financial.view.cash_flow",
+  // DRE — Demonstração do Resultado do Exercício.
+  "financial.view.dre",
+  // Orçado vs Realizado (requer configuração de metas/orçamentos por categoria).
+  "financial.view.budget",
+  // Plano de contas contábil completo (5 níveis, partidas dobradas).
+  "financial.view.accounting",
+  // Análise de custo por procedimento (margem unitária, ponto de equilíbrio).
+  "financial.cost_per_procedure",
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -44,6 +58,8 @@ const ESSENCIAL: Feature[] = [
   "module.medical_records",
   "module.financial",
   "module.reports.basic",
+  // Financeiro: visão simplificada (caixa entrada/saída) já no plano básico.
+  "financial.view.simple",
 ];
 
 const PROFISSIONAL: Feature[] = [
@@ -54,6 +70,11 @@ const PROFISSIONAL: Feature[] = [
   "module.recurring_expenses",
   "module.audit_log",
   "module.priority_support",
+  // Financeiro avançado: fluxo projetado, DRE, orçado vs realizado, custo por procedimento.
+  "financial.view.cash_flow",
+  "financial.view.dre",
+  "financial.view.budget",
+  "financial.cost_per_procedure",
 ];
 
 const PREMIUM: Feature[] = [
@@ -62,6 +83,8 @@ const PREMIUM: Feature[] = [
   "module.api_integration",
   "module.whitelabel",
   "module.dedicated_support",
+  // Financeiro premium: contabilidade completa com plano de contas.
+  "financial.view.accounting",
 ];
 
 export const PLAN_FEATURES: Record<PlanTier, Feature[]> = {

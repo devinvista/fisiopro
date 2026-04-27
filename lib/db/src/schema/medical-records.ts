@@ -113,11 +113,21 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   startDate: date("start_date"),
   responsibleProfessional: text("responsible_professional"),
   status: text("status").notNull().default("ativo"),
+  // Sprint 2 — aceite formal do plano (vira "venda"):
+  // após aceito, alterar preço/itens passa a exigir renegociação (versionar via parent_plan_id).
+  acceptedAt: timestamp("accepted_at"),
+  acceptedBy: integer("accepted_by"),
+  // Snapshot dos preços vigentes no momento do aceite, para auditoria fiscal.
+  // Estrutura: [{ procedureId, packageId, unitPrice, discount, totalSessions, snapshotPrice }]
+  frozenPricesJson: text("frozen_prices_json"),
+  // Quando o plano é renegociado, o novo plano referencia o anterior aqui.
+  parentPlanId: integer("parent_plan_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_treatment_plans_patient_id").on(table.patientId),
   index("idx_treatment_plans_clinic_id").on(table.clinicId),
+  index("idx_treatment_plans_parent").on(table.parentPlanId),
 ]);
 
 export const insertTreatmentPlanSchema = createInsertSchema(treatmentPlansTable).omit({ id: true, createdAt: true, updatedAt: true });

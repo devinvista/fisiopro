@@ -303,6 +303,19 @@ export async function updatePatientTreatmentPlanById(
   data: Record<string, unknown>,
   ctx: AuthCtx,
 ) {
+  // Sprint 2 — após aceite, só campos "soft" continuam editáveis (status, notas).
+  // Mudar valores comerciais exige `renegotiate`, que cria um novo plano versionado.
+  const existing = await repo.getTreatmentPlan(planId, patientId);
+  if (!existing) throw HttpError.notFound("Plano de tratamento não encontrado");
+
+  const isAccepted = !!existing.acceptedAt;
+  const ALLOWED_AFTER_ACCEPT = new Set([
+    "status",
+    "objectives",
+    "techniques",
+    "responsibleProfessional",
+  ]);
+
   const update: Record<string, unknown> = {};
   for (const key of [
     "objectives",
@@ -312,9 +325,24 @@ export async function updatePatientTreatmentPlanById(
     "status",
     "responsibleProfessional",
   ] as const) {
-    if (data[key] !== undefined) update[key] = data[key] || null;
+    if (data[key] !== undefined) {
+      if (isAccepted && !ALLOWED_AFTER_ACCEPT.has(key)) {
+        throw HttpError.conflict(
+          `Plano já aceito em ${existing.acceptedAt?.toISOString().slice(0, 10)}. ` +
+            `Para alterar "${key}" use a renegociação (gera nova versão do plano).`,
+        );
+      }
+      update[key] = data[key] || null;
+    }
   }
-  if (data.startDate !== undefined) update.startDate = (data.startDate as string) || null;
+  if (data.startDate !== undefined) {
+    if (isAccepted) {
+      throw HttpError.conflict(
+        "Plano já aceito — data de início não pode mais ser alterada. Use renegociação.",
+      );
+    }
+    update.startDate = (data.startDate as string) || null;
+  }
 
   const plan = await repo.updateTreatmentPlan(planId, patientId, update);
   if (!plan) throw HttpError.notFound("Plano de tratamento não encontrado");
@@ -327,6 +355,117 @@ export async function updatePatientTreatmentPlanById(
     summary: "Plano de tratamento atualizado",
   });
   return plan;
+}
+
+// ─── Treatment Plan: aceitação (Sprint 2) ─────────────────────────────────────
+
+/**
+ * Estrutura do snapshot gravado em `treatment_plans.frozen_prices_json` no aceite.
+ * Mantemos `tablePrice` (catálogo na época) e o `effectivePrice = unitPrice − discount`
+ * para que mudanças posteriores no catálogo não afetem o que foi vendido.
+ */
+export interface FrozenPriceItem {
+  procedureId: number | null;
+  packageId: number | null;
+  procedureName: string | null;
+  unitPrice: string;
+  discount: string;
+  effectivePrice: string;
+  tablePrice: string;
+  totalSessions: number | null;
+  estimatedTotalRevenue: string;
+}
+
+export interface FrozenPricesSnapshot {
+  capturedAt: string;
+  capturedBy: number;
+  totalEstimatedRevenue: string;
+  items: FrozenPriceItem[];
+}
+
+function toMoney(n: number): string {
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2) : "0.00";
+}
+
+/**
+ * Aceita um plano de tratamento, congelando os preços vigentes e o transformando em
+ * uma "venda formal". A partir do aceite, alterações comerciais (preço, desconto, itens)
+ * exigem renegociação (versionamento via `parent_plan_id`).
+ *
+ * Idempotente: chamar duas vezes não duplica o snapshot.
+ */
+export async function acceptPatientTreatmentPlan(
+  patientId: number,
+  planId: number,
+  ctx: AuthCtx,
+) {
+  if (!ctx.userId) throw HttpError.unauthorized("Usuário não autenticado");
+
+  const existing = await repo.getTreatmentPlan(planId, patientId);
+  if (!existing) throw HttpError.notFound("Plano de tratamento não encontrado");
+  if (existing.status !== "ativo") {
+    throw HttpError.conflict(
+      `Apenas planos com status "ativo" podem ser aceitos (status atual: "${existing.status}").`,
+    );
+  }
+  if (existing.acceptedAt) {
+    // Idempotente: já aceito, devolve o estado atual.
+    return existing;
+  }
+
+  const items = await repo.listTreatmentPlanProceduresWithCatalog(planId);
+  if (items.length === 0) {
+    throw HttpError.conflict(
+      "Plano sem procedimentos — adicione itens antes de aceitar.",
+    );
+  }
+
+  let totalRevenue = 0;
+  const frozenItems: FrozenPriceItem[] = items.map((row) => {
+    const unit = Number(row.unitPrice ?? row.tablePrice ?? 0);
+    const discount = Math.max(0, Number(row.discount ?? 0));
+    const effective = Math.max(0, unit - discount);
+    const sessions = row.totalSessions ?? 0;
+    const totalForItem = effective * sessions;
+    totalRevenue += totalForItem;
+    return {
+      procedureId: row.procedureId,
+      packageId: row.packageId,
+      procedureName: row.procedureName,
+      unitPrice: toMoney(unit),
+      discount: toMoney(discount),
+      effectivePrice: toMoney(effective),
+      tablePrice: toMoney(Number(row.tablePrice ?? 0)),
+      totalSessions: row.totalSessions,
+      estimatedTotalRevenue: toMoney(totalForItem),
+    };
+  });
+
+  const snapshot: FrozenPricesSnapshot = {
+    capturedAt: new Date().toISOString(),
+    capturedBy: ctx.userId,
+    totalEstimatedRevenue: toMoney(totalRevenue),
+    items: frozenItems,
+  };
+
+  const updated = await repo.acceptTreatmentPlan(
+    planId,
+    patientId,
+    ctx.userId,
+    JSON.stringify(snapshot),
+  );
+  if (!updated) throw HttpError.notFound("Plano de tratamento não encontrado");
+
+  await logAudit({
+    userId: ctx.userId,
+    patientId,
+    action: "accept",
+    entityType: "treatment_plan",
+    entityId: planId,
+    summary: `Plano aceito (receita estimada R$ ${snapshot.totalEstimatedRevenue})`,
+  });
+
+  return updated;
 }
 
 export async function deletePatientTreatmentPlan(
