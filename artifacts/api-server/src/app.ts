@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
@@ -82,9 +83,13 @@ app.use(cookieParser());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true, limit: "5mb" }));
 
-app.get("/", (_req, res) => {
-  res.status(200).json({ ok: true, service: "fisiogest-api" });
-});
+// Em produção, "/" deve servir a SPA (tratado abaixo no bloco de static).
+// Em dev mantemos um JSON simples para sanity-check da API.
+if (process.env.NODE_ENV !== "production") {
+  app.get("/", (_req, res) => {
+    res.status(200).json({ ok: true, service: "fisiogest-api" });
+  });
+}
 app.get("/api", (_req, res) => {
   res.status(200).json({ ok: true, service: "fisiogest-api" });
 });
@@ -121,11 +126,31 @@ app.use("/api/storage/uploads", uploadsLimiter);
 app.use("/api", router);
 
 if (process.env.NODE_ENV === "production") {
-  const publicDir = path.resolve(process.cwd(), "artifacts/fisiogest/dist/public");
-  app.use(express.static(publicDir));
-  app.get(/.*/, (_req, res) => {
-    res.sendFile(path.join(publicDir, "index.html"));
-  });
+  // Resolve o diretório da SPA tentando vários caminhos comuns,
+  // para funcionar tanto rodando do raiz do projeto quanto do bundle.
+  const candidates = [
+    path.resolve(process.cwd(), "artifacts/fisiogest/dist/public"),
+    path.resolve(__dirname, "../artifacts/fisiogest/dist/public"),
+    path.resolve(__dirname, "../../artifacts/fisiogest/dist/public"),
+  ];
+  let publicDir: string | null = null;
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "index.html"))) {
+      publicDir = dir;
+      break;
+    }
+  }
+  if (!publicDir) {
+    console.error(
+      "[startup] SPA não encontrada. Caminhos tentados:\n" +
+        candidates.map((c) => "  - " + c).join("\n"),
+    );
+  } else {
+    app.use(express.static(publicDir));
+    app.get(/.*/, (_req, res) => {
+      res.sendFile(path.join(publicDir!, "index.html"));
+    });
+  }
 }
 
 app.use(errorHandler);
