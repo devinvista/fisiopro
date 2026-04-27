@@ -147,6 +147,34 @@ describe("resolveEffectivePrice", () => {
     expect(r.discountApplied).toBe("10.00");
   });
 
+  it("preço negociado ACIMA da tabela é respeitado (sem desconto)", async () => {
+    // Cenário: tabela R$80, mas plano vendeu por R$100 (premium / particular).
+    // Plano deve cobrar R$100 e originalUnitPrice mostra R$80 para auditoria.
+    prime({
+      procedure: { price: "80.00" },
+      plan: { treatmentPlanId: 7, unitPrice: "100.00", discount: "0" },
+    });
+    const r = await resolveEffectivePrice(7, 100, 10);
+    expect(r.effectivePrice).toBe("100.00");
+    expect(r.priceSource).toBe("plano_tratamento");
+    expect(r.originalUnitPrice).toBe("80.00");
+    expect(r.treatmentPlanId).toBe(7);
+    expect(r.discountApplied).toBe("0.00");
+  });
+
+  it("preço negociado acima da tabela com desconto, mas ainda > tabela", async () => {
+    // Tabela R$80, preço negociado R$120, desconto R$10 → cobra R$110 (acima da tabela).
+    prime({
+      procedure: { price: "80.00" },
+      plan: { treatmentPlanId: 8, unitPrice: "120.00", discount: "10" },
+    });
+    const r = await resolveEffectivePrice(7, 100, 10);
+    expect(r.effectivePrice).toBe("110.00");
+    expect(r.priceSource).toBe("plano_tratamento");
+    expect(r.originalUnitPrice).toBe("80.00");
+    expect(r.discountApplied).toBe("10.00");
+  });
+
   it("plano vence sobre override da clínica", async () => {
     prime({
       procedure: { price: "80.00" },
