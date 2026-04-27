@@ -98,9 +98,27 @@ export function AppointmentDetailModal({
   const completeMutation = useCompleteAppointment();
 
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
-  const [isRescheduling, setIsRescheduling] = useState(false);
+  // Quando preenchido, identifica qual appointment está sendo remarcado.
+  // Em sessões individuais é sempre `appointment.id`; em sessões em grupo
+  // recebe o `member.id` do paciente cuja consulta está sendo remarcada.
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const isRescheduling = reschedulingId !== null;
   const [rescheduleForm, setRescheduleForm] = useState({ date: appointment.date, startTime: appointment.startTime });
   const [rescheduleBusy, setRescheduleBusy] = useState(false);
+
+  const startReschedule = (target: { id: string; date: string; startTime: string; }) => {
+    setRescheduleForm({ date: target.date, startTime: target.startTime });
+    setReschedulingId(target.id);
+  };
+  const cancelReschedule = () => setReschedulingId(null);
+
+  // Paciente cuja consulta está sendo remarcada (para mostrar no formulário).
+  const reschedulingMember =
+    reschedulingId === null
+      ? null
+      : reschedulingId === appointment.id
+        ? appointment
+        : sessionSiblings.find((s) => s.id === reschedulingId) ?? appointment;
 
   const cfg = STATUS_CONFIG[appointment.status] || STATUS_CONFIG.agendado;
   const isBusy = updateMutation.isPending || deleteMutation.isPending || completeMutation.isPending;
@@ -128,7 +146,7 @@ export function AppointmentDetailModal({
               description: "Deseja remarcar para outro horário?",
               action: (
                 <button
-                  onClick={() => setIsRescheduling(true)}
+                  onClick={() => startReschedule(appointment)}
                   className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   Remarcar
@@ -154,9 +172,10 @@ export function AppointmentDetailModal({
   };
 
   const handleReschedule = async () => {
+    if (!reschedulingId) return;
     setRescheduleBusy(true);
     try {
-      const res = await apiFetch(`/api/appointments/${appointment.id}/reschedule`, {
+      const res = await apiFetch(`/api/appointments/${reschedulingId}/reschedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(rescheduleForm),
@@ -167,9 +186,10 @@ export function AppointmentDetailModal({
         return;
       }
       toast({ title: "Remarcado com sucesso!", description: `Nova consulta em ${rescheduleForm.date} às ${rescheduleForm.startTime}.` });
-      setIsRescheduling(false);
+      setReschedulingId(null);
       onRefresh();
-      onClose();
+      // Em sessões em grupo, mantemos o modal aberto para gerenciar os outros pacientes.
+      if (!isGroupSession) onClose();
     } catch {
       toast({ variant: "destructive", title: "Erro ao remarcar." });
     } finally {
@@ -422,6 +442,13 @@ export function AppointmentDetailModal({
                                 <RefreshCw className="w-3 h-3 inline mr-0.5" /> Reativar
                               </button>
                             )}
+                            <button
+                              className="text-[10px] font-semibold px-2.5 py-1 rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                              onClick={() => startReschedule(member)}
+                              disabled={isBusy}
+                            >
+                              <Repeat className="w-3 h-3 inline mr-0.5" /> Remarcar
+                            </button>
                             {member.status !== "cancelado" && member.status !== "faltou" && (
                               <button
                                 className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 ml-auto"
@@ -499,7 +526,7 @@ export function AppointmentDetailModal({
                   )}
                   {(appointment.status === "agendado" || appointment.status === "confirmado" || appointment.status === "cancelado" || appointment.status === "faltou") && (
                     <Button size="sm" variant="outline" className="rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50"
-                      onClick={() => setIsRescheduling(true)} disabled={isBusy}>
+                      onClick={() => startReschedule(appointment)} disabled={isBusy}>
                       <Repeat className="w-3.5 h-3.5 mr-1" /> Remarcar
                     </Button>
                   )}
@@ -520,7 +547,7 @@ export function AppointmentDetailModal({
                 <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider flex items-center gap-1.5">
                   <Repeat className="w-3.5 h-3.5" /> Remarcar consulta
                 </p>
-                <p className="text-sm text-slate-500">Selecione a nova data e horário para <strong>{appointment.patient?.name}</strong>.</p>
+                <p className="text-sm text-slate-500">Selecione a nova data e horário para <strong>{reschedulingMember?.patient?.name ?? appointment.patient?.name}</strong>.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label className="text-xs">Nova data</Label>
@@ -536,7 +563,7 @@ export function AppointmentDetailModal({
                     {rescheduleBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Repeat className="w-4 h-4 mr-1" />}
                     Confirmar remarcação
                   </Button>
-                  <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setIsRescheduling(false)}>Cancelar</Button>
+                  <Button size="sm" variant="outline" className="rounded-xl" onClick={cancelReschedule}>Cancelar</Button>
                 </div>
               </div>
             )}
