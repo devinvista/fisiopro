@@ -71,3 +71,43 @@ describe("buildPatientPayload", () => {
     expect(payload.notes).toBeUndefined();
   });
 });
+
+describe("patientFormSchema — normalização de nome", () => {
+  it("aplica Title Case no nome ao validar", () => {
+    const parsed = patientFormSchema.parse({ ...valid, name: "joão silva" });
+    expect(parsed.name).toBe("João Silva");
+  });
+
+  it("mantém partículas em minúsculas (de, da, dos, etc.)", () => {
+    const parsed = patientFormSchema.parse({
+      ...valid,
+      name: "MARIA DOS SANTOS DA SILVA",
+    });
+    expect(parsed.name).toBe("Maria dos Santos da Silva");
+  });
+
+  it("preserva acentos ao normalizar", () => {
+    const parsed = patientFormSchema.parse({
+      ...valid,
+      name: "ÂNGELA FAGUNDES",
+    });
+    expect(parsed.name).toBe("Ângela Fagundes");
+  });
+
+  it("trata nomes compostos por hífen", () => {
+    const parsed = patientFormSchema.parse({
+      ...valid,
+      name: "ana-paula souza",
+    });
+    expect(parsed.name).toBe("Ana-Paula Souza");
+  });
+
+  it("rejeita nomes com dígitos ou caracteres inválidos", () => {
+    expect(
+      patientFormSchema.safeParse({ ...valid, name: "João 123" }).success,
+    ).toBe(false);
+    expect(
+      patientFormSchema.safeParse({ ...valid, name: "Maria@Silva" }).success,
+    ).toBe(false);
+  });
+});

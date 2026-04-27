@@ -28,7 +28,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
+import { maskCpf, maskPhone, displayCpf, maskName } from "@/utils/masks";
 import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { cn } from "@/lib/utils";
@@ -579,7 +579,14 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
           <Input
             required
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, name: maskName(e.target.value) })
+            }
+            onBlur={(e) =>
+              setFormData({ ...formData, name: maskName(e.target.value).trimEnd() })
+            }
+            placeholder="Ex.: Maria da Silva"
+            autoComplete="name"
             className="h-11"
           />
         </div>

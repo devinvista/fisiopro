@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { toTitleCaseName } from "@/utils/masks";
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
+
+const NAME_ALLOWED = /^[A-Za-zÀ-ÖØ-öø-ÿ\s'-]+$/;
 
 const optionalNonEmpty = z
   .string()
@@ -12,7 +15,12 @@ export const patientFormSchema = z.object({
     .string()
     .trim()
     .min(2, "Nome deve ter ao menos 2 caracteres")
-    .max(120, "Nome muito longo"),
+    .max(120, "Nome muito longo")
+    .refine(
+      (v) => NAME_ALLOWED.test(v),
+      "Nome deve conter apenas letras, espaços, hífen ou apóstrofo",
+    )
+    .transform((v) => toTitleCaseName(v)),
   cpf: z
     .string()
     .trim()
