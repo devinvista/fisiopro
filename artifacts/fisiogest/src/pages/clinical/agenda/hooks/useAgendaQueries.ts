@@ -1,7 +1,41 @@
 import { useQuery } from "@tanstack/react-query";
-import { useListAppointments } from "@workspace/api-client-react";
+import type { AppointmentWithDetails } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api";
 import type { BlockedSlot, ScheduleOption } from "../types";
+
+interface PaginatedAppointmentsResponse {
+  data: AppointmentWithDetails[];
+  page?: { limit: number; hasMore: boolean; nextCursor: string | null };
+}
+
+/**
+ * Busca TODOS os agendamentos do intervalo, paginando até o fim.
+ * A API limita a 100 por página, então a agenda precisa iterar via cursor
+ * — caso contrário, semanas com mais de 20 atendimentos perdem os últimos
+ * dias visualmente.
+ */
+async function fetchAllAppointments(
+  startDate: string,
+  endDate: string,
+): Promise<AppointmentWithDetails[]> {
+  const all: AppointmentWithDetails[] = [];
+  let cursor: string | null = null;
+  // Hard cap defensivo para evitar loop infinito caso o backend mude
+  for (let i = 0; i < 50; i++) {
+    const params = new URLSearchParams({ startDate, endDate, limit: "100" });
+    if (cursor) params.set("cursor", cursor);
+    const res = await apiFetch(`/api/appointments?${params}`);
+    const body = (await res.json()) as PaginatedAppointmentsResponse | AppointmentWithDetails[];
+    if (Array.isArray(body)) {
+      all.push(...body);
+      break;
+    }
+    all.push(...(body.data ?? []));
+    if (!body.page?.hasMore || !body.page.nextCursor) break;
+    cursor = body.page.nextCursor;
+  }
+  return all;
+}
 
 interface ProfessionalOption {
   id: number;
@@ -37,7 +71,11 @@ export function useAgendaQueries({
     select: (data) => data.filter((u) => u.roles.includes("profissional")),
   });
 
-  const appointmentsQuery = useListAppointments({ startDate, endDate });
+  const appointmentsQuery = useQuery<AppointmentWithDetails[]>({
+    queryKey: ["appointments", "agenda-range", startDate, endDate],
+    queryFn: () => fetchAllAppointments(startDate, endDate),
+    staleTime: 30_000,
+  });
 
   const blockedSlotsQuery = useQuery<BlockedSlot[]>({
     queryKey: ["blocked-slots", startDate, endDate, selectedScheduleId],
@@ -53,10 +91,7 @@ export function useAgendaQueries({
   return {
     schedules: schedulesQuery.data ?? [],
     professionals: professionalsQuery.data ?? [],
-    appointments: (() => {
-      const d: any = appointmentsQuery.data;
-      return (Array.isArray(d) ? d : (d?.data ?? [])) as NonNullable<typeof appointmentsQuery.data>;
-    })(),
+    appointments: appointmentsQuery.data ?? [],
     isLoadingAppointments: appointmentsQuery.isLoading,
     refetchAppointments: appointmentsQuery.refetch,
     blockedSlots: blockedSlotsQuery.data ?? [],
