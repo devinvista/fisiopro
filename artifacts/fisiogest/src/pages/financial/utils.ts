@@ -1,5 +1,7 @@
 export const formatCurrency = (val: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+    .format(val)
+    .replace(/\u00A0/g, " ");
 
 /**
  * Cabeçalhos para requests JSON. JWT vai por cookie httpOnly automaticamente;

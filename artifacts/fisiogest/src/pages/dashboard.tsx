@@ -144,7 +144,7 @@ function KpiCard({
             </div>
           ) : (
             <>
-              <p className="text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums break-normal hyphens-none leading-tight">{value}</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-slate-900 tabular-nums break-words leading-tight">{value}</p>
               {sub && <div className="mt-1">{sub}</div>}
             </>
           )}

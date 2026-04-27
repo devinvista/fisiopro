@@ -130,7 +130,7 @@ export function OrcadoRealizadoTab({ month, year }: { month: number; year: numbe
         <CardContent className="p-6 flex items-center justify-between gap-4 flex-wrap">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Resultado Líquido</p>
-            <p className={`text-xl sm:text-3xl font-extrabold tabular-nums break-normal hyphens-none leading-tight ${(cur.netProfit ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`text-xl sm:text-3xl font-extrabold tabular-nums break-words leading-tight ${(cur.netProfit ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
               {formatCurrency(cur.netProfit ?? 0)}
             </p>
             {est.netProfit !== undefined && (

@@ -30,7 +30,7 @@ export function KpiCard({
             </div>
           ) : (
             <>
-              <p className={`font-bold text-slate-900 tabular-nums break-normal hyphens-none leading-tight ${size === "lg" ? "text-2xl sm:text-3xl" : size === "sm" ? "text-base sm:text-lg" : "text-lg sm:text-2xl"}`}>
+              <p className={`font-bold text-slate-900 tabular-nums break-words leading-tight ${size === "lg" ? "text-xl sm:text-2xl xl:text-3xl" : size === "sm" ? "text-base sm:text-lg" : "text-base sm:text-lg xl:text-2xl"}`}>
                 {value}
               </p>
               {trend && (
