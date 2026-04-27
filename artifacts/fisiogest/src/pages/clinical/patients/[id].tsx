@@ -428,7 +428,8 @@ export default function PatientDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = new URLSearchParams(window.location.search).get("tab");
-    const validTabs = ["jornada","anamnesis","evaluations","treatment","evolutions","history","financial","atestados","discharge","auditoria"];
+    const baseTabs = ["jornada","anamnesis","evaluations","treatment","evolutions","history","financial","atestados","discharge"];
+    const validTabs = isSuperAdmin ? [...baseTabs, "auditoria"] : baseTabs;
     return validTabs.includes(tabParam ?? "") ? (tabParam as string) : "jornada";
   });
 
@@ -588,10 +589,12 @@ export default function PatientDetail() {
                 <ExportProntuarioButton patientId={patientId} patient={patient} />
               </div>
 
-              {/* ── LGPD: portabilidade de dados (art. 18, V) ── */}
-              <div className="mt-3">
-                <ExportLgpdButton patientId={patientId} />
-              </div>
+              {/* ── LGPD: portabilidade de dados (art. 18, V) — apenas superadmin ── */}
+              {isSuperAdmin && (
+                <div className="mt-3">
+                  <ExportLgpdButton patientId={patientId} />
+                </div>
+              )}
 
               {/* ── Action buttons ── */}
               {(canEdit || canDelete) && (
