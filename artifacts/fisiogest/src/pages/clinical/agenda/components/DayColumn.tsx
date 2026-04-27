@@ -416,7 +416,7 @@ export function DayColumn({
                       {apt.procedure?.name} · {apt.startTime}
                     </p>
                   </div>
-                  <p className="text-[10px] font-semibold leading-tight break-words mt-1">
+                  <p className="text-[10px] font-semibold leading-tight break-normal hyphens-none mt-1 truncate">
                     {apt.patient?.name}
                   </p>
                 </>

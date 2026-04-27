@@ -85,7 +85,7 @@ export function WalletSection({ patientId }: { patientId: number }) {
         <CardContent className="p-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Saldo disponível</p>
-            <p className={`text-xl sm:text-3xl font-bold font-display tabular-nums break-words leading-tight ${balanceText}`}>
+            <p className={`text-xl sm:text-3xl font-bold font-display tabular-nums break-normal hyphens-none leading-tight ${balanceText}`}>
               {formatCurrency(balance)}
             </p>
             <p className="text-xs text-slate-400 mt-1">{transactions.length} transação(ões) registrada(s)</p>

@@ -199,7 +199,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Saldo Atual</p>
-                  <p className={`text-xl sm:text-3xl font-extrabold break-words leading-tight ${saldoColor}`}>
+                  <p className={`text-xl sm:text-3xl font-extrabold break-normal hyphens-none leading-tight ${saldoColor}`}>
                     {saldo < 0 ? "−" : ""}{formatCurrency(Math.abs(saldo))}
                   </p>
                   <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${saldoBadgeClass}`}>

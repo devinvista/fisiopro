@@ -102,7 +102,7 @@ export function KpiCard({ label, value, sub, icon: Icon, color }: {
           <Icon className="w-5 h-5" style={{ color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-tight mb-1 break-normal hyphens-none">{label}</p>
           <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{value}</p>
           {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
         </div>

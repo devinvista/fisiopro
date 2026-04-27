@@ -18,7 +18,7 @@ export function KpiCard({
       <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: accentColor }} />
       <div className="pl-4 pr-3 py-4 sm:pl-5 sm:pr-4 min-w-0">
         <div className="flex items-start justify-between gap-2 min-w-0">
-          <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-widest leading-tight min-w-0 break-words">{label}</p>
+          <p className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider leading-tight min-w-0 break-normal hyphens-none">{label}</p>
           <div
             className="p-2 rounded-xl shrink-0 opacity-80"
             style={{ backgroundColor: `${accentColor}18`, color: accentColor }}
@@ -34,7 +34,7 @@ export function KpiCard({
             </div>
           ) : (
             <>
-              <p className={`font-bold text-slate-900 tabular-nums break-words leading-tight ${size === "lg" ? "text-2xl sm:text-3xl" : size === "sm" ? "text-base sm:text-lg" : "text-lg sm:text-2xl"}`}>
+              <p className={`font-bold text-slate-900 tabular-nums break-normal hyphens-none leading-tight ${size === "lg" ? "text-2xl sm:text-3xl" : size === "sm" ? "text-base sm:text-lg" : "text-lg sm:text-2xl"}`}>
                 {value}
               </p>
               {trend && (
