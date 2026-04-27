@@ -312,7 +312,7 @@ export function CreateAppointmentForm({
           values: parsed.data,
           canSelectProfessional,
           scheduleId: effectiveScheduleId,
-        }) as any,
+        }) as Parameters<typeof mutation.mutate>[0]["data"],
       },
       {
         onSuccess: () => {

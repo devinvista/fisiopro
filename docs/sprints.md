@@ -2,7 +2,7 @@
 
 Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
-> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, 6.3 (17 itens). Em 27/abr: hardening de tipos no backend (`scheduleId` obrigatório nas 3 vias de criação), correção de a11y do `CommandDialog`, navegação livre do datepicker (até +5 anos). Detalhes em `docs/changelog.md`.
+> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, 6.3 (17 itens). Em 27/abr (manhã): hardening de tipos no backend (`scheduleId` obrigatório nas 3 vias de criação), correção de a11y do `CommandDialog`, navegação livre do datepicker (até +5 anos). Em 27/abr (tarde): roadmap **Financeiro** finalizado — Sprint 1, 2 e 3 todas entregues (preço com hierarquia, plano como venda formal, fluxo de caixa projetado, DRE por procedimento, auditoria de estornos). Em 27/abr (noite): import para Replit + correção dos testes de `buildAppointmentPayload` (scheduleId no tipo) + ESLint passa a ignorar gerados (`lib/api-zod/src/generated/**`) e `dist-prod/**` → `pnpm test` 271/271 ✅, `pnpm typecheck` ✅, `pnpm lint` 0 erros ✅. Detalhes em `docs/changelog.md`.
 
 ---
 

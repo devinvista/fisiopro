@@ -73,11 +73,13 @@ describe("buildAppointmentPayload", () => {
     const payload = buildAppointmentPayload({
       values: { ...valid, professionalId: "7" },
       canSelectProfessional: true,
+      scheduleId: 1,
     });
     expect(payload).toMatchObject({
       patientId: 10,
       procedureId: 5,
       professionalId: 7,
+      scheduleId: 1,
     });
   });
 
@@ -85,6 +87,7 @@ describe("buildAppointmentPayload", () => {
     const payload = buildAppointmentPayload({
       values: { ...valid, professionalId: "7" },
       canSelectProfessional: false,
+      scheduleId: 1,
     });
     expect(payload).not.toHaveProperty("professionalId");
   });
@@ -98,11 +101,21 @@ describe("buildAppointmentPayload", () => {
     expect(payload).toHaveProperty("scheduleId", 99);
   });
 
+  it("exige scheduleId em todas as vias de criação", () => {
+    expect(() =>
+      buildAppointmentPayload({
+        values: valid,
+        canSelectProfessional: false,
+      } as Parameters<typeof buildAppointmentPayload>[0]),
+    ).toThrow(/Selecione uma agenda/);
+  });
+
   it("buildRecurringAppointmentPayload anexa o bloco de recorrência", () => {
     const payload = buildRecurringAppointmentPayload(
-      { values: valid, canSelectProfessional: false },
+      { values: valid, canSelectProfessional: false, scheduleId: 1 },
       { daysOfWeek: [2, 4], totalSessions: 8 },
     );
     expect(payload.recurrence).toEqual({ daysOfWeek: [2, 4], totalSessions: 8 });
+    expect(payload.scheduleId).toBe(1);
   });
 });

@@ -56,7 +56,12 @@ export function appointmentFormDefaults(
 export interface BuildAppointmentPayloadOptions {
   values: AppointmentFormValues;
   canSelectProfessional: boolean;
-  scheduleId?: number | null;
+  /**
+   * ID da agenda (obrigatório). Mantemos `number | null` no tipo para que o
+   * próprio formulário possa repassar o valor "ainda não selecionado" sem
+   * conversões adicionais — o runtime falha cedo com mensagem amigável.
+   */
+  scheduleId: number | null;
 }
 
 export function buildAppointmentPayload({

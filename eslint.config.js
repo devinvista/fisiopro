@@ -9,11 +9,13 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
+      "**/dist-prod/**",
       "**/build/**",
       "**/.cache/**",
       "**/coverage/**",
       "**/*.tsbuildinfo",
       "lib/api-client-react/src/generated/**",
+      "lib/api-zod/src/generated/**",
       "lib/api-spec/dist/**",
       "attached_assets/**",
       "db/migrations/**",

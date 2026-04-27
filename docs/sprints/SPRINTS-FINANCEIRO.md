@@ -51,7 +51,7 @@ usado mesmo quando o paciente tem plano de tratamento ativo com preço diferenci
 
 ---
 
-## Sprint 2 — Plano como venda + configuração financeira (3-4 dias) 🟡 EM ANDAMENTO
+## Sprint 2 — Plano como venda + configuração financeira (3-4 dias) ✅ ENTREGUE 2026-04-27
 
 **Objetivo:** transformar o plano de tratamento em uma "venda formal" e dar à clínica
 controle sobre orçamento e metas.
@@ -64,8 +64,11 @@ controle sobre orçamento e metas.
       mensagem de "renegociação necessária"). Status, objetivos e notas continuam editáveis.
 - [x] Endpoint `POST /api/.../treatment-plans/:planId/renegotiate` para versionar via `parent_plan_id`
       (clona procedimentos, encerra plano anterior como `concluido`, novo plano nasce sem aceite).
-- [ ] Geração de **receita estimada** agregada em `treatment_plan_estimates` para alimentar
-      o fluxo de caixa projetado (próxima iteração — Sprint 3 T7 já cobre via snapshot).
+- [—] Geração de **receita estimada** agregada em `treatment_plan_estimates`
+      → **deferido para o roadmap.** A Sprint 3 T7 já entregou o fluxo de caixa
+      projetado consumindo `financial_records` pendentes; uma tabela
+      agregada exclusiva por plano só será criada quando houver demanda real
+      de relatório "receita futura por plano de tratamento".
 
 ### T5. Configurações financeiras da clínica ✅
 - [x] Nova tabela `clinic_financial_settings`:
@@ -101,7 +104,7 @@ controle sobre orçamento e metas.
 
 ---
 
-## Sprint 3 — Fluxo de Caixa Projetado + auditoria (2-3 dias) 🟢
+## Sprint 3 — Fluxo de Caixa Projetado + auditoria (2-3 dias) ✅ ENTREGUE 2026-04-27
 
 **Objetivo:** ferramenta de gestão de capital de giro inexistente nos concorrentes
 + melhorias finais de qualidade/auditoria.

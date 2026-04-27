@@ -1,5 +1,66 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão 27/abril/2026 (madrugada) — Import para Replit + revisão pós-Sprint 3 (testes, lint, tipos, docs)
+
+**Contexto:** Migração do projeto para o ambiente Replit + análise completa
+pós-encerramento das Sprints 1-3 do roadmap financeiro. Revisão de bugs,
+TypeScript, rotas e documentação.
+
+**Implementado:**
+
+1. **Migração para Replit (concluída):**
+   - `pnpm install` (10.26.1) com Node 22.22 LTS — todas as dependências resolvidas.
+   - Workflow `Start application` (`pnpm run dev`) sobe os 3 artefatos em paralelo:
+     API Express na 8080, mockup-sandbox Vite na 8081, fisiogest Vite na 5000.
+   - Conexão Neon Postgres OK; scheduler com 5 jobs cron registrados (billing,
+     consolidatedBilling, autoConfirm, endOfDay, subscriptionCheck).
+   - `.env` validado contra `.env.example`; nenhum segredo de auth externo
+     necessário (JWT próprio + Cloudinary + Asaas já configurados).
+
+2. **Bugfixes de testes (3 falhas → 0):**
+   - `appointment.schema.test.ts`: testes de `buildAppointmentPayload`
+     e `buildRecurringAppointmentPayload` chamavam o helper sem `scheduleId`,
+     que ficou obrigatório no hardening da sessão anterior. Corrigidos os 3
+     casos + adicionado teste explícito **"exige scheduleId em todas as vias
+     de criação"** que valida o `throw` do runtime.
+   - `pnpm test`: **271/271 passando** (antes: 268/271).
+
+3. **Hardening de tipos (escalada do hardening de runtime):**
+   - `BuildAppointmentPayloadOptions.scheduleId` deixou de ser `?: number | null`
+     e passou a ser `number | null` obrigatório — o TypeScript agora pega antes
+     do runtime se algum caller esquecer de passar a agenda.
+   - `CreateAppointmentForm.tsx`: removido o `as any` no `mutation.mutate`
+     (substituído por `as Parameters<typeof mutation.mutate>[0]["data"]`).
+
+4. **ESLint — eliminação de 2261 erros falsos:**
+   - `eslint.config.js` ignora agora também `lib/api-zod/src/generated/**`
+     (arquivo gerado pelo Orval com 2200+ linhas de código bundled) e
+     `**/dist-prod/**` (artefato de build de produção). Antes esses dois
+     arquivos sozinhos somavam **2261 errors** falsos.
+   - Resultado: `pnpm lint` agora reporta **0 erros** (apenas warnings de
+     unused-vars em scripts de seed e escapes desnecessários nos schemas
+     gerados — todos non-blocking).
+
+5. **Documentação atualizada:**
+   - `docs/sprints/SPRINTS-FINANCEIRO.md`: Sprint 2 e Sprint 3 marcadas como
+     **✅ ENTREGUE 2026-04-27** (todos os itens [x]). T4 último bullet
+     (`treatment_plan_estimates` agregado) marcado como **deferido para o
+     roadmap** com justificativa: a Sprint 3 T7 já entregou o fluxo de caixa
+     projetado consumindo `financial_records` pendentes, então uma tabela
+     agregada exclusiva por plano só será criada quando houver demanda real.
+   - `docs/sprints.md`: nota de "última atualização" estendida com o resumo
+     do dia (manhã/tarde/noite).
+   - `replit.md`: nada a alterar (estrutura de artefatos e stack inalteradas).
+
+**Resultado:**
+- ✅ `pnpm typecheck` — sem erros.
+- ✅ `pnpm test` — 271/271 testes passando.
+- ✅ `pnpm lint` — 0 erros (2907 warnings non-blocking).
+- ✅ Workflow `Start application` rodando, landing page renderiza.
+- ✅ Roadmap financeiro completo (Sprints 1-3 todas entregues).
+
+---
+
 ### Sessão 27/abril/2026 (noite) — Sprint 3 T8 + T9 (categorização contábil por procedimento + auditoria de estornos)
 
 **Contexto:** Encerrar a Sprint 3 do roadmap financeiro entregando os dois últimos
