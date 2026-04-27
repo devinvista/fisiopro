@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, patientSubscriptionsTable, sessionCreditsTable,
+  usersTable, patientsTable,
 } from "@workspace/db";
 import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or, lt, desc } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -31,6 +32,7 @@ import {
 } from "../shared/financial-reports.service.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
+  reverseRecordSchema, listReversalsQuerySchema,
 } from "../financial.schemas.js";
 import { clinicCond, resolvePackageForSubscription } from "../financial.repository.js";
 
@@ -217,7 +219,7 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
     const id = parseInt(req.params.id as string);
     const body = validateBody(updateRecordStatusSchema, req.body, res);
     if (!body) return;
-    const { status, paymentDate, paymentMethod } = body;
+    const { status, paymentDate, paymentMethod, reversalReason } = body;
 
     const cc = clinicCond(req);
     const existingWhere = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
@@ -232,14 +234,33 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
       return;
     }
 
+    const isReversingNow =
+      (status === "cancelado" || status === "estornado") && existing.status !== status;
+
+    if (isReversingNow && !reversalReason) {
+      res.status(400).json({
+        error: "Bad Request",
+        message: "Motivo do estorno é obrigatório ao cancelar ou estornar um lançamento.",
+      });
+      return;
+    }
+
     const [record] = await db.transaction(async (tx) => {
+      const updateValues: Record<string, any> = {
+        status,
+        paymentDate: paymentDate || undefined,
+        paymentMethod: paymentMethod || undefined,
+      };
+      if (isReversingNow) {
+        updateValues.originalAmount = existing.originalAmount ?? existing.amount;
+        updateValues.reversalReason = reversalReason;
+        updateValues.reversedBy = req.userId ?? null;
+        updateValues.reversedAt = new Date();
+      }
+
       const [updated] = await tx
         .update(financialRecordsTable)
-        .set({
-          status,
-          paymentDate: paymentDate || undefined,
-          paymentMethod: paymentMethod || undefined,
-        })
+        .set(updateValues)
         .where(existingWhere)
         .returning();
 
@@ -348,6 +369,8 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
 router.patch("/records/:id/estorno", requirePermission("financial.write"), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
+    const body = validateBody(reverseRecordSchema, req.body, res);
+    if (!body) return;
 
     const cc = clinicCond(req);
     const whereClause = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
@@ -367,10 +390,17 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
       return;
     }
 
+    const reversedAt = new Date();
     const [updated] = await db.transaction(async (tx) => {
       const [u] = await tx
         .update(financialRecordsTable)
-        .set({ status: "estornado" })
+        .set({
+          status: "estornado",
+          originalAmount: record.originalAmount ?? record.amount,
+          reversalReason: body.reversalReason,
+          reversedBy: req.userId ?? null,
+          reversedAt,
+        })
         .where(whereClause)
         .returning();
 
@@ -379,7 +409,7 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
         await postReversal(entryId, {
           clinicId: record.clinicId ?? req.clinicId ?? null,
           entryDate: todayBRT(),
-          description: `Estorno — ${record.description}`,
+          description: `Estorno — ${record.description} (motivo: ${body.reversalReason})`,
           sourceType: "financial_record",
           sourceId: record.id,
           patientId: record.patientId,
@@ -396,14 +426,86 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
 
     await logAudit({
       userId: req.userId,
-      action: "update",
+      action: "reverse",
       entityType: "financial_record",
       entityId: id,
       patientId: record.patientId ?? null,
-      summary: `Estorno aplicado: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+      summary: `Estorno aplicado: ${record.description} (R$ ${Number(record.amount).toFixed(2)}) — motivo: ${body.reversalReason}`,
     });
 
     res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+/**
+ * Lista o histórico de estornos da clínica.
+ * Filtra registros com `reversedAt IS NOT NULL` (ou seja, que passaram pelo
+ * fluxo de estorno auditado a partir da Sprint 3 T9). Inclui o nome do usuário
+ * que aplicou o estorno e o nome do paciente impactado.
+ */
+router.get("/records/reversals", requirePermission("financial.read"), async (req: AuthRequest, res) => {
+  try {
+    const q = validateQuery(listReversalsQuerySchema, req.query, res);
+    if (!q) return;
+
+    const limit = clampLimit(q.limit ?? 50);
+    const conditions: any[] = [isNotNull(financialRecordsTable.reversedAt)];
+
+    const cc = clinicCond(req);
+    if (cc) conditions.push(cc);
+
+    if (q.from) conditions.push(gte(sql`DATE(${financialRecordsTable.reversedAt})`, q.from));
+    if (q.to) conditions.push(lte(sql`DATE(${financialRecordsTable.reversedAt})`, q.to));
+
+    if (q.cursor) {
+      const cursor = decodeCursor(q.cursor);
+      if (cursor) {
+        conditions.push(
+          or(
+            lt(financialRecordsTable.reversedAt, new Date(cursor.v as string)),
+            and(
+              eq(financialRecordsTable.reversedAt, new Date(cursor.v as string)),
+              lt(financialRecordsTable.id, cursor.id),
+            ),
+          )!,
+        );
+      }
+    }
+
+    const rows = await db
+      .select({
+        id: financialRecordsTable.id,
+        type: financialRecordsTable.type,
+        amount: financialRecordsTable.amount,
+        originalAmount: financialRecordsTable.originalAmount,
+        description: financialRecordsTable.description,
+        category: financialRecordsTable.category,
+        status: financialRecordsTable.status,
+        reversalReason: financialRecordsTable.reversalReason,
+        reversedAt: financialRecordsTable.reversedAt,
+        reversedBy: financialRecordsTable.reversedBy,
+        reversedByName: usersTable.name,
+        patientId: financialRecordsTable.patientId,
+        patientName: patientsTable.name,
+        procedureId: financialRecordsTable.procedureId,
+        procedureName: proceduresTable.name,
+        paymentDate: financialRecordsTable.paymentDate,
+        createdAt: financialRecordsTable.createdAt,
+      })
+      .from(financialRecordsTable)
+      .leftJoin(usersTable, eq(financialRecordsTable.reversedBy, usersTable.id))
+      .leftJoin(patientsTable, eq(financialRecordsTable.patientId, patientsTable.id))
+      .leftJoin(proceduresTable, eq(financialRecordsTable.procedureId, proceduresTable.id))
+      .where(and(...conditions))
+      .orderBy(desc(financialRecordsTable.reversedAt), desc(financialRecordsTable.id))
+      .limit(limit + 1);
+
+    res.json(
+      buildPage(rows, limit, (row) => ({ v: row.reversedAt!.toISOString(), id: row.id })),
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

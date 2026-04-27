@@ -32,6 +32,9 @@ export const procedureFormSchema = z
     onlineBookingEnabled: z.boolean(),
     monthlyPrice: z.string().optional(),
     billingDay: z.string().optional(),
+    // Sprint 3 T8 — sub-conta contábil de receita para este procedimento.
+    // string vazia → null no payload (usa conta padrão 4.1.1/4.1.2).
+    accountingAccountId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.modalidade === "grupo" && data.maxCapacity < 2) {
@@ -57,6 +60,7 @@ export const procedureFormDefaults: ProcedureFormValues = {
   onlineBookingEnabled: false,
   monthlyPrice: undefined,
   billingDay: undefined,
+  accountingAccountId: undefined,
 };
 
 export function buildProcedurePayload(values: ProcedureFormValues) {
@@ -72,6 +76,10 @@ export function buildProcedurePayload(values: ProcedureFormValues) {
     onlineBookingEnabled: values.onlineBookingEnabled,
     monthlyPrice: values.monthlyPrice,
     billingDay: values.billingDay,
+    accountingAccountId:
+      values.accountingAccountId && values.accountingAccountId !== ""
+        ? Number(values.accountingAccountId)
+        : null,
   };
 }
 

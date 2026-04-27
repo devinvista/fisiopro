@@ -27,7 +27,18 @@ type ProcedureFormState = {
   onlineBookingEnabled: boolean;
   monthlyPrice?: string;
   billingDay?: string;
+  // Sprint 3 T8 — id (string) da sub-conta contábil de receita.
+  // "" → conta padrão (4.1.1/4.1.2).
+  accountingAccountId?: string;
 };
+
+// Sub-conta de receita exibida no Select. Listada via /api/financial/accounting/accounts.
+export interface AccountingAccountOption {
+  id: number;
+  code: string;
+  name: string;
+  type: string;
+}
 
 interface ProcedureFormModalProps {
   isOpen: boolean;
@@ -36,6 +47,9 @@ interface ProcedureFormModalProps {
   form: ProcedureFormState;
   setForm: React.Dispatch<React.SetStateAction<ProcedureFormState>>;
   onSubmit: () => void;
+  accountingAccounts?: AccountingAccountOption[];
+  /** Quando undefined, a clínica não possui o feature `financial.view.accounting`. */
+  showAccountingField?: boolean;
 }
 
 export function ProcedureFormModal({
@@ -45,7 +59,11 @@ export function ProcedureFormModal({
   form,
   setForm,
   onSubmit,
+  accountingAccounts = [],
+  showAccountingField = false,
 }: ProcedureFormModalProps) {
+  // Apenas contas de receita (sub-contas de 4.1.1/4.1.2 etc) fazem sentido aqui.
+  const revenueAccounts = accountingAccounts.filter((a) => a.type === "revenue");
   const formMargin = getMargin(form.price, form.cost);
 
   return (
@@ -180,6 +198,31 @@ export function ProcedureFormModal({
               onCheckedChange={v => setForm(f => ({ ...f, onlineBookingEnabled: v }))}
             />
           </div>
+
+          {showAccountingField && (
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label>Conta contábil de receita</Label>
+              <Select
+                value={form.accountingAccountId ?? ""}
+                onValueChange={(v) => setForm((f) => ({ ...f, accountingAccountId: v === "__default__" ? "" : v }))}
+              >
+                <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectValue placeholder="Conta padrão (4.1.1 / 4.1.2)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Conta padrão (4.1.1 / 4.1.2)</SelectItem>
+                  {revenueAccounts.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.code} — {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-slate-400 uppercase font-semibold tracking-wider">
+                Sub-conta usada no DRE por procedimento. Vazio = receita padrão.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row bg-slate-50/50 p-4 -mx-6 -mb-6 border-t border-slate-100">

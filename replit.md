@@ -134,6 +134,59 @@ O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano
 - **Frontend:** aba "Fluxo de Caixa" (`pages/financial/components/CashFlowTab.tsx`) com seletor 15/30/60/90 dias, KPIs (saldo inicial/entradas/saídas/saldo final/menor saldo), gráfico recharts (área de saldo + barras in/out + linha tracejada vermelha na reserva mínima) e tabela diária com badges de status. Banner clicável leva pra `Configurações → Financeiro` quando a reserva ainda não foi configurada.
 - **Cobertura:** puro cálculo dinâmico, sem schema novo. T7 ✅.
 
+### Categorização contábil por procedimento (Sprint 3 — T8)
+
+- **Schema:** `procedures.accounting_account_id` (integer, FK opcional para
+  `accounting_accounts`) já existia; agora é exposto em `createProcedureSchema`/
+  `updateProcedureSchema` e propagado pelo service.
+- **CRUD de sub-contas:** `POST/GET/PUT/DELETE /api/financial/accounting/accounts`
+  em `modules/financial/accounting/accounting.routes.ts` — gated por feature
+  `financial.view.accounting` + `requirePermission("financial.write")`.
+  `DELETE` bloqueia remoção quando há `accounting_journal_lines` ou procedimento
+  referenciando a conta.
+- **Helper:** `resolveAccountCodeById(accountId, fallbackCode, clinicId)` em
+  `accounting.service.ts`. Os postings de receita
+  (`postCashReceipt`, `postReceivableRevenue`, `postWalletUsage`,
+  `postPackageCreditUsage`) aceitam `revenueAccountCode` opcional; quando
+  ausente caem na conta padrão (`4.1.1` ou `4.1.2`).
+- **Fluxo de cobrança:** `appointments.billing.ts` resolve
+  `procedureRevenueAccountCode` / `procedurePackageRevenueAccountCode` via
+  `resolveAccountCodeById` e propaga em **todos** os caminhos de receita
+  (consolidada, uso de carteira, uso de crédito de pacote, a-receber 3×).
+- **DRE por procedimento:** `GET /api/financial/accounting/dre-by-procedure?from&to`
+  agrega `accounting_journal_lines.creditAmount` por `procedure_id` (do
+  `journal_entries`) + `account_code` da linha. Retorna `procedures[]` com
+  `accounts[]` (cada uma com `code`, `name`, `total`) + `totalRevenue` global.
+- **Frontend:**
+  - `ProcedureFormModal` ganhou Select "Conta contábil de receita" (gated por
+    `financial.view.accounting`); sentinel `__default__` no Radix representa
+    "usar conta padrão" (Radix `Select` proíbe `value=""`).
+  - Nova aba **"DRE/Procedimento"** (`pages/financial/components/DreByProcedureTab.tsx`)
+    no `Financial`, gated por `financial.view.accounting`. T8 ✅.
+
+### Auditoria robusta de estornos (Sprint 3 — T9)
+
+- **Schema (aditivo):** `financial_records` ganhou `original_amount` (numeric),
+  `reversal_reason` (text), `reversed_by` (FK `users.id`) e `reversed_at`
+  (timestamp). Tudo nullable, aplicado via SQL idempotente
+  `ADD COLUMN IF NOT EXISTS` (drizzle-kit push exige TTY indisponível neste
+  ambiente; preferimos SQL aditivo manual em vez de `db:push --force` para
+  preservar tipos de IDs).
+- **Endpoints:**
+  - `POST /api/financial/records/:id/estorno` exige `reversalReason` (mín. 3
+    chars), salva valor original em `original_amount`, autor em `reversed_by`
+    e timestamp em `reversed_at`. Mudança de status para `cancelado/estornado`
+    via PATCH segue o mesmo contrato.
+  - `GET /api/financial/records/reversals?cursor=&limit=&from=&to=` retorna
+    histórico paginado por cursor, com joins (autor do estorno, paciente,
+    procedimento).
+- **Frontend:**
+  - Modal de estorno em `FinancialTab` ganhou `Textarea` obrigatório de motivo;
+    botão desabilitado enquanto não digitar 3+ chars.
+  - Nova aba **"Estornos"** (`pages/financial/components/EstornosTab.tsx`)
+    lista o histórico com autor, motivo, valor original × valor atual e
+    busca cliente-side por descrição/paciente. T9 ✅.
+
 ### Diferenciação por plano SaaS (Sprint 2 — T6)
 
 Catálogo de features financeiras em `lib/shared-constants/src/plan-features.ts`:

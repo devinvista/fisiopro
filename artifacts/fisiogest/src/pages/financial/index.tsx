@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Receipt, BarChart3, Target, Activity, Settings2, Wallet } from "lucide-react";
+import { CalendarDays, Receipt, BarChart3, Target, Activity, Settings2, Wallet, RotateCcw, Layers } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -12,6 +12,8 @@ import { OrcadoRealizadoTab } from "./components/OrcadoRealizadoTab";
 import { DreTab } from "./components/DreTab";
 import { DespesasFixasTab } from "./components/DespesasFixasTab";
 import { CashFlowTab } from "./components/CashFlowTab";
+import { EstornosTab } from "./components/EstornosTab";
+import { DreByProcedureTab } from "./components/DreByProcedureTab";
 import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
@@ -30,6 +32,8 @@ const ALL_TABS: TabDef[] = [
   { value: "fluxo-caixa",     icon: <Wallet className="w-3.5 h-3.5" />,     label: "Fluxo de Caixa",       feature: "financial.view.cash_flow" },
   { value: "dre",             icon: <Activity className="w-3.5 h-3.5" />,   label: "DRE Mensal",           feature: "financial.view.dre" },
   { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,  label: "Despesas Fixas",       feature: "module.recurring_expenses" },
+  { value: "estornos",        icon: <RotateCcw className="w-3.5 h-3.5" />,  label: "Estornos",             feature: "financial.view.simple" },
+  { value: "dre-procedimento",icon: <Layers className="w-3.5 h-3.5" />,     label: "DRE/Procedimento",     feature: "financial.view.accounting" },
 ];
 
 export default function Financial() {
@@ -124,6 +128,16 @@ export default function Financial() {
         {hasFeature("module.recurring_expenses") && (
           <TabsContent value="despesas-fixas">
             <DespesasFixasTab />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.simple") && (
+          <TabsContent value="estornos">
+            <EstornosTab />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.accounting") && (
+          <TabsContent value="dre-procedimento">
+            <DreByProcedureTab />
           </TabsContent>
         )}
       </Tabs>

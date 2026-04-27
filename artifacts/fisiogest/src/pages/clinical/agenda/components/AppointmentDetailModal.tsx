@@ -101,12 +101,12 @@ export function AppointmentDetailModal({
   // Quando preenchido, identifica qual appointment está sendo remarcado.
   // Em sessões individuais é sempre `appointment.id`; em sessões em grupo
   // recebe o `member.id` do paciente cuja consulta está sendo remarcada.
-  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [reschedulingId, setReschedulingId] = useState<number | null>(null);
   const isRescheduling = reschedulingId !== null;
   const [rescheduleForm, setRescheduleForm] = useState({ date: appointment.date, startTime: appointment.startTime });
   const [rescheduleBusy, setRescheduleBusy] = useState(false);
 
-  const startReschedule = (target: { id: string; date: string; startTime: string; }) => {
+  const startReschedule = (target: { id: number; date: string; startTime: string; }) => {
     setRescheduleForm({ date: target.date, startTime: target.startTime });
     setReschedulingId(target.id);
   };

@@ -1,5 +1,78 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão 27/abril/2026 (noite) — Sprint 3 T8 + T9 (categorização contábil por procedimento + auditoria de estornos)
+
+**Contexto:** Encerrar a Sprint 3 do roadmap financeiro entregando os dois últimos
+itens pendentes (T8 — categorização contábil por procedimento; T9 — auditoria
+robusta de estornos) e corrigir erros de TypeScript pré-existentes que vinham
+quebrando o `typecheck` da fisiogest.
+
+**Implementado:**
+
+1. **Bugfixes TS pré-existentes (T0):**
+   - `AppointmentDetailModal.tsx`: `reschedulingId` agora é `number | null`
+     (era `string | null`, mas `appointment.id` é `number`).
+   - `medical-records.service.ts`: ações `accept` e `renegotiate` adicionadas
+     ao enum aceito por `logAudit`.
+
+2. **T9 — Auditoria robusta de estornos:**
+   - `financial_records` ganhou `original_amount`, `reversal_reason`,
+     `reversed_by` (FK users) e `reversed_at` via SQL idempotente
+     (`ADD COLUMN IF NOT EXISTS`); schema Drizzle atualizado correspondente.
+   - `POST /api/financial/records/:id/estorno` e mudança de status para
+     `cancelado/estornado` agora exigem `reversalReason` (mín. 3 chars) e
+     persistem o valor original.
+   - Novo endpoint `GET /api/financial/records/reversals` paginado por cursor
+     com joins (autor do estorno, paciente, procedimento) + filtros
+     `from`/`to`.
+   - Frontend: modal de estorno em `FinancialTab` ganhou `Textarea`
+     obrigatório de motivo; nova aba **"Estornos"** (`EstornosTab.tsx`) lista
+     o histórico com autor, motivo, valor original × valor atual e busca por
+     descrição/paciente.
+
+3. **T8 — Categorização contábil por procedimento:**
+   - Coluna `accounting_account_id` (integer, FK opcional) em `procedures`
+     exposta nos schemas Zod (`createProcedureSchema`/`updateProcedureSchema`)
+     e propagada pelo service.
+   - Novo CRUD `POST/GET/PUT/DELETE /api/financial/accounting/accounts`
+     (gated por feature `financial.view.accounting` + permissão
+     `financial.write`); `DELETE` bloqueia remoção quando há lançamentos
+     contábeis ou procedimentos referenciando.
+   - `accounting.service.ts` ganhou `resolveAccountCodeById(accountId,
+     fallbackCode, clinicId)`; postings de receita aceitam `revenueAccountCode`
+     opcional (`postCashReceipt`, `postReceivableRevenue`, `postWalletUsage`,
+     `postPackageCreditUsage`).
+   - `appointments.billing.ts` resolve a sub-conta do procedimento (fallback
+     `4.1.1`/`4.1.2`) e propaga em todos os fluxos de receita: consolidada,
+     uso de carteira, uso de crédito de pacote e a-receber.
+   - Endpoint `GET /api/financial/accounting/dre-by-procedure?from&to` agrega
+     créditos de `accounting_journal_lines` por `procedure_id` + sub-conta.
+   - Frontend:
+     - Campo **"Conta contábil de receita"** no `ProcedureFormModal` (gated
+       por `financial.view.accounting`); valor vazio (`__default__`) → usa
+       conta padrão.
+     - Nova aba **"DRE/Procedimento"** (`DreByProcedureTab.tsx`) agrupa
+       receita por procedimento e detalha cada sub-conta usada, com totais
+       por procedimento e total geral do período.
+
+4. **Arquivos novos:**
+   - `artifacts/api-server/src/modules/financial/accounting/accounting.routes.ts`
+   - `artifacts/fisiogest/src/pages/financial/components/EstornosTab.tsx`
+   - `artifacts/fisiogest/src/pages/financial/components/DreByProcedureTab.tsx`
+
+**Decisões técnicas:**
+
+- **SQL aditivo direto vez de `db:push --force`:** o `drizzle-kit push` nesse
+  ambiente exige TTY interativo. Para evitar destruição de IDs/colunas usei
+  apenas `ADD COLUMN IF NOT EXISTS` em colunas não-PK, nullable, nunca
+  alterando tipos de chaves primárias existentes (regra crítica).
+- **`Select` do Radix não aceita `value=""`:** sentinel `__default__` no
+  `ProcedureFormModal` representa "usar conta padrão"; convertido pra `null`
+  no payload.
+- **DRE/Procedimento usa `accounting_journal_lines.creditAmount`:** segue o
+  modelo dupla-entrada existente, agregando por `procedure_id` (cabeçalho
+  do journal entry) + `account_code` da linha.
+
 ### Sessão 27/abril/2026 (tarde) — Bundle de produção, remarcar em grupo, restrição LGPD ao superadmin, modal de termos persistente
 
 **Contexto:** Sessão pós-import do Replit. Quatro entregas independentes:

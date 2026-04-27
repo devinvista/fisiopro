@@ -40,8 +40,9 @@ import { getCatalogHtml } from "./utils";
 export default function Procedimentos() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { hasRole, isSuperAdmin } = useAuth();
+  const { hasRole, isSuperAdmin, hasFeature } = useAuth();
   const isAdmin = hasRole("admin") || isSuperAdmin;
+  const showAccountingField = hasFeature("financial.view.accounting");
 
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -114,6 +115,16 @@ export default function Procedimentos() {
     queryKey: ["procedures", selectedCategory],
     queryFn: () => apiFetch<Procedure[]>(url),
   });
+
+  // Sprint 3 T8 — Sub-contas contábeis disponíveis para vincular ao procedimento.
+  // Só busca se a clínica tem o feature `financial.view.accounting` (gating do endpoint).
+  const { data: accountingData } = useQuery<{ accounts: Array<{ id: number; code: string; name: string; type: string }> }>({
+    queryKey: ["accounting-accounts"],
+    queryFn: () => apiFetch("/api/financial/accounting/accounts"),
+    enabled: showAccountingField,
+    staleTime: 60_000,
+  });
+  const accountingAccounts = accountingData?.accounts ?? [];
 
   const procedures = allProcedures.filter(p =>
     search.trim() === "" || p.name.toLowerCase().includes(search.toLowerCase())
@@ -263,6 +274,9 @@ export default function Procedimentos() {
       onlineBookingEnabled: proc.onlineBookingEnabled ?? false,
       monthlyPrice: undefined,
       billingDay: undefined,
+      accountingAccountId: (proc as any).accountingAccountId
+        ? String((proc as any).accountingAccountId)
+        : "",
     });
     setIsModalOpen(true);
   }
@@ -469,6 +483,8 @@ export default function Procedimentos() {
         form={form}
         setForm={setForm}
         onSubmit={handleSubmit}
+        accountingAccounts={accountingAccounts}
+        showAccountingField={showAccountingField}
       />
 
       <CatalogModal

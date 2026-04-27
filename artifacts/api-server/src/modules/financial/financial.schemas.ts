@@ -41,4 +41,17 @@ export const updateRecordStatusSchema = z.object({
   status: z.enum(FINANCIAL_RECORD_STATUSES, { error: "Status inválido" }),
   paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "paymentDate deve estar no formato YYYY-MM-DD").optional().nullable(),
   paymentMethod: z.string().max(50).optional().nullable(),
+  // Obrigatório quando o status alvo for `cancelado` ou `estornado` — auditoria do estorno.
+  reversalReason: z.string().min(3, "Motivo do estorno é obrigatório (mínimo 3 caracteres)").max(500).optional(),
+});
+
+export const reverseRecordSchema = z.object({
+  reversalReason: z.string().min(3, "Motivo do estorno é obrigatório (mínimo 3 caracteres)").max(500),
+});
+
+export const listReversalsQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  limit: z.union([z.string(), z.number()]).optional().transform((v) => (v === undefined ? undefined : Number(v))),
+  cursor: z.string().optional(),
 });

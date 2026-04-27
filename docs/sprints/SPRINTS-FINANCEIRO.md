@@ -120,16 +120,46 @@ controle sobre orçamento e metas.
 - [x] Linha vermelha tracejada = `cash_reserve_target` configurado em `clinic_financial_settings`; CTA pra configurar quando ausente.
 - [x] Banner de alerta + tabela diária com badges de status (OK/Abaixo reserva/Negativo).
 
-### T8. Categorização contábil por procedimento
-- [ ] Adicionar `accounting_account_id` em `procedures`.
-- [ ] Sub-contas dinâmicas em `accounting_accounts` (4.1.1.01, 4.1.1.02, ...).
-- [ ] DRE por categoria de procedimento.
+### T8. Categorização contábil por procedimento ✅
+- [x] Coluna `accounting_account_id` (integer FK) em `procedures` exposta no schema
+      e propagada via `createProcedureSchema`/`updateProcedureSchema` + service.
+- [x] Sub-contas dinâmicas: novo CRUD em `/api/financial/accounting/accounts`
+      (`GET`, `POST`, `PUT`, `DELETE`) com gating `financial.view.accounting` +
+      `requirePermission("financial.write")`. Bloqueia remoção quando há
+      lançamentos contábeis ou procedimento referenciando.
+- [x] Helper `resolveAccountCodeById(accountId, fallbackCode, clinicId)` em
+      `accounting.service.ts`; postings de receita aceitam `revenueAccountCode`
+      opcional (`postCashReceipt`, `postReceivableRevenue`, `postWalletUsage`,
+      `postPackageCreditUsage`).
+- [x] `appointments.billing.ts` resolve a sub-conta do procedimento (fallback
+      automático para 4.1.1 / 4.1.2) e propaga em todos os fluxos: receita
+      consolidada, uso de carteira, uso de crédito de pacote e a-receber.
+- [x] Endpoint `GET /api/financial/accounting/dre-by-procedure?from&to` agrega
+      créditos das contas de receita por `procedure_id` + sub-conta.
+- [x] Frontend:
+      - Campo "Conta contábil de receita" no `ProcedureFormModal` (gated por
+        `financial.view.accounting`); vazio → conta padrão.
+      - Nova aba "DRE/Procedimento" (`DreByProcedureTab.tsx`) agrupa receita
+        por procedimento e detalha cada sub-conta usada.
 
-### T9. Auditoria robusta de estornos
-- [ ] Adicionar `original_amount`, `reversal_reason`, `reversed_by` em `financial_records`.
-- [ ] Telas de "histórico de estornos" para auditoria.
+### T9. Auditoria robusta de estornos ✅
+- [x] Colunas `original_amount`, `reversal_reason`, `reversed_by`, `reversed_at`
+      adicionadas em `financial_records` via SQL idempotente
+      (`ADD COLUMN IF NOT EXISTS`) e refletidas no schema Drizzle.
+- [x] Endpoint `POST /api/financial/records/:id/estorno` e mudança de status
+      para `cancelado`/`estornado` exigem `reversalReason` (mín. 3 chars) e
+      preservam o valor original em `original_amount`.
+- [x] Endpoint `GET /api/financial/records/reversals` com paginação cursor
+      (joins users/patients/procedures) e filtros opcionais `from`/`to`.
+- [x] Frontend:
+      - Modal de estorno em `FinancialTab` agora tem `Textarea` obrigatório
+        para o motivo; payload envia `reversalReason`.
+      - Nova aba "Estornos" (`EstornosTab.tsx`) lista histórico com autor,
+        motivo, valor original × valor atual e busca por descrição/paciente.
 
 ### Critérios de aceite
-- Aba "Fluxo de Caixa" mostra saldo projetado dos próximos 30 dias.
-- DRE por procedimento funciona no nível contábil (não só em `financial_records.category`).
-- Todo estorno registra motivo, autor e valor original.
+- [x] Aba "Fluxo de Caixa" mostra saldo projetado dos próximos 30 dias.
+- [x] DRE por procedimento funciona no nível contábil (créditos por
+      `accounting_journal_lines` agrupados por `procedure_id` + sub-conta),
+      não só em `financial_records.category`.
+- [x] Todo estorno registra motivo, autor e valor original.

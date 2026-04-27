@@ -94,6 +94,32 @@ export async function ensureAccountingReady(clinicId?: number | null, tx: Tx = d
   await ensureSystemAccounts(tx, clinicId ?? null);
 }
 
+/**
+ * Resolve um código contábil válido — se a clínica configurou uma sub-conta
+ * (`accounting_accounts.parent_id` ou conta filha) para um procedimento,
+ * usamos esse código; caso contrário, retornamos o código padrão (fallback).
+ *
+ * Aceita tanto um id (`procedures.accounting_account_id`) quanto um código
+ * já resolvido. Se o código não existir na clínica, faz fallback silencioso.
+ */
+export async function resolveAccountCodeById(
+  accountId: number | null | undefined,
+  fallbackCode: string,
+  clinicId?: number | null,
+  tx: Tx = db,
+): Promise<string> {
+  if (!accountId) return fallbackCode;
+  const clinicCondition = clinicId == null
+    ? isNull(accountingAccountsTable.clinicId)
+    : eq(accountingAccountsTable.clinicId, clinicId);
+  const [row] = await tx
+    .select({ code: accountingAccountsTable.code })
+    .from(accountingAccountsTable)
+    .where(and(clinicCondition, eq(accountingAccountsTable.id, accountId)))
+    .limit(1);
+  return row?.code ?? fallbackCode;
+}
+
 export async function createJournalEntry(input: JournalEntryInput, tx: Tx = db) {
   const clinicId = input.clinicId ?? null;
   await ensureSystemAccounts(tx, clinicId);
@@ -153,24 +179,24 @@ export async function createJournalEntry(input: JournalEntryInput, tx: Tx = db) 
   return entry;
 }
 
-export async function postCashReceipt(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
+export async function postCashReceipt(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
     eventType: input.eventType ?? "cash_receipt",
     lines: [
       { accountCode: ACCOUNT_CODES.cash, debit: input.amount },
-      { accountCode: ACCOUNT_CODES.serviceRevenue, credit: input.amount },
+      { accountCode: input.revenueAccountCode ?? ACCOUNT_CODES.serviceRevenue, credit: input.amount },
     ],
   }, tx);
 }
 
-export async function postReceivableRevenue(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
+export async function postReceivableRevenue(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
     eventType: input.eventType ?? "receivable_revenue",
     lines: [
       { accountCode: ACCOUNT_CODES.receivables, debit: input.amount },
-      { accountCode: ACCOUNT_CODES.serviceRevenue, credit: input.amount },
+      { accountCode: input.revenueAccountCode ?? ACCOUNT_CODES.serviceRevenue, credit: input.amount },
     ],
   }, tx);
 }
@@ -197,13 +223,13 @@ export async function postWalletDeposit(input: Omit<JournalEntryInput, "lines" |
   }, tx);
 }
 
-export async function postWalletUsage(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number }, tx: Tx = db) {
+export async function postWalletUsage(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
     eventType: "wallet_usage_revenue",
     lines: [
       { accountCode: ACCOUNT_CODES.customerAdvances, debit: input.amount },
-      { accountCode: ACCOUNT_CODES.serviceRevenue, credit: input.amount },
+      { accountCode: input.revenueAccountCode ?? ACCOUNT_CODES.serviceRevenue, credit: input.amount },
     ],
   }, tx);
 }
@@ -219,13 +245,13 @@ export async function postPackageSale(input: Omit<JournalEntryInput, "lines" | "
   }, tx);
 }
 
-export async function postPackageCreditUsage(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number }, tx: Tx = db) {
+export async function postPackageCreditUsage(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
     eventType: "package_credit_usage_revenue",
     lines: [
       { accountCode: ACCOUNT_CODES.customerAdvances, debit: input.amount },
-      { accountCode: ACCOUNT_CODES.packageRevenue, credit: input.amount },
+      { accountCode: input.revenueAccountCode ?? ACCOUNT_CODES.packageRevenue, credit: input.amount },
     ],
   }, tx);
 }

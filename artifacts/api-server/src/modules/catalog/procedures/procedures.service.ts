@@ -110,6 +110,7 @@ export async function createProcedure(scope: ActorScope, body: CreateProcedureIn
     billingType,
     monthlyPrice,
     billingDay,
+    accountingAccountId,
   } = body;
 
   const resolvedMaxCapacity =
@@ -134,6 +135,7 @@ export async function createProcedure(scope: ActorScope, body: CreateProcedureIn
     billingType,
     monthlyPrice: monthlyPrice != null ? String(monthlyPrice) : null,
     billingDay: billingDay ?? null,
+    accountingAccountId: accountingAccountId ?? null,
     isActive: true,
     clinicId: scope.clinicId ?? null,
   });
@@ -161,6 +163,7 @@ export async function updateProcedure(
     billingType,
     monthlyPrice,
     billingDay,
+    accountingAccountId,
   } = body;
 
   const scoped = repo.tenantScopeCondition(scope.clinicId, scope.isSuperAdmin);
@@ -179,6 +182,8 @@ export async function updateProcedure(
     monthlyPrice:
       monthlyPrice !== undefined ? (monthlyPrice ? String(monthlyPrice) : null) : undefined,
     billingDay: billingDay !== undefined ? (billingDay ?? null) : undefined,
+    accountingAccountId:
+      accountingAccountId !== undefined ? (accountingAccountId ?? null) : undefined,
   });
   if (!procedure) throw HttpError.notFound();
   return decorateProcedure(procedure);

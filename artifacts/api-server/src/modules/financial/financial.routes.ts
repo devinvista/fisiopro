@@ -15,6 +15,7 @@ import recordsRoutes from "./records/financial-records.routes.js";
 import paymentsRoutes from "./payments/financial-payments.routes.js";
 import analyticsRoutes from "./analytics/financial-analytics.routes.js";
 import projectionRoutes from "./projection/cash-flow-projection.routes.js";
+import accountingRoutes from "./accounting/accounting.routes.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -24,5 +25,6 @@ router.use(recordsRoutes);
 router.use(paymentsRoutes);
 router.use(analyticsRoutes);
 router.use(projectionRoutes);
+router.use(accountingRoutes);
 
 export default router;

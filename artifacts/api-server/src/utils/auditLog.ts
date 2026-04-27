@@ -6,7 +6,7 @@ interface AuditEntry {
   userId?: number | null;
   userName?: string | null;
   patientId?: number | null;
-  action: "create" | "update" | "delete";
+  action: "create" | "update" | "delete" | "accept" | "renegotiate" | "reverse";
   entityType: string;
   entityId?: number | null;
   summary?: string;

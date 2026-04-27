@@ -50,6 +50,16 @@ const procedureBaseSchema = z.object({
       )
       .optional()
       .nullable(),
+    // Sprint 3 T8 — Categorização contábil por procedimento.
+    // FK para accounting_accounts.id (sub-conta filha de 4.1.1 / 4.1.2).
+    // Quando definido, o reconhecimento de receita gerado por este procedimento
+    // é creditado na sub-conta indicada em vez da conta padrão.
+    accountingAccountId: z
+      .union([z.number(), z.string(), z.null()])
+      .transform((v) => (v === null || v === "" ? null : Number(v)))
+      .refine((v) => v === null || (Number.isInteger(v) && v > 0), "accountingAccountId deve ser inteiro positivo")
+      .optional()
+      .nullable(),
   });
 
 export const createProcedureSchema = procedureBaseSchema.refine(

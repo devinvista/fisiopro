@@ -7,7 +7,7 @@ import {
 import { eq, and, gt, sql, desc } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
-  postPackageCreditUsage, postReceivableRevenue, postWalletUsage,
+  postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
@@ -67,6 +67,22 @@ export async function applyBillingRules(
     originalUnitPrice: priceResolution.originalUnitPrice,
     treatmentPlanId: priceResolution.treatmentPlanId,
   };
+
+  // Sprint 3 T8 — Categorização contábil por procedimento.
+  // Se o procedimento tem uma sub-conta de receita configurada
+  // (`procedures.accounting_account_id`), resolvemos o código aqui e propagamos
+  // para todos os postings de receita (a receber, carteira, crédito de pacote).
+  // Fallback automático para a conta padrão (`4.1.1`/`4.1.2`) quando ausente.
+  const procedureRevenueAccountCode = await resolveAccountCodeById(
+    (procedure as any).accountingAccountId ?? null,
+    "4.1.1", // ACCOUNT_CODES.serviceRevenue (default)
+    resolvedClinicId,
+  );
+  const procedurePackageRevenueAccountCode = await resolveAccountCodeById(
+    (procedure as any).accountingAccountId ?? null,
+    "4.1.2", // ACCOUNT_CODES.packageRevenue (default)
+    resolvedClinicId,
+  );
 
   // ── BILLING: attendance → billing logic by type ────────────────────────────
   if (confirmedStatuses.includes(newStatus) && !confirmedStatuses.includes(oldStatus)) {
@@ -142,6 +158,7 @@ export async function applyBillingRules(
           procedureId,
           subscriptionId: consolidatedSub.id,
           financialRecordId: pendingInvoiceItem.id,
+          revenueAccountCode: procedureRevenueAccountCode,
         });
 
         await db
@@ -229,6 +246,7 @@ export async function applyBillingRules(
                 procedureId,
                 patientPackageId: credit.patientPackageId,
                 financialRecordId: creditUsageRecord.id,
+                revenueAccountCode: procedurePackageRevenueAccountCode,
               }, tx as any);
 
               await tx
@@ -299,6 +317,7 @@ export async function applyBillingRules(
               procedureId,
               walletTransactionId: walletTransaction.id,
               financialRecordId: fr.id,
+              revenueAccountCode: procedureRevenueAccountCode,
             }, tx as any);
 
             await tx
@@ -348,6 +367,7 @@ export async function applyBillingRules(
             appointmentId,
             procedureId,
             financialRecordId: receivableRecord.id,
+            revenueAccountCode: procedureRevenueAccountCode,
           }, tx as any);
 
           await tx

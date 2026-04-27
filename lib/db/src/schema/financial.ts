@@ -32,6 +32,18 @@ export const financialRecordsTable = pgTable("financial_records", {
   originalUnitPrice: numeric("original_unit_price", { precision: 10, scale: 2 }),
   // Plano de tratamento que ditou o preço (NULL quando origem = tabela/override).
   treatmentPlanId: integer("treatment_plan_id"),
+  // ── Auditoria de estornos (Sprint 3 T9) ───────────────────────────────────
+  // Valor original do lançamento antes do estorno (preserva valor mesmo se
+  // o `amount` for editado depois). Preenchido quando `status` muda para
+  // `estornado`/`cancelado`.
+  originalAmount: numeric("original_amount", { precision: 10, scale: 2 }),
+  // Motivo informado pelo usuário ao realizar o estorno (obrigatório no
+  // endpoint /estorno e na mudança de status para cancelado/estornado).
+  reversalReason: text("reversal_reason"),
+  // Quem aplicou o estorno (FK lógica para users; sem onDelete para preservar histórico).
+  reversedBy: integer("reversed_by"),
+  // Data/hora exata do estorno (independente do `paymentDate` original).
+  reversedAt: timestamp("reversed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_financial_records_clinic_id").on(table.clinicId),

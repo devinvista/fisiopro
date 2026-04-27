@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
@@ -42,6 +43,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<"history" | "subscriptions" | "carteira">("history");
   const [estornoTarget, setEstornoTarget] = useState<{ id: number; description: string; amount: number } | null>(null);
+  const [estornoReason, setEstornoReason] = useState("");
   const [estorning, setEstorning] = useState(false);
 
   const isLoading = recLoading || sumLoading;
@@ -76,12 +78,21 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
   const handleEstorno = async () => {
     if (!estornoTarget) return;
+    if (estornoReason.trim().length < 3) {
+      toast({ title: "Informe o motivo do estorno (mínimo 3 caracteres).", variant: "destructive" });
+      return;
+    }
     setEstorning(true);
     try {
-      await apiSendJson(`/api/financial/records/${estornoTarget.id}/estorno`, "PATCH");
+      await apiSendJson(
+        `/api/financial/records/${estornoTarget.id}/estorno`,
+        "PATCH",
+        { reversalReason: estornoReason.trim() },
+      );
       toast({ title: "Estorno aplicado", description: "O registro foi marcado como estornado." });
       invalidate();
       setEstornoTarget(null);
+      setEstornoReason("");
     } catch (e: any) {
       toast({ title: "Erro ao estornar", description: e.message, variant: "destructive" });
     } finally {
@@ -321,8 +332,8 @@ export function FinancialTab({ patientId }: { patientId: number }) {
           )}
 
           {/* Estorno confirmation */}
-          <Dialog open={!!estornoTarget} onOpenChange={v => { if (!v) setEstornoTarget(null); }}>
-            <DialogContent className="border-none shadow-2xl rounded-3xl w-[calc(100vw-2rem)] sm:max-w-[420px]">
+          <Dialog open={!!estornoTarget} onOpenChange={v => { if (!v) { setEstornoTarget(null); setEstornoReason(""); } }}>
+            <DialogContent className="border-none shadow-2xl rounded-3xl w-[calc(100vw-2rem)] sm:max-w-[460px]">
               <DialogHeader>
                 <div className="flex items-center gap-3 mb-1">
                   <div className="p-2.5 rounded-xl bg-amber-100">
@@ -340,9 +351,28 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                   <p className="text-slate-500 text-xs mt-0.5">{formatCurrency(estornoTarget.amount)}</p>
                 </div>
               )}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-semibold text-slate-700">
+                  Motivo do estorno <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  rows={3}
+                  className="rounded-xl border-slate-200 focus:border-amber-400"
+                  placeholder="Ex.: cobrança duplicada, paciente devolveu o serviço, erro de lançamento…"
+                  value={estornoReason}
+                  onChange={(e) => setEstornoReason(e.target.value)}
+                />
+                <p className="text-[11px] text-slate-400">
+                  Será registrado no histórico de estornos para auditoria (mínimo 3 caracteres).
+                </p>
+              </div>
               <div className="flex gap-2 justify-end pt-1">
-                <Button variant="outline" className="rounded-xl" onClick={() => setEstornoTarget(null)} disabled={estorning}>Cancelar</Button>
-                <Button className="rounded-xl bg-amber-600 hover:bg-amber-700" onClick={handleEstorno} disabled={estorning}>
+                <Button variant="outline" className="rounded-xl" onClick={() => { setEstornoTarget(null); setEstornoReason(""); }} disabled={estorning}>Cancelar</Button>
+                <Button
+                  className="rounded-xl bg-amber-600 hover:bg-amber-700"
+                  onClick={handleEstorno}
+                  disabled={estorning || estornoReason.trim().length < 3}
+                >
                   {estorning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                   Confirmar Estorno
                 </Button>
