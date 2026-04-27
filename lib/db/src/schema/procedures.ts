@@ -18,6 +18,15 @@ export const proceduresTable = pgTable("procedures", {
   billingDay: integer("billing_day"),
   clinicId: integer("clinic_id"),
   isActive: boolean("is_active").notNull().default(true),
+  /**
+   * Sprint 3 — T8: Categorização contábil por procedimento.
+   * Aponta para a sub-conta de receita (`accounting_accounts`) onde a receita
+   * deste procedimento será registrada. Quando NULL, o billing usa a sub-conta
+   * `4.1.1.<slug-da-categoria>` criada automaticamente, ou cai pra `4.1.1`.
+   * Não declarado como FK Drizzle pra evitar ciclo de import com accounting.ts;
+   * a constraint é aplicada via SQL (`fk_procedures_accounting_account`).
+   */
+  accountingAccountId: integer("accounting_account_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

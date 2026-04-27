@@ -119,6 +119,21 @@ O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano
 - `POST /api/patients/:patientId/treatment-plans/:planId/renegotiate` — gera nova versão do plano: clona os procedimentos, aplica overrides do payload (campos top-level — `frequency`, `estimatedSessions`, `startDate`, `objectives`, `techniques`, `responsibleProfessional`), aponta `parent_plan_id` para o anterior e marca o anterior como `concluido`. O novo plano nasce **sem aceite** — precisa ser revisado e aceito separadamente para congelar o novo snapshot. Exige plano anterior `aceito` + `status='ativo'` (HTTP 409 caso contrário).
 - Histórico fiscal: o plano original mantém `frozen_prices_json` intacto após renegociação; toda a árvore de versões é navegável via `parent_plan_id` (índice `idx_treatment_plans_parent`).
 
+### Fluxo de Caixa Projetado (Sprint 3 — T7)
+
+- **Endpoint:** `GET /api/financial/cash-flow-projection?days=N` (1..180), gated por `requireFeature("financial.view.cash_flow")` + `requirePermission("financial.read")`.
+- **Saldo inicial:** `getAccountingBalances()` na conta contábil `1.1.1` (Caixa/Banco) — débito − crédito acumulado até hoje.
+- **Entradas projetadas:** `financial_records` `type=receita` `status=pendente` em `RECEIVABLE_TYPES`, agregadas por `due_date`.
+- **Saídas projetadas:**
+  - Despesas pontuais pendentes (`financial_records` `type=despesa` `status=pendente`) por `due_date`.
+  - `recurring_expenses` ativas, projetadas pela frequência:
+    - `mensal` → reocorre no mesmo dia do `createdAt` (clamp em 28 pra evitar saltos de fevereiro);
+    - `semanal` → cada 7 dias a partir de `createdAt`;
+    - `anual` → aniversário do `createdAt`.
+- **Alertas por dia:** `negative` quando `closing < 0`; `below_reserve` quando `closing < cash_reserve_target` (configurado em `clinic_financial_settings`).
+- **Frontend:** aba "Fluxo de Caixa" (`pages/financial/components/CashFlowTab.tsx`) com seletor 15/30/60/90 dias, KPIs (saldo inicial/entradas/saídas/saldo final/menor saldo), gráfico recharts (área de saldo + barras in/out + linha tracejada vermelha na reserva mínima) e tabela diária com badges de status. Banner clicável leva pra `Configurações → Financeiro` quando a reserva ainda não foi configurada.
+- **Cobertura:** puro cálculo dinâmico, sem schema novo. T7 ✅.
+
 ### Diferenciação por plano SaaS (Sprint 2 — T6)
 
 Catálogo de features financeiras em `lib/shared-constants/src/plan-features.ts`:
