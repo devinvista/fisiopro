@@ -1,5 +1,31 @@
 ## Histórico de Correções (Audit Log do Projeto)
 
+### Sessão 27/abril/2026 — Hardening de tipos backend, a11y de Dialog, datepicker livre
+
+**Contexto:** Após tornar `appointments.schedule_id` NOT NULL no banco (sessão anterior), 3 caminhos de criação ainda permitiam `scheduleId: null` no nível TypeScript, gerando 3 erros de typecheck. Além disso, `CommandDialog` (busca global) renderizava sem `DialogTitle`, disparando avisos de acessibilidade do Radix em todo build dev. O datepicker pt-BR estava travado no mês corrente porque `onMonthChange` era no-op e `toYear` limitava a 31/dez do ano atual.
+
+**Implementado:**
+- **`appointments.service.ts` `createAppointment`** (linha ~205): assinatura passou de `scheduleId?: number | string | null` para `scheduleId: number | string` (obrigatório); guard `if (!Number.isFinite || <= 0) throw badRequest("scheduleId é obrigatório")`. Também simplificou: removido o `if (resolvedScheduleId)` redundante em torno do schedule lookup.
+- **`appointments.service.ts` `createRecurringAppointments`** (linha ~562): mesma mudança de assinatura + guard.
+- **`public.schemas.ts` `bookSchema`**: `scheduleId` deixa de ser `optional().nullable()` e passa a ser obrigatório com `error: "scheduleId é obrigatório"`. Booking público não pode mais criar agendamento sem agenda.
+- **`public.repository.ts` `insertAppointment`**: tipo do parâmetro `scheduleId: number | null` → `scheduleId: number`.
+- **`public.service.ts` `createBooking`**: `scheduleId: scheduleId ? Number(scheduleId) : null` → `scheduleId: Number(scheduleId)`.
+- **`public.service.test.ts`**: `baseInput.scheduleId: null` → `1` para refletir o novo contrato.
+- **`components/ui/command.tsx` `CommandDialog`**: adicionados `<DialogTitle className="sr-only">` e `<DialogDescription className="sr-only">` para satisfazer requisitos do Radix Dialog sem mudar o visual.
+- **`components/ui/date-picker-ptbr.tsx`**: estado interno `calendarMonth` sincronizado ao abrir o popover; `onMonthChange={setCalendarMonth}` passa a propagar; `toYear` ampliado para `currentYear + 5`; `captionLayout="dropdown"` (mês + ano em vez de só mês).
+
+**Arquivos órfãos removidos** (nenhum import detectado em todo o monorepo):
+- `artifacts/fisiogest/src/pages/clinical/patients/patient-detail/tabs/anamnesis/EVAScale.tsx`
+- `artifacts/fisiogest/src/lib/index.ts` (barrel sem consumidores)
+- 4 barrels sem consumidores: `pages/catalog/procedimentos/components/index.ts`, `pages/clinical/agendar/components/index.ts`, `pages/saas/superadmin/components/index.ts`, `pages/settings/configuracoes/components/index.ts`
+
+**Validação:**
+- `pnpm --filter @workspace/api-server exec tsc --noEmit` ✅ (3 erros → 0)
+- `pnpm --filter @workspace/fisiogest exec tsc --noEmit` ✅
+- Workflow `Start application` reiniciado, dev server saudável, browser console sem o aviso de `DialogContent requires DialogTitle` após o restart.
+
+---
+
 ### Sessão abril/2026 — Sprint 6.3: virtualização da lista de pacientes
 
 **Contexto:** `pages/clinical/patients/index.tsx` renderizava todas as linhas da `ListView` no DOM (limit padrão 50, mas o componente está pronto para crescer com paginação cursor). Risco de jank ao alcançar centenas/milhares de pacientes por clínica.

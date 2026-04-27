@@ -2,7 +2,7 @@
 
 Status: ✅ feito • 🟡 em andamento • ⬜ pendente • 🗄️ backlog
 
-> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, 6.3 (17 itens). Detalhes em `docs/changelog.md`.
+> **Última atualização:** abril/2026 — concluídos 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 4.2, 6.1, 6.2, 6.3 (17 itens). Em 27/abr: hardening de tipos no backend (`scheduleId` obrigatório nas 3 vias de criação), correção de a11y do `CommandDialog`, navegação livre do datepicker (até +5 anos). Detalhes em `docs/changelog.md`.
 
 ---
 

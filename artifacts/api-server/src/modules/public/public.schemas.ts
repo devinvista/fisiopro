@@ -29,7 +29,7 @@ export const bookSchema = z.object({
   patientCpf: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   clinicId: z.coerce.number().int().positive().optional().nullable(),
-  scheduleId: z.coerce.number().int().positive().optional().nullable(),
+  scheduleId: z.coerce.number({ error: "scheduleId é obrigatório" }).int().positive(),
 });
 
 export type BookInput = z.infer<typeof bookSchema>;

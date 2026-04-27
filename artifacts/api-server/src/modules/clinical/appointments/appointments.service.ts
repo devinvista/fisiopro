@@ -204,7 +204,7 @@ export async function getAvailableSlots(params: {
 // ─── Create ──────────────────────────────────────────────────────────────────
 export async function createAppointment(body: {
   patientId: number; procedureId: number; date: string; startTime: string;
-  notes?: string | null; scheduleId?: number | string | null; professionalId?: number | null;
+  notes?: string | null; scheduleId: number | string; professionalId?: number | null;
 }, ctx: AuthCtx) {
   const { patientId, procedureId, date, startTime, notes, scheduleId } = body;
 
@@ -213,23 +213,24 @@ export async function createAppointment(body: {
 
   const endTime = addMinutes(startTime, procedure.durationMinutes);
   const maxCapacity = procedure.maxCapacity ?? 1;
-  const resolvedScheduleId = scheduleId ? parseInt(String(scheduleId)) : null;
+  const resolvedScheduleId = parseInt(String(scheduleId));
+  if (!Number.isFinite(resolvedScheduleId) || resolvedScheduleId <= 0) {
+    throw badRequest("scheduleId é obrigatório");
+  }
 
-  if (resolvedScheduleId) {
-    const [schedule] = await db
-      .select({ startTime: schedulesTable.startTime, endTime: schedulesTable.endTime })
-      .from(schedulesTable)
-      .where(eq(schedulesTable.id, resolvedScheduleId));
-    if (schedule) {
-      if (
-        timeToMinutes(startTime) < timeToMinutes(schedule.startTime) ||
-        timeToMinutes(endTime) > timeToMinutes(schedule.endTime)
-      ) {
-        throw unprocessable(
-          "OutOfHours",
-          `O procedimento extrapola o horário de atendimento da agenda (${schedule.startTime}–${schedule.endTime}). Escolha um horário em que o procedimento termine até às ${schedule.endTime}.`
-        );
-      }
+  const [schedule] = await db
+    .select({ startTime: schedulesTable.startTime, endTime: schedulesTable.endTime })
+    .from(schedulesTable)
+    .where(eq(schedulesTable.id, resolvedScheduleId));
+  if (schedule) {
+    if (
+      timeToMinutes(startTime) < timeToMinutes(schedule.startTime) ||
+      timeToMinutes(endTime) > timeToMinutes(schedule.endTime)
+    ) {
+      throw unprocessable(
+        "OutOfHours",
+        `O procedimento extrapola o horário de atendimento da agenda (${schedule.startTime}–${schedule.endTime}). Escolha um horário em que o procedimento termine até às ${schedule.endTime}.`
+      );
     }
   }
 
@@ -558,7 +559,7 @@ export async function completeAppointment(id: number, ctx: AuthCtx) {
 // ─── Recurring ───────────────────────────────────────────────────────────────
 export async function createRecurringAppointments(body: {
   patientId: number; procedureId: number; date: string; startTime: string;
-  notes?: string | null; scheduleId?: number | string | null; professionalId?: number | null;
+  notes?: string | null; scheduleId: number | string; professionalId?: number | null;
   recurrence: { daysOfWeek: number[]; totalSessions: number };
 }, ctx: AuthCtx) {
   const { patientId, procedureId, date, startTime, notes, recurrence, scheduleId } = body;
@@ -567,7 +568,10 @@ export async function createRecurringAppointments(body: {
   const [procedure] = await db.select().from(proceduresTable).where(eq(proceduresTable.id, procedureId));
   if (!procedure) throw notFound("Procedimento não encontrado");
 
-  const resolvedScheduleId = scheduleId ? parseInt(String(scheduleId)) : null;
+  const resolvedScheduleId = parseInt(String(scheduleId));
+  if (!Number.isFinite(resolvedScheduleId) || resolvedScheduleId <= 0) {
+    throw badRequest("scheduleId é obrigatório");
+  }
   const resolvedProfessionalId = isAdminOrSecretary(ctx)
     ? (body.professionalId ?? ctx.userId)
     : ctx.userId;

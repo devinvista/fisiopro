@@ -189,7 +189,7 @@ describe("publicService.createBooking", () => {
     patientCpf: null,
     notes: null,
     clinicId: null,
-    scheduleId: null,
+    scheduleId: 1,
   };
 
   beforeEach(() => {

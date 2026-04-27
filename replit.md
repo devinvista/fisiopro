@@ -204,6 +204,14 @@ Criadas pelo seed (`pnpm run db:seed-demo`):
 
 ## Convenções Arquiteturais
 
+### Regras de domínio críticas
+
+- **`appointments.schedule_id` é NOT NULL** (DB, Zod e tipos TS) — toda criação de agendamento (presencial via `appointments.routes`, recorrente via `/recurring`, e booking público via `/api/public/book`) **exige** `scheduleId`. Não é mais possível agendar "sem agenda". Validações:
+  - DB: coluna `appointments.schedule_id` com constraint NOT NULL
+  - Zod: `createAppointmentSchema.scheduleId` (`appointments.schemas.ts`), `bookSchema.scheduleId` (`public.schemas.ts`) — ambos com mensagem `"scheduleId é obrigatório"`
+  - TS: assinaturas de `createAppointment`, `createRecurringAppointments` e `publicRepository.insertAppointment` usam `scheduleId: number` (sem `null`)
+  - Frontend: o seletor de agenda no formulário é obrigatório quando a página não recebe a prop `scheduleId`
+
 ### Backend — `modules/<dominio>/<feature>/`
 
 Padrão obrigatório para qualquer feature nova ou refatoração:

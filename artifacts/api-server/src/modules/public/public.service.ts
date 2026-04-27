@@ -291,7 +291,7 @@ export const publicService = {
       bookingToken,
       source: "online",
       clinicId: clinicId ? Number(clinicId) : null,
-      scheduleId: scheduleId ? Number(scheduleId) : null,
+      scheduleId: Number(scheduleId),
     });
 
     return {

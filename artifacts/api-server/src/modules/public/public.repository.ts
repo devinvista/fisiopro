@@ -267,7 +267,7 @@ export const publicRepository = {
     bookingToken: string;
     source: "online";
     clinicId: number | null;
-    scheduleId: number | null;
+    scheduleId: number;
   }) {
     return db.insert(appointmentsTable).values(values).returning();
   },
