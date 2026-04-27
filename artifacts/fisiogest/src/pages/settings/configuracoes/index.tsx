@@ -1,7 +1,7 @@
 import { Section, getHashSection } from "./helpers";
 import { BASE, API_BASE, ROLE_COLORS, DAYS_OF_WEEK, PRESET_COLORS, DEFAULT_SCHEDULE_FORM, EMPTY_USER_FORM, parseDays, formatDaysBadges, SECTIONS } from "./constants";
 import { Clinic, SystemUser, Professional, Schedule, ScheduleFormState, SectionConfig } from "./types";
-import { AgendasSection, ClinicaSection, ScheduleCard, UsuariosSection } from "./components";
+import { AgendasSection, ClinicaSection, FinanceiroSection, ScheduleCard, UsuariosSection } from "./components";
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import { maskCpf, maskPhone, maskCnpj, displayCpf } from "@/utils/masks";
@@ -94,10 +94,14 @@ import { Sparkles } from "lucide-react";
 import { PlanoSection } from "../plano-section";
 
 export default function Configuracoes() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasFeature } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>(getHashSection);
 
-  const visibleSections = SECTIONS.filter((s) => s.permission === null || hasPermission(s.permission));
+  const visibleSections = SECTIONS.filter((s) => {
+    if (s.permission !== null && !hasPermission(s.permission)) return false;
+    if (s.feature && !hasFeature(s.feature)) return false;
+    return true;
+  });
 
   const currentSection = visibleSections.find((s) => s.id === activeSection) ?? visibleSections[0];
 
@@ -208,6 +212,7 @@ export default function Configuracoes() {
             {currentSection?.id === "clinica" && <ClinicaSection />}
             {currentSection?.id === "usuarios" && <UsuariosSection />}
             {currentSection?.id === "agendas" && <AgendasSection />}
+            {currentSection?.id === "financeiro" && <FinanceiroSection />}
             {currentSection?.id === "plano" && <PlanoSection />}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import type { SectionConfig } from "./types";
-import { Building2, UserCog, CalendarDays, Sparkles } from "lucide-react";
+import { Building2, UserCog, CalendarDays, Sparkles, Wallet } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import type { Role } from "@/utils/permissions";
 import type { ScheduleFormState } from "./types";
@@ -93,6 +93,14 @@ export const SECTIONS: SectionConfig[] = [
     description: "Configurações de horários e agendas",
     icon: CalendarDays,
     permission: "settings.manage",
+  },
+  {
+    id: "financeiro",
+    label: "Financeiro",
+    description: "Metas, orçamentos e prazos de cobrança",
+    icon: Wallet,
+    permission: "settings.manage",
+    feature: "financial.view.budget",
   },
   {
     id: "plano",

@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
 import {
-  appointmentsTable, financialRecordsTable, sessionCreditsTable, clinicsTable,
+  appointmentsTable, financialRecordsTable, sessionCreditsTable,
   patientSubscriptionsTable, patientWalletTable, patientWalletTransactionsTable,
   patientPackagesTable,
 } from "@workspace/db";
@@ -15,6 +15,7 @@ import {
 } from "./appointments.repository.js";
 import { resolveEffectivePrice } from "./appointments.pricing.js";
 import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
+import { getClinicFinancialSettings } from "../../financial/settings/clinic-financial-settings.service.js";
 import type { AppointmentStatus } from "@workspace/shared-constants";
 
 // ─── Billing rules ────────────────────────────────────────────────────────────
@@ -44,15 +45,13 @@ export async function applyBillingRules(
 
   const resolvedClinicId = clinicId ?? details.clinicId ?? null;
 
-  // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias)
+  // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias).
+  // Lê de `clinic_financial_settings` (Sprint 2 — T5); o serviço faz fallback
+  // automático para `clinics.default_due_days` se a linha de settings não existir.
   let clinicDueDays = 3;
   if (resolvedClinicId) {
-    const [clinicSettings] = await db
-      .select({ defaultDueDays: clinicsTable.defaultDueDays })
-      .from(clinicsTable)
-      .where(eq(clinicsTable.id, resolvedClinicId))
-      .limit(1);
-    clinicDueDays = clinicSettings?.defaultDueDays ?? 3;
+    const settings = await getClinicFinancialSettings(resolvedClinicId);
+    clinicDueDays = settings.defaultDueDays;
   }
   const dueDatePorSessao = addDaysToDate(appointmentDate, clinicDueDays);
 

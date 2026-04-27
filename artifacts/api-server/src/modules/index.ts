@@ -25,6 +25,7 @@ import treatmentPlanProceduresRouter from "./catalog/treatment-plan-procedures/t
 // Financial domain
 import financialRouter from "./financial/financial.routes.js";
 import recurringExpensesRouter from "./financial/recurring-expenses/recurring-expenses.routes.js";
+import clinicFinancialSettingsRouter from "./financial/settings/clinic-financial-settings.routes.js";
 import patientWalletRouter, { walletListRouter } from "./financial/patient-wallet/patient-wallet.routes.js";
 import subscriptionsRouter from "./financial/subscriptions/subscriptions.routes.js";
 import reportsRouter from "./financial/reports/reports.routes.js";
@@ -87,6 +88,7 @@ router.use("/treatment-plans/:planId/procedures", treatmentPlanProceduresRouter)
 // Financial
 router.use("/financial", financialRouter);
 router.use("/recurring-expenses", recurringExpensesRouter);
+router.use("/clinics/current/financial-settings", clinicFinancialSettingsRouter);
 router.use("/subscriptions", subscriptionsRouter);
 router.use("/reports", reportsRouter);
 

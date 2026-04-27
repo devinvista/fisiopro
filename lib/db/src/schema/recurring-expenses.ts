@@ -8,6 +8,10 @@ export const recurringExpensesTable = pgTable("recurring_expenses", {
   name: text("name").notNull(),
   category: text("category").notNull(),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  // Sprint 2 — T5: orçamento mensal pode diferir do valor cobrado (ex.: aluguel
+  // R$ 5.000 fixos mas energia R$ 800 ± variação). Quando NULL, o sistema
+  // calcula a partir de `amount` ajustado pela frequência.
+  monthlyBudget: numeric("monthly_budget", { precision: 10, scale: 2 }),
   frequency: text("frequency").notNull().default("mensal"),
   isActive: boolean("is_active").notNull().default(true),
   notes: text("notes"),

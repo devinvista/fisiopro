@@ -11,11 +11,31 @@ import { CustosPorProcedimentoTab } from "./components/CustosPorProcedimentoTab"
 import { OrcadoRealizadoTab } from "./components/OrcadoRealizadoTab";
 import { DreTab } from "./components/DreTab";
 import { DespesasFixasTab } from "./components/DespesasFixasTab";
+import { useAuth } from "@/hooks/use-auth";
+import type { Feature } from "@/utils/plan-features";
+
+interface TabDef {
+  value: string;
+  icon: React.ReactNode;
+  label: string;
+  /** Feature exigida para exibir a aba; ausência = aparece para todos. */
+  feature?: Feature;
+}
+
+const ALL_TABS: TabDef[] = [
+  { value: "lancamentos",     icon: <Receipt className="w-3.5 h-3.5" />,    label: "Lançamentos",          feature: "financial.view.simple" },
+  { value: "custos",          icon: <BarChart3 className="w-3.5 h-3.5" />,  label: "Custo/Procedimento",   feature: "financial.cost_per_procedure" },
+  { value: "orcado",          icon: <Target className="w-3.5 h-3.5" />,     label: "Orçado vs Realizado",  feature: "financial.view.budget" },
+  { value: "dre",             icon: <Activity className="w-3.5 h-3.5" />,   label: "DRE Mensal",           feature: "financial.view.dre" },
+  { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,  label: "Despesas Fixas",       feature: "module.recurring_expenses" },
+];
 
 export default function Financial() {
+  const { hasFeature } = useAuth();
+  const visibleTabs = ALL_TABS.filter((t) => !t.feature || hasFeature(t.feature));
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [activeTab, setActiveTab] = useState("lancamentos");
+  const [activeTab, setActiveTab] = useState<string>(() => visibleTabs[0]?.value ?? "lancamentos");
 
   return (
     <AppLayout title="Controle Financeiro">
@@ -59,13 +79,7 @@ export default function Financial() {
         <div className="relative mb-6">
           <div className="overflow-x-auto pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsList className="inline-flex bg-slate-100/80 rounded-xl p-1 gap-1 h-auto min-w-max">
-            {[
-              { value: "lancamentos", icon: <Receipt className="w-3.5 h-3.5" />, label: "Lançamentos" },
-              { value: "custos", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Custo/Procedimento" },
-              { value: "orcado", icon: <Target className="w-3.5 h-3.5" />, label: "Orçado vs Realizado" },
-              { value: "dre", icon: <Activity className="w-3.5 h-3.5" />, label: "DRE Mensal" },
-              { value: "despesas-fixas", icon: <Settings2 className="w-3.5 h-3.5" />, label: "Despesas Fixas" },
-            ].map((tab) => (
+            {visibleTabs.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
@@ -80,21 +94,31 @@ export default function Financial() {
           <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
         </div>
 
-        <TabsContent value="lancamentos">
-          <LancamentosTab month={month} year={year} />
-        </TabsContent>
-        <TabsContent value="custos">
-          <CustosPorProcedimentoTab month={month} year={year} />
-        </TabsContent>
-        <TabsContent value="orcado">
-          <OrcadoRealizadoTab month={month} year={year} />
-        </TabsContent>
-        <TabsContent value="dre">
-          <DreTab month={month} year={year} />
-        </TabsContent>
-        <TabsContent value="despesas-fixas">
-          <DespesasFixasTab />
-        </TabsContent>
+        {hasFeature("financial.view.simple") && (
+          <TabsContent value="lancamentos">
+            <LancamentosTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.cost_per_procedure") && (
+          <TabsContent value="custos">
+            <CustosPorProcedimentoTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.budget") && (
+          <TabsContent value="orcado">
+            <OrcadoRealizadoTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.dre") && (
+          <TabsContent value="dre">
+            <DreTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("module.recurring_expenses") && (
+          <TabsContent value="despesas-fixas">
+            <DespesasFixasTab />
+          </TabsContent>
+        )}
       </Tabs>
     </AppLayout>
   );

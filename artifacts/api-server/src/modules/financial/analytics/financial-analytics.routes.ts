@@ -7,6 +7,8 @@ import {
 import { eq, and, sql, gte, lte, inArray, isNull, or, count } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
+import { requireFeature } from "../../../middleware/plan-features.js";
+import { getClinicFinancialSettings } from "../settings/clinic-financial-settings.service.js";
 import { monthDateRangeBRT, nowBRT } from "../../../utils/dateUtils.js";
 import {
   ACCOUNT_CODES,
@@ -25,7 +27,7 @@ const router = Router();
 // ─── GET /cost-per-procedure ───────────────────────────────────────────────────
 // Returns all active procedures with estimated cost, real (overhead-rateado) cost per session,
 // revenue generated in the month, and margin analysis.
-router.get("/cost-per-procedure", requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
+router.get("/cost-per-procedure", requireFeature("financial.cost_per_procedure"), requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
     const clinicId = req.clinicId;
     if (!clinicId && !req.isSuperAdmin) {
       throw HttpError.badRequest("Clínica não identificada");
@@ -220,7 +222,7 @@ router.get("/cost-per-procedure", requirePermission("financial.read"), asyncHand
 
 // ─── GET /dre ─────────────────────────────────────────────────────────────────
 // Mini Demonstrativo de Resultado do Exercício (DRE) mensal
-router.get("/dre", requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
+router.get("/dre", requireFeature("financial.view.dre"), requirePermission("financial.read"), asyncHandler(async (req: AuthRequest, res) => {
     const clinicId = req.clinicId;
     const cc = clinicCond(req);
     const brt = nowBRT();
@@ -282,12 +284,26 @@ router.get("/dre", requirePermission("financial.read"), asyncHandler(async (req:
       : eq(recurringExpensesTable.isActive, true);
 
     const recurringRows = await db.select().from(recurringExpensesTable).where(recCond);
-    const estimatedExpenses = recurringRows.reduce((sum, r) => {
+    // Cada despesa recorrente pode ter `monthlyBudget` próprio (Sprint 2 — T5).
+    // Quando ausente, calculamos a partir de `amount` ajustado pela frequência.
+    const recurringEstimatedExpenses = recurringRows.reduce((sum, r) => {
+      if (r.monthlyBudget !== null && r.monthlyBudget !== undefined) {
+        return sum + Number(r.monthlyBudget);
+      }
       const amt = Number(r.amount);
       if (r.frequency === "anual") return sum + amt / 12;
       if (r.frequency === "semanal") return sum + amt * 4.33;
       return sum + amt;
     }, 0);
+
+    // Se a clínica configurou metas explícitas em `clinic_financial_settings`,
+    // elas têm prioridade sobre o cálculo implícito (Sprint 2 — T5).
+    const financialSettings = clinicId ? await getClinicFinancialSettings(clinicId) : null;
+    const configuredExpenseBudget = financialSettings?.monthlyExpenseBudget ?? null;
+    const configuredRevenueGoal = financialSettings?.monthlyRevenueGoal ?? null;
+    const estimatedExpenses = configuredExpenseBudget !== null
+      ? configuredExpenseBudget
+      : recurringEstimatedExpenses;
 
     const pendCond = cc
       ? and(cc, eq(financialRecordsTable.status, "pendente"), eq(financialRecordsTable.type, "receita"), inArray(financialRecordsTable.transactionType, RECEIVABLE_TYPES), gte(financialRecordsTable.dueDate, start), lte(financialRecordsTable.dueDate, end))
@@ -299,7 +315,8 @@ router.get("/dre", requirePermission("financial.read"), asyncHandler(async (req:
       .where(pendCond);
 
     const pendingReceivable = Number(pendRow?.total ?? 0);
-    const estimatedRevenue  = mrr > 0 ? mrr + pendingReceivable : current.revenue + pendingReceivable;
+    const computedRevenue = mrr > 0 ? mrr + pendingReceivable : current.revenue + pendingReceivable;
+    const estimatedRevenue = configuredRevenueGoal !== null ? configuredRevenueGoal : computedRevenue;
 
     const netProfit   = current.revenue - current.totalExpenses;
     const prevNetProfit = previous.revenue - previous.totalExpenses;
@@ -332,6 +349,8 @@ router.get("/dre", requirePermission("financial.read"), asyncHandler(async (req:
         netProfit: Math.round((estimatedRevenue - estimatedExpenses) * 100) / 100,
         mrr: Math.round(mrr * 100) / 100,
         pendingReceivable: Math.round(pendingReceivable * 100) / 100,
+        revenueSource: configuredRevenueGoal !== null ? "configured" : "computed",
+        expensesSource: configuredExpenseBudget !== null ? "configured" : "recurring",
       },
       variance: {
         revenue: Math.round((current.revenue - estimatedRevenue) * 100) / 100,

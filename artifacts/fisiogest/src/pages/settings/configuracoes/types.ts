@@ -19,7 +19,16 @@ export interface Clinic {
   autoConfirmHours?: number | null;
   noShowFeeEnabled?: boolean;
   noShowFeeAmount?: string | null;
-  defaultDueDays?: number | null;
+}
+
+/** Sprint 2 — T5: configurações financeiras da clínica. */
+export interface ClinicFinancialSettings {
+  clinicId: number;
+  monthlyExpenseBudget: number | null;
+  monthlyRevenueGoal: number | null;
+  cashReserveTarget: number | null;
+  defaultDueDays: number;
+  configured: boolean;
 }
 
 export interface SystemUser {
@@ -75,5 +84,7 @@ export interface SectionConfig {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   permission: "settings.manage" | "users.manage" | null;
+  /** Se preenchido, a seção só aparece para clínicas cujo plano libera a feature. */
+  feature?: import("@/utils/plan-features").Feature;
 }
 

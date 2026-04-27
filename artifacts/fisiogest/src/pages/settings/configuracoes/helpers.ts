@@ -14,11 +14,11 @@ export function fetchUsers(): Promise<SystemUser[]> {
   return apiFetchJson<SystemUser[]>(`${API_BASE}/api/users`);
 }
 
-export type Section = "clinica" | "usuarios" | "agendas" | "plano";
+export type Section = "clinica" | "usuarios" | "agendas" | "financeiro" | "plano";
 
 export function getHashSection(): Section {
   if (typeof window === "undefined") return "clinica";
   const h = window.location.hash.replace("#", "");
-  if (h === "usuarios" || h === "agendas" || h === "plano") return h;
+  if (h === "usuarios" || h === "agendas" || h === "financeiro" || h === "plano") return h;
   return "clinica";
 }

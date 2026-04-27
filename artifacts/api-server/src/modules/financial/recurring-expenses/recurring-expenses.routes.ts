@@ -41,7 +41,7 @@ router.post("/", requirePermission("financial.write"), async (req: AuthRequest, 
       return;
     }
 
-    const { name, category, amount, frequency, notes } = req.body;
+    const { name, category, amount, frequency, notes, monthlyBudget } = req.body;
 
     if (!name || !category || !amount) {
       res.status(400).json({ error: "Bad Request", message: "Nome, categoria e valor são obrigatórios" });
@@ -54,6 +54,16 @@ router.post("/", requirePermission("financial.write"), async (req: AuthRequest, 
       return;
     }
 
+    let monthlyBudgetValue: string | null = null;
+    if (monthlyBudget !== undefined && monthlyBudget !== null && monthlyBudget !== "") {
+      const numBudget = Number(monthlyBudget);
+      if (isNaN(numBudget) || numBudget < 0) {
+        res.status(400).json({ error: "Bad Request", message: "Orçamento mensal inválido" });
+        return;
+      }
+      monthlyBudgetValue = String(numBudget);
+    }
+
     const [record] = await db
       .insert(recurringExpensesTable)
       .values({
@@ -61,6 +71,7 @@ router.post("/", requirePermission("financial.write"), async (req: AuthRequest, 
         name,
         category,
         amount: String(numAmount),
+        monthlyBudget: monthlyBudgetValue,
         frequency: frequency || "mensal",
         notes: notes || null,
         isActive: true,
@@ -77,7 +88,7 @@ router.post("/", requirePermission("financial.write"), async (req: AuthRequest, 
 router.patch("/:id", requirePermission("financial.write"), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const { name, category, amount, frequency, notes, isActive } = req.body;
+    const { name, category, amount, frequency, notes, isActive, monthlyBudget } = req.body;
 
     const clinicCond = req.isSuperAdmin && !req.clinicId
       ? eq(recurringExpensesTable.id, id)
@@ -90,6 +101,18 @@ router.patch("/:id", requirePermission("financial.write"), async (req: AuthReque
     if (frequency !== undefined) updates.frequency = frequency;
     if (notes !== undefined) updates.notes = notes;
     if (isActive !== undefined) updates.isActive = Boolean(isActive);
+    if (monthlyBudget !== undefined) {
+      if (monthlyBudget === null || monthlyBudget === "") {
+        updates.monthlyBudget = null;
+      } else {
+        const numBudget = Number(monthlyBudget);
+        if (isNaN(numBudget) || numBudget < 0) {
+          res.status(400).json({ error: "Bad Request", message: "Orçamento mensal inválido" });
+          return;
+        }
+        updates.monthlyBudget = String(numBudget);
+      }
+    }
 
     const [record] = await db
       .update(recurringExpensesTable)

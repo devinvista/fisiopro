@@ -67,17 +67,20 @@ controle sobre orçamento e metas.
 - [ ] Geração de **receita estimada** agregada em `treatment_plan_estimates` para alimentar
       o fluxo de caixa projetado (próxima iteração — Sprint 3 T7 já cobre via snapshot).
 
-### T5. Configurações financeiras da clínica
-- [ ] Nova tabela `clinic_financial_settings`:
+### T5. Configurações financeiras da clínica ✅
+- [x] Nova tabela `clinic_financial_settings`:
   - `monthly_expense_budget` (orçamento total mensal de despesa)
   - `monthly_revenue_goal`
-  - `cash_reserve_target` (reserva mínima)
-  - `default_due_days` (migrar de `clinics`)
-- [ ] Adicionar `monthly_budget` em `recurring_expenses` (orçado pode diferir do `amount` cobrado).
-- [ ] Tela de configuração em `Configurações → Financeiro`.
-- [ ] Migration `0002_clinic_financial_settings.sql`.
+  - `cash_reserve_target` (reserva mínima — alerta no fluxo projetado, Sprint 3)
+  - `default_due_days` (com fallback para `clinics.default_due_days`)
+- [x] Adicionar `monthly_budget` em `recurring_expenses` (orçado pode diferir do `amount` cobrado).
+- [x] Endpoints `GET/PUT /api/clinics/current/financial-settings` (gated por `financial.view.budget`).
+- [x] DRE/Orçado vs Realizado consomem metas configuradas (`revenueSource`/`expensesSource`).
+- [x] `appointments.billing` lê `defaultDueDays` via `getClinicFinancialSettings`.
+- [x] Tela de configuração em `Configurações → Financeiro` (`FinanceiroSection.tsx`).
+- [x] Schema aplicado via SQL idempotente (`CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS`); push do drizzle-kit não roda sem TTY.
 
-### T6. Diferenciação simplificada vs avançada por plano SaaS
+### T6. Diferenciação simplificada vs avançada por plano SaaS ✅
 - [x] Adicionar features em `lib/shared-constants/src/plan-features.ts`:
   - `financial.view.simple` (todos)
   - `financial.view.cash_flow` (profissional+)
@@ -85,8 +88,11 @@ controle sobre orçamento e metas.
   - `financial.view.budget` (profissional+)
   - `financial.view.accounting` (premium)
   - `financial.cost_per_procedure` (profissional+)
-- [ ] Esconder abas no frontend via `<FeatureGate />` (próxima iteração).
-- [ ] Proteger rotas no backend via `requireFeature()` (próxima iteração).
+- [x] Esconder abas no frontend via `hasFeature()` em `pages/financial/index.tsx`
+      (custos→`financial.cost_per_procedure`, orçado→`financial.view.budget`,
+      DRE→`financial.view.dre`, despesas-fixas→`module.recurring_expenses`).
+- [x] Esconder seção "Financeiro" em Configurações via `feature: financial.view.budget`.
+- [x] Proteger rotas no backend via `requireFeature()` em DRE, custos por procedimento e settings.
 
 ### Critérios de aceite
 - Plano aceito não permite mais alterar preço sem versionar.

@@ -22,6 +22,7 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [frequency, setFrequency] = useState("mensal");
+  const [monthlyBudget, setMonthlyBudget] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -32,9 +33,11 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
       setCategory(editData.category ?? "");
       setAmount(String(editData.amount ?? ""));
       setFrequency(editData.frequency ?? "mensal");
+      setMonthlyBudget(editData.monthlyBudget != null ? String(editData.monthlyBudget) : "");
       setNotes(editData.notes ?? "");
     } else {
-      setName(""); setCategory(""); setAmount(""); setFrequency("mensal"); setNotes("");
+      setName(""); setCategory(""); setAmount(""); setFrequency("mensal");
+      setMonthlyBudget(""); setNotes("");
     }
   }, [editData, open]);
 
@@ -49,7 +52,14 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
       const res = await fetch(url, {
         method,
         headers: authHeaders(),
-        body: JSON.stringify({ name, category, amount: Number(amount), frequency, notes: notes || undefined }),
+        body: JSON.stringify({
+          name,
+          category,
+          amount: Number(amount),
+          frequency,
+          monthlyBudget: monthlyBudget !== "" ? Number(monthlyBudget) : null,
+          notes: notes || undefined,
+        }),
       });
       if (res.ok) { toast({ title: editData ? "Despesa atualizada." : "Despesa cadastrada." }); onSuccess(); }
       else { const d = await res.json().catch(() => ({})); toast({ variant: "destructive", title: d.message ?? "Erro ao salvar." }); }
@@ -103,6 +113,22 @@ export function RecurringExpenseModal({ open, editData, onClose, onSuccess }: {
               Equivalente mensal: <strong className="text-slate-600 tabular-nums">{formatCurrency(Number(amount) * 4.33)}</strong>
             </p>
           )}
+          <div className="space-y-1.5">
+            <Label htmlFor="rec-budget">Orçamento mensal (R$)</Label>
+            <Input
+              id="rec-budget"
+              type="number"
+              min="0"
+              step="0.01"
+              value={monthlyBudget}
+              onChange={e => setMonthlyBudget(e.target.value)}
+              placeholder="Opcional — usado no Orçado vs Realizado"
+              className="rounded-xl"
+            />
+            <p className="text-xs text-slate-400">
+              Quando preenchido, este valor é usado como teto orçado mensal desta despesa. Se vazio, será usado o equivalente mensal calculado pelo valor + frequência.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="rec-notes">Observações</Label>
             <Input id="rec-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Opcional…" className="rounded-xl" />

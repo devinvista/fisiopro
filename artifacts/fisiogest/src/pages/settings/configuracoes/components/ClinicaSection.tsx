@@ -112,7 +112,6 @@ export function ClinicaSection() {
     autoConfirmHours: "" as string | number,
     noShowFeeEnabled: false,
     noShowFeeAmount: "",
-    defaultDueDays: 3 as string | number,
   });
   const [logoPreview, setLogoPreview] = useState<string>("");
 
@@ -139,7 +138,6 @@ export function ClinicaSection() {
         autoConfirmHours: clinic.autoConfirmHours ?? "",
         noShowFeeEnabled: clinic.noShowFeeEnabled ?? false,
         noShowFeeAmount: clinic.noShowFeeAmount ?? "",
-        defaultDueDays: clinic.defaultDueDays ?? 3,
       });
       setLogoPreview(clinic.logoUrl ?? "");
     }
@@ -179,7 +177,6 @@ export function ClinicaSection() {
       ...formData,
       cancellationPolicyHours: formData.cancellationPolicyHours !== "" ? Number(formData.cancellationPolicyHours) : null,
       autoConfirmHours: formData.autoConfirmHours !== "" ? Number(formData.autoConfirmHours) : null,
-      defaultDueDays: formData.defaultDueDays !== "" ? Number(formData.defaultDueDays) : 3,
     };
     updateMutation.mutate(payload);
   };
@@ -587,39 +584,8 @@ export function ClinicaSection() {
 
           <Separator />
 
-          {/* Prazo de vencimento de recebíveis */}
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-medium flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                Prazo de vencimento de recebíveis
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Número de dias após a data do atendimento para o vencimento do título a receber gerado por sessão avulsa.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Input
-                type="number"
-                min="0"
-                max="90"
-                value={formData.defaultDueDays}
-                onChange={(e) => setFormData((p) => ({ ...p, defaultDueDays: e.target.value }))}
-                placeholder="3"
-                className="w-32"
-              />
-              <span className="text-sm text-muted-foreground">dias após o atendimento</span>
-            </div>
-            {Number(formData.defaultDueDays) >= 0 && (
-              <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-700">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                {Number(formData.defaultDueDays) === 0
-                  ? "Recebíveis vencerão no próprio dia do atendimento."
-                  : <>Recebíveis por sessão vencerão <strong className="mx-1">{formData.defaultDueDays} {Number(formData.defaultDueDays) === 1 ? "dia" : "dias"}</strong> após o atendimento.</>
-                }
-              </div>
-            )}
-          </div>
+          {/* Prazo de vencimento de recebíveis foi movido para a aba "Financeiro"
+              (Configurações → Financeiro → Prazo padrão). */}
 
         </CardContent>
       </Card>
