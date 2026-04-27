@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from "react";
+import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -461,18 +461,16 @@ function BottomNav({ location, hasPermission, onOpenMenu }: BottomNavProps) {
 }
 
 export function AppLayout({ children, title }: AppLayoutProps) {
-  const { user, logout, hasPermission, hasFeature, clinics, isSuperAdmin } = useAuth();
+  const { user, logout, hasPermission, hasFeature, clinics, isSuperAdmin, refreshUser } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // LGPD — políticas pendentes (vem do /api/auth/me)
-  const initialPending: number[] = (((user as any)?.lgpd?.pendingPolicies as Array<{ id: number }> | undefined) ?? [])
+  // LGPD — políticas pendentes (vem do /api/auth/me).
+  // Derivamos diretamente do contexto: se o usuário aceitar, o aceite chama
+  // refreshUser() que atualiza o user e remove as pendências automaticamente.
+  // Assim o modal não reaparece a cada navegação de página.
+  const lgpdPending: number[] = (((user as any)?.lgpd?.pendingPolicies as Array<{ id: number }> | undefined) ?? [])
     .map((p) => p.id);
-  const [lgpdPending, setLgpdPending] = useState<number[]>(initialPending);
-  useEffect(() => {
-    setLgpdPending(initialPending);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(user as any)?.lgpd?.pendingPolicies?.map?.((p: { id: number }) => p.id).join?.(",")]);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -580,7 +578,11 @@ export function AppLayout({ children, title }: AppLayoutProps) {
 
       <PolicyAcceptanceModal
         pendingIds={lgpdPending}
-        onAllAccepted={() => setLgpdPending([])}
+        onAllAccepted={() => {
+          // recarrega o usuário do backend → pendingPolicies fica vazio,
+          // o modal fecha e não reaparece em outras páginas.
+          void refreshUser();
+        }}
       />
     </div>
   );

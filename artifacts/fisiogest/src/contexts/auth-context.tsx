@@ -45,6 +45,8 @@ interface AuthContextType {
   hasPermission: (permission: Permission) => boolean;
   hasRole: (role: string) => boolean;
   hasFeature: (feature: Feature) => boolean;
+  /** Recarrega /api/auth/me e atualiza o usuário no contexto (LGPD, planos, etc). */
+  refreshUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -186,6 +188,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return planHasFeature(subscription?.planName ?? null, feature);
   };
 
+  const refreshUser = async () => {
+    try {
+      const userData = (await getCurrentUser()) as any;
+      setUser(userData);
+      setIsAuthenticated(true);
+      localStorage.setItem(STORAGE_AUTH_HINT, "1");
+      setIsSuperAdmin(userData.isSuperAdmin ?? false);
+      setSubscription(userData.subscription ?? null);
+      setFeatures(userData.features ?? []);
+      if (userData.clinicId !== undefined) setClinicId(userData.clinicId);
+      if (userData.clinics) {
+        setClinics(userData.clinics);
+        localStorage.setItem(STORAGE_CLINICS, JSON.stringify(userData.clinics));
+      }
+    } catch {
+      /* mantém estado atual se a re-busca falhar */
+    }
+  };
+
   const planName = (subscription?.planName as PlanTier | undefined) ?? null;
 
   return (
@@ -206,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasPermission,
         hasRole,
         hasFeature,
+        refreshUser,
       }}
     >
       {children}
