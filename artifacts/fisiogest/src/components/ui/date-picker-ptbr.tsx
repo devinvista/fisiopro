@@ -87,6 +87,18 @@ export function DatePickerPTBR({
     return isValid(d) ? d : undefined;
   }, [display]);
 
+  // Mês exibido no calendário — controlado para permitir navegação livre.
+  // Quando o popover abre ou o valor externo muda, sincroniza com a data atual.
+  const [calendarMonth, setCalendarMonth] = React.useState<Date>(
+    () => calendarDate ?? new Date(),
+  );
+  React.useEffect(() => {
+    if (open) {
+      setCalendarMonth(displayAsDate ?? calendarDate ?? new Date());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
     const masked = applyDateMask(raw, display);
@@ -172,13 +184,13 @@ export function DatePickerPTBR({
             mode="single"
             selected={calendarDate}
             onSelect={handleCalendarSelect}
-            month={displayAsDate ?? calendarDate}
-            onMonthChange={() => {}}
-            defaultMonth={calendarDate ?? new Date(2000, 0, 1)}
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            defaultMonth={calendarDate ?? new Date()}
             locale={ptBR}
-            captionLayout="dropdown-months"
+            captionLayout="dropdown"
             fromYear={1920}
-            toYear={new Date().getFullYear()}
+            toYear={new Date().getFullYear() + 5}
           />
         </PopoverContent>
       </Popover>
