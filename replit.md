@@ -157,6 +157,17 @@ Antes do Sprint 4, pagar uma `faturaMensalAvulso` causava (a) reconhecimento dob
 - **Invariante crítica:** `closeAvulsoMonth` cria `faturaMensalAvulso` com `parent.amount = SUM(filhos.amount)`. Se essa invariante for violada, o cascade marcaria filhos extras como `pago` sem cobertura — Sprint posterior pode adicionar re-agregação no `closeAvulsoMonth` quando filhos novos aparecem após o fechamento.
 - **Testes:** 4 casos em `payment-cascade.test.ts` (cascade feliz com 2 filhos + alocação por filho, idempotência sem filhos pendentes, filho sem `recognizedEntryId` marcado pago sem alocar, defesa contra `patientId=null`).
 
+### UI consolidada do Plano + migração de legado (Sprint 5 Refactor — abr/2026)
+
+Detalhes em `sprints/sprint-5-ui-consolidada-e-migracao.md`.
+
+- **TreatmentPlanTab** reorganizado em 4 abas internas: **Itens / Aceite / Cobrança / Sessões**. `AcceptanceBlock` + `MaterializeBlock` ficam em "Aceite"; `BillingSettingsBlock` + `CloseMonthBlock` + `CreditsStatementBlock` ficam em "Cobrança".
+- **`RecurringPackagesPanel`** substitui `SubscriptionBillingPanel` (deletado) em `LancamentosTab`. Painel único com 2 sub-blocos: **Faturas dos Planos** (`/api/treatment-plans/billing/{status,run}`, fonte primária Sprint 2+) e **Assinaturas (legado)** (`/api/subscriptions/{billing-status,run-billing}`, mantido enquanto houver dados pré-migração).
+- **Script `artifacts/api-server/src/scripts/migrate-legacy-plans.ts`** — migração idempotente, dry-run por padrão, com `--apply`, `--only-clinic <id>`, `--skip-part-{a,b}`. Parte A: planos materializados sem aceite formal viram `acceptedVia='legado'` com `acceptedAt = materializedAt` e `frozenPricesJson` snapshot. Parte B: subscriptions órfãs (sem plano correspondente) são agrupadas por paciente em "Plano Legado" com 1 `treatment_plan_procedure` cada (`kind='recorrenteMensal'`); subscriptions originais marcadas `cancelada` com nota cruzada.
+- **`acceptedVia`** agora aceita `'legado'` (além de `'presencial'` e `'remoto'`).
+- **Labels "Assinatura" removidas** da UI clínica/financeira: strip MRR, KPI subs, toast e dialog de cobrança em `LancamentosTab` agora usam "Pacote Mensal" / "Pacote Recorrente Legado". Mantidos intencionalmente: banners SaaS em `app-layout.tsx`, FAQ pública em `landing/FAQSection.tsx`, todo `pages/saas/superadmin/**`.
+- **Pendências para Sprint 6:** `packageType: "faturaConsolidada"` ainda existe como template no catálogo de Pacotes (precisa migração de schema); backend `dashboard.mrr`/`activeSubscriptions` ainda lê de `patient_subscriptions` (deve mudar para `treatment_plan_procedures` com `kind='recorrenteMensal'` após `migrate-legacy-plans --apply` em todas as clínicas).
+
 ### Fluxo de Caixa Projetado (Sprint 3 — T7)
 
 - **Endpoint:** `GET /api/financial/cash-flow-projection?days=N` (1..180), gated por `requireFeature("financial.view.cash_flow")` + `requirePermission("financial.read")`.

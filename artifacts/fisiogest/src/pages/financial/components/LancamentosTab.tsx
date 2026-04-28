@@ -131,7 +131,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
           toast({ title: `${data.generated} lançamento(s) gerado(s).` });
           refetchDash(); refetchRec();
         } else {
-          toast({ title: data.skipped > 0 ? `Nenhuma cobrança nova — ${data.skipped} já registrada(s) ou fora da janela.` : "Nenhuma assinatura com vencimento na janela atual." });
+          toast({ title: data.skipped > 0 ? `Nenhuma cobrança nova — ${data.skipped} já registrada(s) ou fora da janela.` : "Nenhum pacote recorrente (legado) com vencimento na janela atual." });
         }
         await fetchBillingStatus();
       }
@@ -267,10 +267,10 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         </div>
       )}
 
-      {/* ── MRR & Subscription Metrics ── */}
+      {/* ── MRR & Pacotes Recorrentes (Sprint 5) ── */}
       <div>
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Repeat className="w-3 h-3" /> Receita Recorrente (Assinaturas)
+          <Repeat className="w-3 h-3" /> Receita Recorrente (Pacotes Mensais)
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KpiCard
@@ -279,7 +279,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
             icon={<Repeat className="w-4 h-4" />}
             accentColor="#6366f1"
             loading={dashLoading}
-            sub={`${(dashboard as any)?.activeSubscriptions ?? 0} assinatura(s) ativa(s)`}
+            sub={`${(dashboard as any)?.activeSubscriptions ?? 0} pacote(s) mensal(is) ativo(s)`}
           />
           <KpiCard
             label="A Receber — Ledger"
@@ -452,9 +452,9 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
       <Dialog open={showBillingConfirm} onOpenChange={setShowBillingConfirm}>
         <DialogContent className="rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Executar Cobrança Mensal</DialogTitle>
+            <DialogTitle>Executar Cobrança Mensal (Pacotes Legados)</DialogTitle>
             <DialogDescription>
-              Gera lançamentos financeiros para todas as assinaturas ativas com vencimento em aberto (janela de 3 dias). Esta ação é segura e idempotente — assinaturas já cobradas no mês não serão duplicadas.
+              Gera lançamentos financeiros para pacotes recorrentes do modelo legado (assinaturas pré-Sprint 2) com vencimento em aberto na janela atual (3 dias). Ação segura e idempotente — itens já cobrados no mês não são duplicados. Para Planos de Tratamento aceitos, use a aba "Faturas dos Planos" no painel acima.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
