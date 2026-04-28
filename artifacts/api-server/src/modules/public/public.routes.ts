@@ -118,4 +118,97 @@ router.get(
   }),
 );
 
+// ─── Sprint 2 — Aceite público de plano de tratamento via token ──────────────
+//
+// GET  /api/public/treatment-plans/by-token/:token   → snapshot do plano
+// POST /api/public/treatment-plans/by-token/:token/accept → consome o token
+//
+// Sem auth: a posse do token é a credencial. Status do token (`valid|expired|
+// used|not_found`) é refletido em códigos HTTP distintos para a UI exibir
+// mensagens claras.
+router.get(
+  "/treatment-plans/by-token/:token",
+  handle(async (req, res) => {
+    const token = String(req.params.token);
+    const { lookupAcceptanceToken, loadPublicPlanSnapshot } = await import(
+      "../clinical/medical-records/treatment-plans.tokens.js"
+    );
+    const lookup = await lookupAcceptanceToken(token);
+    if (lookup.status === "not_found") {
+      throw new PublicError(404, "not_found", "Link inválido.");
+    }
+    if (lookup.status === "expired") {
+      throw new PublicError(410, "expired", "Este link expirou. Solicite um novo à clínica.");
+    }
+    if (lookup.status === "used") {
+      throw new PublicError(409, "used", "Este link já foi usado.");
+    }
+    const snapshot = await loadPublicPlanSnapshot(lookup.tokenRow!.planId);
+    if (!snapshot) {
+      throw new PublicError(404, "not_found", "Plano não encontrado.");
+    }
+    res.json({ ...snapshot, expiresAt: lookup.tokenRow!.expiresAt.toISOString() });
+  }),
+);
+
+router.post(
+  "/treatment-plans/by-token/:token/accept",
+  handle(async (req, res) => {
+    const token = String(req.params.token);
+    const body = (req.body ?? {}) as { signature?: string };
+    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+    if (signature.length < 3) {
+      throw new PublicError(400, "signature_required", "Digite seu nome completo como assinatura.");
+    }
+    const { lookupAcceptanceToken, consumeAcceptanceToken } = await import(
+      "../clinical/medical-records/treatment-plans.tokens.js"
+    );
+    const { acceptPatientTreatmentPlan } = await import(
+      "../clinical/medical-records/medical-records.service.js"
+    );
+    const { db, treatmentPlansTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+
+    const lookup = await lookupAcceptanceToken(token);
+    if (lookup.status === "not_found") {
+      throw new PublicError(404, "not_found", "Link inválido.");
+    }
+    if (lookup.status === "expired") {
+      throw new PublicError(410, "expired", "Este link expirou. Solicite um novo à clínica.");
+    }
+    if (lookup.status === "used") {
+      throw new PublicError(409, "used", "Este link já foi usado.");
+    }
+
+    const planId = lookup.tokenRow!.planId;
+    const [plan] = await db
+      .select({ patientId: treatmentPlansTable.patientId })
+      .from(treatmentPlansTable)
+      .where(eq(treatmentPlansTable.id, planId))
+      .limit(1);
+    if (!plan) {
+      throw new PublicError(404, "not_found", "Plano não encontrado.");
+    }
+
+    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
+    const ip = ipHeader || req.ip || null;
+    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
+
+    const updated = await acceptPatientTreatmentPlan(plan.patientId, planId, {}, {
+      signature,
+      ip,
+      device: ua,
+      via: "link",
+    });
+
+    await consumeAcceptanceToken(token);
+
+    res.json({
+      ok: true,
+      planId,
+      acceptedAt: (updated as any)?.acceptedAt ?? null,
+    });
+  }),
+);
+
 export default router;

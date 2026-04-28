@@ -121,11 +121,27 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // faturas geradas). Idempotência: se preenchido, não materializa de novo.
   materializedAt: timestamp("materialized_at"),
   responsibleProfessional: text("responsible_professional"),
+  // Status do plano. Domínio aceito pelo backend:
+  //   - "ativo"      : sinônimo histórico de "vigente" (mantido para compat).
+  //   - "rascunho"   : recém-criado, ainda não aceito pelo paciente.
+  //   - "vigente"    : aceito e em execução (novo nome após Sprint 2).
+  //   - "encerrado"  : finalizado normalmente (substitui "concluido" gradualmente).
+  //   - "concluido"  : alias legado de "encerrado".
+  //   - "cancelado"  : cancelado antes/depois do aceite.
   status: text("status").notNull().default("ativo"),
   // Sprint 2 — aceite formal do plano (vira "venda"):
   // após aceito, alterar preço/itens passa a exigir renegociação (versionar via parent_plan_id).
   acceptedAt: timestamp("accepted_at"),
   acceptedBy: integer("accepted_by"),
+  // ── Sprint 2 — Trilha LGPD do aceite ────────────────────────────────────
+  // Nome digitado pelo paciente como "assinatura" (exigência probatória LGPD).
+  acceptedBySignature: text("accepted_by_signature"),
+  // IP do dispositivo no momento do aceite (presencial = IP do front da clínica).
+  acceptedIp: text("accepted_ip"),
+  // User-Agent do dispositivo (truncado em 500 chars no service).
+  acceptedDevice: text("accepted_device"),
+  // Canal pelo qual o aceite foi coletado: "presencial" | "link" | "legado".
+  acceptedVia: text("accepted_via"),
   // Snapshot dos preços vigentes no momento do aceite, para auditoria fiscal.
   // Estrutura: [{ procedureId, packageId, unitPrice, discount, totalSessions, snapshotPrice }]
   frozenPricesJson: text("frozen_prices_json"),
@@ -166,6 +182,16 @@ export const treatmentPlanProceduresTable = pgTable("treatment_plan_procedures",
   treatmentPlanId: integer("treatment_plan_id").notNull().references(() => treatmentPlansTable.id, { onDelete: "cascade" }),
   procedureId: integer("procedure_id"),
   packageId: integer("package_id"),
+  // ── Sprint 2 — Tipo do item do plano ───────────────────────────────────────
+  // Domínio: "recorrenteMensal" | "pacoteSessoes" | "avulso".
+  // Quando NULL, o backend deriva o kind a partir dos campos legados:
+  //   - packageId set + packageType='mensal'   → recorrenteMensal
+  //   - packageId set + packageType='sessoes'  → pacoteSessoes
+  //   - sem packageId                          → avulso
+  // Nota: a renomeação física para `treatment_plan_items` foi adiada — manter
+  // o nome `treatment_plan_procedures` evita migration destrutiva. A renomeação
+  // de tabela vira opcional no Sprint 6 quando todas as referências usarem `kind`.
+  kind: text("kind"),
   sessionsPerWeek: integer("sessions_per_week").notNull().default(1),
   totalSessions: integer("total_sessions"),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
@@ -326,3 +352,25 @@ export const patientPhotosTable = pgTable("patient_photos", {
 export const insertPatientPhotoSchema = createInsertSchema(patientPhotosTable).omit({ id: true, createdAt: true });
 export type InsertPatientPhoto = z.infer<typeof insertPatientPhotoSchema>;
 export type PatientPhoto = typeof patientPhotosTable.$inferSelect;
+
+// ─── Sprint 2 — Tokens de aceite público de plano de tratamento ─────────────
+//
+// Permite gerar um link de aceite (válido por N dias) para que o paciente
+// revise e aceite o plano remotamente. O token é consumido (`usedAt`) na
+// primeira aceitação bem-sucedida e bloqueia novos usos.
+export const treatmentPlanAcceptanceTokensTable = pgTable("treatment_plan_acceptance_tokens", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => treatmentPlansTable.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_tp_accept_tokens_plan_id").on(table.planId),
+  index("idx_tp_accept_tokens_expires_at").on(table.expiresAt),
+]);
+
+export const insertTreatmentPlanAcceptanceTokenSchema = createInsertSchema(treatmentPlanAcceptanceTokensTable).omit({ id: true, createdAt: true });
+export type InsertTreatmentPlanAcceptanceToken = z.infer<typeof insertTreatmentPlanAcceptanceTokenSchema>;
+export type TreatmentPlanAcceptanceToken = typeof treatmentPlanAcceptanceTokensTable.$inferSelect;

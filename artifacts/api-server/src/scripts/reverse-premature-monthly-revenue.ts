@@ -130,7 +130,6 @@ async function main() {
         await postReversal(inv.recognizedEntryId!, {
           clinicId: inv.clinicId ?? null,
           entryDate: new Date().toISOString().slice(0, 10),
-          amount: Number(inv.amount),
           description:
             `Estorno de receita prematura — ${inv.description} (1ª sessão ainda não ocorreu)`,
           sourceType: "financial_record",

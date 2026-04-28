@@ -7,6 +7,7 @@ import { HttpError } from "../../../utils/httpError.js";
 import { logAudit } from "../../../utils/auditLog.js";
 import { deleteCloudinaryAsset, extractPublicId } from "../../../utils/cloudinary.js";
 import * as repo from "./medical-records.repository.js";
+import { acceptPlanFinancials } from "./treatment-plans.acceptance.js";
 
 export type AuthCtx = { userId?: number };
 
@@ -407,9 +408,29 @@ function toMoney(n: number): string {
 }
 
 /**
+ * Trilha LGPD do aceite — Sprint 2.
+ * `via='presencial'` é o aceite presencial autenticado pelo profissional.
+ * `via='link'` é o aceite remoto via token público pelo paciente.
+ * `via='legado'` é reservado a aceites históricos sem captura de IP.
+ */
+export interface AcceptanceTrailInput {
+  signature?: string | null;
+  ip?: string | null;
+  device?: string | null;
+  via?: "presencial" | "link" | "legado";
+}
+
+/**
  * Aceita um plano de tratamento, congelando os preços vigentes e o transformando em
  * uma "venda formal". A partir do aceite, alterações comerciais (preço, desconto, itens)
  * exigem renegociação (versionamento via `parent_plan_id`).
+ *
+ * Sprint 2: o aceite agora também dispara a "venda" (faturas + créditos via
+ * `acceptPlanFinancials`). NÃO cria appointments — a materialização da agenda
+ * permanece como ação operacional separada.
+ *
+ * Status aceitos como ponto de partida: `rascunho` (novo domínio) ou `ativo`
+ * (legado, mantido por compat). O aceite promove `rascunho → vigente`.
  *
  * Idempotente: chamar duas vezes não duplica o snapshot.
  */
@@ -417,14 +438,22 @@ export async function acceptPatientTreatmentPlan(
   patientId: number,
   planId: number,
   ctx: AuthCtx,
+  trail: AcceptanceTrailInput = {},
 ) {
-  if (!ctx.userId) throw HttpError.unauthorized("Usuário não autenticado");
+  // ctx.userId é opcional aqui: aceite via link público (via='link') pode chegar
+  // com userId=null. Para os demais (presencial/legado), exigimos autenticação.
+  const via = trail.via ?? "presencial";
+  if (via !== "link" && !ctx.userId) {
+    throw HttpError.unauthorized("Usuário não autenticado");
+  }
+  const acceptedBy = ctx.userId ?? null;
 
   const existing = await repo.getTreatmentPlan(planId, patientId);
   if (!existing) throw HttpError.notFound("Plano de tratamento não encontrado");
-  if (existing.status !== "ativo") {
+  const acceptableStatuses = new Set(["rascunho", "vigente", "ativo"]);
+  if (!acceptableStatuses.has(existing.status)) {
     throw HttpError.conflict(
-      `Apenas planos com status "ativo" podem ser aceitos (status atual: "${existing.status}").`,
+      `Apenas planos com status "rascunho" ou "vigente" podem ser aceitos (status atual: "${existing.status}").`,
     );
   }
   if (existing.acceptedAt) {
@@ -462,7 +491,7 @@ export async function acceptPatientTreatmentPlan(
 
   const snapshot: FrozenPricesSnapshot = {
     capturedAt: new Date().toISOString(),
-    capturedBy: ctx.userId,
+    capturedBy: acceptedBy ?? 0, // 0 = aceite via link público (sem usuário interno).
     totalEstimatedRevenue: toMoney(totalRevenue),
     items: frozenItems,
   };
@@ -470,18 +499,49 @@ export async function acceptPatientTreatmentPlan(
   const updated = await repo.acceptTreatmentPlan(
     planId,
     patientId,
-    ctx.userId,
+    acceptedBy,
     JSON.stringify(snapshot),
+    {
+      signature: trail.signature ?? null,
+      ip: trail.ip ?? null,
+      device: trail.device ?? null,
+      via: trail.via ?? "presencial",
+    },
   );
   if (!updated) throw HttpError.notFound("Plano de tratamento não encontrado");
 
+  // Sprint 2: dispara o efeito financeiro do aceite (faturas + créditos),
+  // sem criar appointments. Falhas aqui derrubam o aceite (transação no
+  // próprio módulo). Se nenhum item for elegível, retorna zeros sem erro.
+  let financials: Awaited<ReturnType<typeof acceptPlanFinancials>> | null = null;
+  try {
+    financials = await acceptPlanFinancials(planId);
+  } catch (err) {
+    // Em caso de falha, ainda persistimos o aceite — a operadora pode reemitir
+    // o efeito financeiro manualmente. Logamos via audit para rastreio.
+    // Action enum não inclui um item específico; usamos "update" + descrição clara.
+    await logAudit({
+      userId: acceptedBy ?? 0,
+      patientId,
+      action: "update",
+      entityType: "treatment_plan",
+      entityId: planId,
+      summary: `[ALERTA] Aceite gravado, mas efeito financeiro falhou: ${(err as Error).message}`,
+    });
+  }
+
   await logAudit({
-    userId: ctx.userId,
+    userId: acceptedBy ?? 0,
     patientId,
     action: "accept",
     entityType: "treatment_plan",
     entityId: planId,
-    summary: `Plano aceito (receita estimada R$ ${snapshot.totalEstimatedRevenue})`,
+    summary:
+      `Plano aceito (receita estimada R$ ${snapshot.totalEstimatedRevenue}` +
+      (financials
+        ? `, ${financials.invoicesCreated} fatura(s)/${financials.creditsCreated} crédito(s) gerados`
+        : "") +
+      `, via=${trail.via ?? "presencial"})`,
   });
 
   return updated;

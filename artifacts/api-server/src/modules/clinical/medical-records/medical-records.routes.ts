@@ -174,8 +174,47 @@ router.post(
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
     const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
-    const plan = await svc.acceptPatientTreatmentPlan(patientId, planId, getCtx(req as AuthRequest));
+    // Sprint 2 — captura trilha LGPD: assinatura digitada + IP + user-agent.
+    const body = (req.body ?? {}) as { signature?: string };
+    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+    if (!signature) {
+      res.status(400).json({ error: "signature_required", message: "Assinatura (nome completo) é obrigatória." });
+      return;
+    }
+    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
+    const ip = ipHeader || req.ip || null;
+    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
+    const plan = await svc.acceptPatientTreatmentPlan(patientId, planId, getCtx(req as AuthRequest), {
+      signature,
+      ip,
+      device: ua,
+      via: "presencial",
+    });
     res.json(plan);
+  }),
+);
+
+// Sprint 2 — gera (ou reaproveita) um link público de aceite, válido por 7 dias.
+// Retorna a URL absoluta (montada com APP_PUBLIC_URL ou Origin do request).
+router.post(
+  "/treatment-plans/:planId/public-link",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
+    const planId = parseInt(req.params.planId);
+    const ctx = getCtx(req as AuthRequest);
+    const { generatePublicAcceptanceLink } = await import("./treatment-plans.tokens.js");
+    const baseUrl =
+      (process.env.APP_PUBLIC_URL as string | undefined) ||
+      (req.headers.origin as string | undefined) ||
+      "";
+    const result = await generatePublicAcceptanceLink({
+      planId,
+      patientId,
+      createdBy: ctx.userId ?? null,
+      baseUrl,
+    });
+    res.json(result);
   }),
 );
 

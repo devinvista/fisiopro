@@ -33,6 +33,7 @@ const Clinicas = lazy(() => import("./pages/saas/clinicas"));
 const SuperAdmin = lazy(() => import("./pages/saas/superadmin"));
 const Configuracoes = lazy(() => import("./pages/settings/configuracoes"));
 const NotFound = lazy(() => import("./pages/not-found"));
+const AceitePage = lazy(() => import("./pages/public/aceite"));
 const PrivacyPolicyPage = lazy(() =>
   import("./pages/legal/policy-page").then((m) => ({ default: m.PrivacyPolicyPage })),
 );
@@ -87,6 +88,7 @@ function Router() {
         <Route path="/register" component={Register} />
         <Route path="/recuperar-senha" component={ForgotPassword} />
         <Route path="/redefinir-senha" component={ResetPassword} />
+        <Route path="/aceite/:token" component={AceitePage} />
         <Route path="/politica-de-privacidade" component={PrivacyPolicyPage} />
         <Route path="/termos-de-uso" component={TermsOfUsePage} />
         <Route path="/dashboard">

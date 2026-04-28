@@ -112,12 +112,30 @@ O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano
 
 ### Plano de tratamento como "venda formal" (Sprint 2 — T4)
 
-- `POST /api/patients/:patientId/treatment-plans/:planId/accept` — aceita o plano: gera snapshot dos preços vigentes em `treatment_plans.frozen_prices_json` (estrutura `FrozenPricesSnapshot`) e marca `accepted_at` / `accepted_by`.
+- `POST /api/patients/:patientId/treatment-plans/:planId/accept` — aceita o plano: gera snapshot dos preços vigentes em `treatment_plans.frozen_prices_json` (estrutura `FrozenPricesSnapshot`) e marca `accepted_at` / `accepted_by`. **Sprint 2 (Redesign — abr/2026):** o body é obrigatório `{ signature }` e captura também IP + user-agent + via para a trilha LGPD (campos `accepted_by_signature`, `accepted_ip`, `accepted_device`, `accepted_via`). Após gravar, dispara `acceptPlanFinancials(planId)` (faturas + créditos do mês) — **NÃO** chama mais `materializeTreatmentPlan` (sem agendamentos automáticos).
 - Após aceito: `PUT /treatment-plans/:planId` só aceita alterar campos "soft" (`status`, `objectives`, `techniques`, `responsibleProfessional`). Tentativas de alterar `frequency`, `estimatedSessions`, `startDate` retornam `409 Conflict` exigindo renegociação.
 - Endpoint é idempotente (chamar duas vezes não reescreve o snapshot).
 - O snapshot inclui `totalEstimatedRevenue` para alimentar projeção de receita futura.
 - `POST /api/patients/:patientId/treatment-plans/:planId/renegotiate` — gera nova versão do plano: clona os procedimentos, aplica overrides do payload (campos top-level — `frequency`, `estimatedSessions`, `startDate`, `objectives`, `techniques`, `responsibleProfessional`), aponta `parent_plan_id` para o anterior e marca o anterior como `concluido`. O novo plano nasce **sem aceite** — precisa ser revisado e aceito separadamente para congelar o novo snapshot. Exige plano anterior `aceito` + `status='ativo'` (HTTP 409 caso contrário).
 - Histórico fiscal: o plano original mantém `frozen_prices_json` intacto após renegociação; toda a árvore de versões é navegável via `parent_plan_id` (índice `idx_treatment_plans_parent`).
+
+#### Aceite remoto via link público (Sprint 2 Redesign — abr/2026)
+- `POST /api/patients/:patientId/treatment-plans/:planId/public-link` (auth) — gera (ou reaproveita) um token de aceite válido por **7 dias**. Retorna `{ url, token, expiresAt, reused }`. URL = `${APP_PUBLIC_URL || Origin}/aceite/${token}`. Tokens ficam em `treatment_plan_acceptance_tokens` (índices em `plan_id` e `expires_at`).
+- `GET  /api/public/treatment-plans/by-token/:token` (sem auth) — devolve snapshot público (nome do paciente + termos comerciais; SEM CPF/telefone). Status do token (`valid|expired|used|not_found`) → 200/410/409/404.
+- `POST /api/public/treatment-plans/by-token/:token/accept` (sem auth) — body `{ signature }`. Mesmo fluxo do aceite presencial, mas com `via='link'` e sem usuário interno (`accepted_by = NULL`, `frozen_prices_snapshot.capturedBy = 0`). Após sucesso, marca `used_at = now()` no token.
+- Frontend: página pública `/aceite/:token` em `pages/public/aceite.tsx` (mobile-first); `TreatmentPlanTab` ganha o `AcceptanceBlock` com 2 caminhos antes do aceite (presencial / link) e card verde imutável após aceite mostrando a trilha LGPD ao operador.
+
+#### Decisão de schema: `kind` em vez de renomear tabela
+- `treatment_plan_procedures.kind` (`recorrenteMensal|pacoteSessoes|avulso`, nullable) — quando NULL, o backend deriva via `resolveItemKind()` do `packages.packageType` (compat para planos pré-Sprint 2 Redesign). **Não renomeamos `treatment_plan_procedures` → `treatment_plan_items`** para evitar migration destrutiva; renomeação fica opcional para o Sprint 6.
+- `treatment_plans.status`: novo domínio canônico `rascunho|vigente|encerrado|cancelado`. Mantemos `ativo`/`concluido` como sinônimos de leitura. O aceite promove `rascunho → vigente` automaticamente.
+
+#### `acceptPlanFinancials(planId)` (módulo `treatment-plans.acceptance.ts`)
+- Idempotente, transacional. Para cada item:
+  - **`pacoteSessoes`**: 1 fatura `vendaPacote` (status `pendente`, dueDate=hoje) + N créditos em `session_credits` (status segue `paymentMode`: `prepago`→`pendentePagamento`, `postpago`→`disponivel`).
+  - **`recorrenteMensal`**: 1 fatura `faturaPlano` do mês corrente (próximas continuam vindo do job mensal; usa `billingDay` do pacote clamped ao último dia do mês).
+  - **`avulso`**: nenhum efeito agora — cobrança ocorre na conclusão do atendimento.
+- Idempotência por `(plan_id, plan_procedure_id [, plan_month_ref])`.
+- Falhas no efeito financeiro **não derrubam o aceite** (operador reemite manualmente; `audit_log` com prefixo `[ALERTA]`).
 
 ### Fluxo de Caixa Projetado (Sprint 3 — T7)
 

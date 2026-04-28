@@ -21,6 +21,18 @@ vi.mock("../../../utils/cloudinary.js", () => ({
   extractPublicId: vi.fn(),
 }));
 
+// Sprint 2: o aceite chama `acceptPlanFinancials` (faturas/créditos). Aqui o foco
+// é o fluxo de snapshot/auditoria do service — silenciamos o efeito financeiro,
+// que tem cobertura própria em `treatment-plans.acceptance.test.ts`.
+vi.mock("./treatment-plans.acceptance.js", () => ({
+  acceptPlanFinancials: vi.fn(async (planId: number) => ({
+    planId,
+    invoicesCreated: 0,
+    creditsCreated: 0,
+    totalImmediateCharge: "0.00",
+  })),
+}));
+
 const {
   acceptPatientTreatmentPlan,
   updatePatientTreatmentPlanById,

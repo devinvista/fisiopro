@@ -201,14 +201,28 @@ export async function cloneTreatmentPlanProcedures(
 }
 
 /**
+ * Trilha LGPD do aceite: capturada do request (presencial) ou do paciente
+ * (link público). Sprint 2.
+ */
+export interface AcceptanceTrail {
+  signature?: string | null;
+  ip?: string | null;
+  device?: string | null;
+  via?: "presencial" | "link" | "legado";
+}
+
+/**
  * Marca o plano como aceito, gravando snapshot e auditoria.
  * Idempotente: se já aceito, retorna o plano existente sem sobrescrever o snapshot.
+ *
+ * `acceptedBy` pode ser `null` em aceites via link público (paciente sem login).
  */
 export async function acceptTreatmentPlan(
   planId: number,
   patientId: number,
-  acceptedBy: number,
+  acceptedBy: number | null,
   frozenPricesJson: string,
+  trail: AcceptanceTrail = {},
 ) {
   const [existing] = await db
     .select()
@@ -221,7 +235,15 @@ export async function acceptTreatmentPlan(
     .set({
       acceptedAt: new Date(),
       acceptedBy,
+      acceptedBySignature: trail.signature ?? null,
+      acceptedIp: trail.ip ?? null,
+      acceptedDevice: trail.device ? trail.device.slice(0, 500) : null,
+      acceptedVia: trail.via ?? "presencial",
       frozenPricesJson,
+      // O aceite promove o plano de "rascunho" para "vigente". Se já estava
+      // em outro status (ex.: legado "ativo"), não alteramos para preservar
+      // o comportamento esperado pelos consumidores antigos.
+      status: existing.status === "rascunho" ? "vigente" : existing.status,
       updatedAt: new Date(),
     })
     .where(eq(treatmentPlansTable.id, planId))

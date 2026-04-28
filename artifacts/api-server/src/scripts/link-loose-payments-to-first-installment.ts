@@ -178,7 +178,6 @@ async function main() {
             await postReversal(pair.paymentAccountingEntryId, {
               clinicId: pair.paymentClinicId,
               entryDate: pair.paymentDate,
-              amount: pair.paymentAmount,
               description: `Estorno de pagamento avulso re-vinculado à fatura mensal #${pair.invoiceId}`,
               sourceType: "financial_record",
               sourceId: pair.paymentId,
