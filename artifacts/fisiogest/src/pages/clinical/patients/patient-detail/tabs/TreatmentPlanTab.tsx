@@ -145,6 +145,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     replacementCreditValidityDays: "" as string | number,
     avulsoBillingMode: "porSessao" as "porSessao" | "mensalConsolidado",
     avulsoBillingDay: "" as string | number,
+    // Observações internas — visíveis SOMENTE para a equipe da clínica.
+    // Nunca enviadas no contrato impresso, link público de aceite ou e-mail.
+    internalNotes: "",
   };
   const [form, setForm] = useState(emptyForm);
   const planItemsInitRef = useRef(false);
@@ -167,6 +170,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         avulsoBillingMode:
           (selectedPlan.avulsoBillingMode as "porSessao" | "mensalConsolidado") || "porSessao",
         avulsoBillingDay: selectedPlan.avulsoBillingDay ?? "",
+        internalNotes: selectedPlan.internalNotes || "",
       });
     } else {
       setForm(emptyForm);
@@ -206,6 +210,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         avulsoBillingMode: form.avulsoBillingMode || "porSessao",
         avulsoBillingDay:
           form.avulsoBillingDay === "" ? null : Number(form.avulsoBillingDay),
+        internalNotes: form.internalNotes.trim() ? form.internalNotes : null,
       });
       queryClient.invalidateQueries({ queryKey: plansKey });
       toast({ title: "Plano de tratamento salvo!" });
@@ -474,6 +479,34 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                       Define até quando as consultas e faturas mensais serão geradas.
                     </p>
                   </div>
+                </div>
+
+                {/* ── Observações internas (não saem em contrato/link público) ── */}
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                      <Lock className="w-4 h-4" /> Observações internas (uso da equipe)
+                    </Label>
+                    <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                      Não impresso no contrato
+                    </span>
+                  </div>
+                  <Textarea
+                    className="min-h-[90px] bg-white border-amber-200 focus:border-amber-400 transition-colors text-sm"
+                    placeholder="Combinados com a recepção, particularidades de convênio, lembretes do profissional… Visível apenas dentro do sistema."
+                    value={form.internalNotes}
+                    onChange={e => setForm({ ...form, internalNotes: e.target.value })}
+                    maxLength={5000}
+                  />
+                  <p className="text-[11px] text-amber-700/80">
+                    Estas notas <strong>não aparecem</strong> no contrato impresso,
+                    no link público de aceite nem em mensagens enviadas ao paciente.
+                    {form.internalNotes.length > 0 && (
+                      <span className="text-amber-600 ml-1">
+                        ({form.internalNotes.length}/5000)
+                      </span>
+                    )}
+                  </p>
                 </div>
 
                 <TreatmentPlanItemsSection planId={selectedPlanId ?? undefined} planItems={planItems} planItemsKey={planItemsKey} />

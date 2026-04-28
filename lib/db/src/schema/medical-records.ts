@@ -165,6 +165,12 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // Dia de vencimento da fatura consolidada de avulsos (1..28). Null = usa
   // o dia configurado no pacote ou padrão da clínica.
   avulsoBillingDay: integer("avulso_billing_day"),
+  // ── Observações internas da equipe ──────────────────────────────────────
+  // Texto livre visível apenas para a equipe da clínica (NUNCA exposto no
+  // contrato impresso, no link público de aceite ou em qualquer documento
+  // que vá ao paciente). Usado para combinados internos com a recepção,
+  // particularidades de convênio, lembretes do profissional, etc.
+  internalNotes: text("internal_notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
