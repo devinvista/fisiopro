@@ -13,6 +13,7 @@ import {
   ACCOUNT_CODES,
   allocateReceivable,
   getAccountingBalances,
+  postCashAdvance,
   postCashReceipt,
   postReceivableRevenue,
   postReceivableSettlement,
@@ -150,6 +151,45 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         if (remaining <= 0) break;
         const allocationAmount = Math.min(remaining, Number(pending.amount));
         let receivableEntryId = pending.accountingEntryId ?? pending.recognizedEntryId;
+
+        // ── faturaPlano paga ANTES da 1ª sessão do mês ───────────────────
+        // Não reconhece receita aqui — vai para Adiantamentos de Cliente
+        // (passivo). A receita só é reconhecida na 1ª confirmação de sessão
+        // do mês (em applyBillingRules → recognizeMonthlyInvoiceRevenue),
+        // momento em que o adiantamento é consumido (D: Adiantamentos /
+        // C: Receita).
+        const isFaturaPlanoPrepaid =
+          pending.transactionType === "faturaPlano" && !receivableEntryId;
+
+        if (isFaturaPlanoPrepaid) {
+          const advanceEntry = await postCashAdvance({
+            clinicId: pending.clinicId ?? req.clinicId ?? null,
+            entryDate: today,
+            amount: allocationAmount,
+            description: `Pagamento antecipado de fatura mensal — ${pending.description}`,
+            sourceType: "financial_record",
+            sourceId: paymentRecord.id,
+            patientId,
+            appointmentId: pending.appointmentId,
+            procedureId: pending.procedureId,
+            subscriptionId: pending.subscriptionId,
+            financialRecordId: paymentRecord.id,
+          }, tx as any);
+          primaryEntryId ??= advanceEntry.id;
+
+          if (allocationAmount >= Number(pending.amount)) {
+            await tx
+              .update(financialRecordsTable)
+              .set({ status: "pago", paymentDate: today, paymentMethod: paymentMethod || null, settlementEntryId: advanceEntry.id })
+              .where(eq(financialRecordsTable.id, pending.id));
+            // Promove pool de créditos prepago → disponivel
+            const { promotePrepaidCreditsForFinancialRecord } =
+              await import("../../clinical/medical-records/treatment-plans.materialization.js");
+            await promotePrepaidCreditsForFinancialRecord(pending.id);
+          }
+          remaining = Math.round((remaining - allocationAmount) * 100) / 100;
+          continue;
+        }
 
         if (!receivableEntryId && pending.transactionType !== "vendaPacote") {
           const recognitionEntry = await postReceivableRevenue({

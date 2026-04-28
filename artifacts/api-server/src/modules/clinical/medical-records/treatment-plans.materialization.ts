@@ -370,25 +370,17 @@ export async function materializeTreatmentPlan(
         monthsCoveredCount++;
         totalContracted += monthlyAmount;
 
-        // Reconhece a receita acumulada (a receber) — competência = primeiro
-        // dia do mês para refletir o regime de competência mensal.
-        const accEntry = await postReceivableRevenue({
-          clinicId: plan.clinicId,
-          entryDate: monthStart,
-          amount: monthlyAmount,
-          description: `Receita mensal contratada — plano #${planId} — ${patientName} — ${monthStart.slice(0, 7)}`,
-          sourceType: "financial_record",
-          sourceId: invoice.id,
-          patientId: plan.patientId,
-          procedureId,
-          financialRecordId: invoice.id,
-          revenueAccountCode: accountCode,
-        });
-
-        await tx
-          .update(financialRecordsTable)
-          .set({ recognizedEntryId: accEntry.id, accountingEntryId: accEntry.id })
-          .where(eq(financialRecordsTable.id, invoice.id));
+        // ── Reconhecimento de receita: NÃO ocorre na materialização ────────
+        // Conforme regime de competência por entrega:
+        //   • A fatura mensal nasce `pendente`, sem journal entry.
+        //   • A receita só é reconhecida na **1ª confirmação de sessão** do
+        //     mês (em `applyBillingRules`, ramo de plano materializado).
+        //   • Para fatura prepago paga antes da 1ª sessão, o pagamento gera
+        //     `Adiantamento de Cliente` (passivo); a receita é reconhecida
+        //     no consumo (D: Adiantamentos / C: Receita).
+        // O `accountCode` continua resolvido para uso no momento do
+        // reconhecimento futuro (passado via lookup pela fatura).
+        void accountCode;
 
         // 2) Cria os appointments do mês, vinculados à fatura.
         // Estratégia em lote (1 SELECT + 1 UPDATE em massa + 1 INSERT em

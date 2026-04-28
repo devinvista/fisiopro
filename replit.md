@@ -619,6 +619,32 @@ conformidade).
   do `?tab=auditoria` (usuários comuns que abrirem a URL caem na aba
   "Jornada").
 
+### Reconhecimento de receita por entrega (28/04/2026)
+
+**Regra contábil:** receita de fatura mensal de plano de tratamento
+NUNCA é reconhecida na materialização nem por simples passagem de
+calendário. O reconhecimento ocorre **na 1ª confirmação de sessão
+do mês** (status `compareceu` ou `concluido`), pelo **valor integral
+da fatura mensal**.
+
+* **Materialização** (`treatment-plans.materialization.ts`): cria
+  `financial_records` (status `pendente`), sem journal entry. NÃO
+  chama mais `postReceivableRevenue`.
+* **1ª confirmação** (`appointments.billing.ts` → ramo `planProcId` →
+  `recognizeMonthlyInvoiceRevenue`): se `recognizedEntryId IS NULL`,
+  lança:
+  - Fatura `pendente`: D: Recebíveis (1.1.2) / C: Receita (4.1.x)
+  - Fatura `pago` (prepago): D: Adiantamentos (2.1.1) / C: Receita
+* **Pagamento prepago** (`financial-payments.routes.ts`): faturaPlano
+  paga ANTES da 1ª sessão lança D: Caixa (1.1.1) / C: Adiantamentos
+  (2.1.1) via `postCashAdvance`. Receita só é reconhecida no consumo.
+* **Idempotência:** `financial_records.recognizedEntryId` é o sentinel
+  — chamadas repetidas para a mesma fatura são no-op.
+* **Migração one-shot** executada em 28/04/2026:
+  `src/scripts/reverse-premature-monthly-revenue.ts` estornou ~200
+  faturas (R$ 39.210) que tinham receita reconhecida pela regra
+  antiga sem nenhuma sessão confirmada do mês.
+
 ### Notas técnicas
 
 * **Zod v4 + `partial()`:** Zod v4 proíbe `.partial()` em objetos com

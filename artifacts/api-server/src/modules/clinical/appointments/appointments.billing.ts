@@ -9,6 +9,7 @@ import { todayBRT } from "../../../utils/dateUtils.js";
 import {
   postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
+import { recognizeMonthlyInvoiceRevenue } from "../medical-records/treatment-plans.revenue-recognition.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
 import {
   getWithDetails, resolveMonthlyPackageCreditPolicy, countAbsenceCreditsInMonth,
@@ -161,7 +162,7 @@ export async function applyBillingRules(
     const absenceSet: string[] = ["faltou"] satisfies AppointmentStatus[];
 
     if (confirmedSet.includes(newStatus) && !confirmedSet.includes(oldStatus)) {
-      // Apenas garante a evolução clínica — financeiro já está pré-faturado.
+      // Garante a evolução clínica.
       try {
         await ensureAutoEvolutionForAppointment(
           patientId,
@@ -170,6 +171,24 @@ export async function applyBillingRules(
         );
       } catch (err) {
         console.error("[applyBillingRules] failed to create auto evolution:", err);
+      }
+
+      // ── Reconhecimento de receita por entrega ───────────────────────────
+      // Esta é a 1ª confirmação do mês? Se sim, reconhece a receita
+      // INTEGRAL da fatura mensal. Idempotente — chamadas subsequentes
+      // do mesmo mês são no-op (recognizedEntryId já preenchido).
+      const monthlyInvoiceId: number | null =
+        (details as any).monthlyInvoiceId ?? null;
+      if (monthlyInvoiceId) {
+        try {
+          await recognizeMonthlyInvoiceRevenue({
+            monthlyInvoiceId,
+            appointmentId,
+            appointmentDate,
+          });
+        } catch (err) {
+          console.error("[applyBillingRules] failed to recognize monthly revenue:", err);
+        }
       }
       return;
     }

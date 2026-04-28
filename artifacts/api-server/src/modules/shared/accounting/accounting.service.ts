@@ -234,6 +234,23 @@ export async function postWalletUsage(input: Omit<JournalEntryInput, "lines" | "
   }, tx);
 }
 
+/**
+ * Pagamento antecipado de fatura mensal (plano de tratamento) ANTES da
+ * 1ª sessão do mês ser confirmada. Vai para Adiantamentos de Cliente
+ * (passivo). A receita só é reconhecida no consumo (D: Adiantamentos /
+ * C: Receita) via `postWalletUsage` na 1ª confirmação.
+ */
+export async function postCashAdvance(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
+  return createJournalEntry({
+    ...input,
+    eventType: input.eventType ?? "cash_advance_receipt",
+    lines: [
+      { accountCode: ACCOUNT_CODES.cash, debit: input.amount },
+      { accountCode: ACCOUNT_CODES.customerAdvances, credit: input.amount },
+    ],
+  }, tx);
+}
+
 export async function postPackageSale(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; paid: boolean }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
