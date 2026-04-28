@@ -180,40 +180,34 @@ async function main() {
 
     if (!args.dryRun) {
       for (const r of allWrong) {
-        // Estorna o lançamento contábil se ainda estiver postado.
-        for (const entryId of [r.accountingEntryId, r.recognizedEntryId]) {
-          if (!entryId) continue;
-          const [entry] = await db
-            .select({ status: accountingJournalEntriesTable.status })
-            .from(accountingJournalEntriesTable)
-            .where(eq(accountingJournalEntriesTable.id, entryId))
-            .limit(1);
-          if (entry && entry.status === "posted") {
-            try {
-              await postReversal(entryId, {
-                clinicId,
-                entryDate: todayBRT(),
-                description: `Estorno backfill — record #${r.id} (cobrança incorreta de plano mensal)`,
-                sourceType: "financial_record",
-                sourceId: r.id,
-                financialRecordId: r.id,
-              });
-              totalReversedEntries++;
-            } catch (e) {
-              console.error(`      ! falha estorno entry #${entryId}:`, (e as Error).message);
-            }
-          }
+        // Apaga lançamentos contábeis ligados ao record errado (originais e
+        // estornos), tanto pelos ids referenciados pelo financial_record
+        // quanto por sourceType/sourceId polimórfico. Como os pares
+        // original-estorno se anulam, a remoção não desbalanceia a
+        // contabilidade — apenas remove ruído de auditoria de uma cobrança
+        // que nunca deveria ter existido.
+        const linkedEntryIds = [r.accountingEntryId, r.recognizedEntryId].filter(
+          (x): x is number => typeof x === "number",
+        );
+        if (linkedEntryIds.length > 0) {
+          await db
+            .delete(accountingJournalEntriesTable)
+            .where(inArray(accountingJournalEntriesTable.id, linkedEntryIds));
+          totalReversedEntries += linkedEntryIds.length;
         }
+        const orphanEntries = await db
+          .delete(accountingJournalEntriesTable)
+          .where(
+            and(
+              eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+              eq(accountingJournalEntriesTable.sourceId, r.id),
+            ),
+          )
+          .returning({ id: accountingJournalEntriesTable.id });
+        totalReversedEntries += orphanEntries.length;
 
-        await db
-          .update(financialRecordsTable)
-          .set({
-            status: "cancelado",
-            originalAmount: r.amount,
-            reversalReason: "Backfill: cobrança avulsa substituída por rateio mensal proporcional",
-            reversedAt: new Date(),
-          })
-          .where(eq(financialRecordsTable.id, r.id));
+        // Hard delete do financial_record errado.
+        await db.delete(financialRecordsTable).where(eq(financialRecordsTable.id, r.id));
         totalCanceled++;
       }
     } else {
