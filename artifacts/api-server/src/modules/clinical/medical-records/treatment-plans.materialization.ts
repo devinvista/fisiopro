@@ -348,22 +348,66 @@ export async function materializeTreatmentPlan(
           .where(eq(financialRecordsTable.id, invoice.id));
 
         // 2) Cria os appointments do mês, vinculados à fatura.
-        for (const date of dates) {
-          await tx.insert(appointmentsTable).values({
+        // Estratégia em lote (1 SELECT + 1 UPDATE em massa + 1 INSERT em
+        // massa) para evitar latência por data:
+        //   a) Busca todos os appointments existentes nesses slots
+        //      (mesmo paciente, data, horário, status ativo).
+        //   b) Vincula os existentes ao item/fatura preservando histórico.
+        //   c) Insere em massa as datas restantes.
+        if (dates.length === 0) continue;
+
+        const existingRows = await tx
+          .select({
+            id: appointmentsTable.id,
+            date: appointmentsTable.date,
+          })
+          .from(appointmentsTable)
+          .where(
+            and(
+              eq(appointmentsTable.patientId, plan.patientId),
+              inArray(appointmentsTable.date, dates),
+              eq(appointmentsTable.startTime, item.defaultStartTime!),
+              sql`${appointmentsTable.status} NOT IN ('cancelado','faltou','remarcado')`,
+            ),
+          );
+
+        const existingDates = new Set<string>();
+        const existingIds: number[] = [];
+        for (const row of existingRows) {
+          existingDates.add(row.date);
+          existingIds.push(row.id);
+        }
+
+        if (existingIds.length > 0) {
+          await tx
+            .update(appointmentsTable)
+            .set({
+              treatmentPlanProcedureId: item.id,
+              monthlyInvoiceId: invoice.id,
+            })
+            .where(inArray(appointmentsTable.id, existingIds));
+          appointmentsCreated += existingIds.length;
+        }
+
+        const datesToInsert = dates.filter((d) => !existingDates.has(d));
+        if (datesToInsert.length > 0) {
+          const endTime = addMinutesToTime(item.defaultStartTime!, duration);
+          const rows = datesToInsert.map((date) => ({
             patientId: plan.patientId,
             procedureId,
             professionalId: item.defaultProfessionalId,
             date,
             startTime: item.defaultStartTime!,
-            endTime: addMinutesToTime(item.defaultStartTime!, duration),
-            status: "agendado",
+            endTime,
+            status: "agendado" as const,
             clinicId: plan.clinicId,
             scheduleId,
             treatmentPlanProcedureId: item.id,
             monthlyInvoiceId: invoice.id,
-            source: "presencial",
-          });
-          appointmentsCreated++;
+            source: "presencial" as const,
+          }));
+          await tx.insert(appointmentsTable).values(rows);
+          appointmentsCreated += datesToInsert.length;
         }
       }
     }
