@@ -29,6 +29,7 @@ import recurringExpensesRouter from "./financial/recurring-expenses/recurring-ex
 import clinicFinancialSettingsRouter from "./financial/settings/clinic-financial-settings.routes.js";
 import patientWalletRouter, { walletListRouter } from "./financial/patient-wallet/patient-wallet.routes.js";
 import subscriptionsRouter from "./financial/subscriptions/subscriptions.routes.js";
+import monthlyPlanBillingRouter from "./financial/billing/monthly-plan-billing.routes.js";
 import reportsRouter from "./financial/reports/reports.routes.js";
 
 // SaaS (plans, billing of the platform itself)
@@ -92,6 +93,7 @@ router.use("/financial", financialRouter);
 router.use("/recurring-expenses", recurringExpensesRouter);
 router.use("/clinics/current/financial-settings", clinicFinancialSettingsRouter);
 router.use("/subscriptions", subscriptionsRouter);
+router.use("/treatment-plans/billing", monthlyPlanBillingRouter);
 router.use("/reports", reportsRouter);
 
 // Cross-cutting

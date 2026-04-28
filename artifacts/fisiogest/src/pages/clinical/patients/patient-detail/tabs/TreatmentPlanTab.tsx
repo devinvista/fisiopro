@@ -345,190 +345,223 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             </div>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-6">
-            {/* Objectives and techniques */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-primary" /> Objetivos do Tratamento
-                </Label>
-                <Textarea
-                  className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                  placeholder="Quais os principais objetivos desta etapa? (ex: redução de dor, ganho de amplitude...)"
-                  value={form.objectives} onChange={e => setForm({ ...form, objectives: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <Stethoscope className="w-4 h-4 text-primary" /> Condutas e Técnicas
-                </Label>
-                <Textarea
-                  className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                  placeholder="Quais técnicas serão aplicadas? (ex: liberação miofascial, exercícios cinesioterapêuticos...)"
-                  value={form.techniques} onChange={e => setForm({ ...form, techniques: e.target.value })}
-                />
-              </div>
-            </div>
+          <CardContent className="p-0">
+            {/* Sprint 5 — UI consolidada: Itens / Aceite / Cobrança / Sessões.
+                Cada aba isola um aspecto do plano, evitando o scroll-épico do
+                modelo anterior em coluna única. As mutações ficam dentro da
+                aba "Itens" (campos editáveis); aceite e cobrança são read-only
+                após o aceite formal. */}
+            <Tabs defaultValue="itens" className="w-full">
+              <TabsList className="w-full justify-start gap-1 px-6 pt-4 pb-0 bg-transparent border-b border-slate-100 rounded-none h-auto">
+                <TabsTrigger value="itens" className="data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-lg gap-1.5 text-xs">
+                  <ClipboardList className="w-3.5 h-3.5" /> Itens
+                </TabsTrigger>
+                <TabsTrigger value="aceite" className="data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-lg gap-1.5 text-xs">
+                  <PenLine className="w-3.5 h-3.5" /> Aceite
+                  {selectedPlan?.acceptedAt ? (
+                    <BadgeCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="cobranca" className="data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-lg gap-1.5 text-xs">
+                  <DollarSign className="w-3.5 h-3.5" /> Cobrança
+                </TabsTrigger>
+                <TabsTrigger value="sessoes" className="data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-lg gap-1.5 text-xs">
+                  <Activity className="w-3.5 h-3.5" /> Sessões
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Responsible Professional */}
-            <div className="space-y-2 max-w-md">
-              <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-primary" /> Profissional Responsável
-              </Label>
-              <Select value={form.responsibleProfessional} onValueChange={v => setForm({ ...form, responsibleProfessional: v })}>
-                <SelectTrigger className="bg-slate-50 border-slate-200 focus:bg-white">
-                  <SelectValue placeholder="Selecionar profissional..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {professionals.length === 0 && <SelectItem value="__none" disabled>Nenhum profissional cadastrado</SelectItem>}
-                  {professionals.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Frequency, start date, estimated sessions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                  Frequência
-                  {planItems.length > 0 && <span className="text-[10px] text-slate-400 font-normal">— calculado dos itens</span>}
-                </Label>
-                <Input className="bg-slate-50 border-slate-200 focus:bg-white"
-                  value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })} placeholder="Ex: 3x/semana..." />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700">Data de Início</Label>
-                <DatePickerPTBR className="bg-slate-50 border-slate-200 focus:bg-white h-9"
-                  value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                  Sessões Estimadas
-                  {planItems.length > 0 && <span className="text-[10px] text-slate-400 font-normal">— calculado dos itens</span>}
-                </Label>
-                <Input type="number" min={1} className="bg-slate-50 border-slate-200 focus:bg-white"
-                  value={form.estimatedSessions} onChange={e => setForm({ ...form, estimatedSessions: e.target.value })} placeholder="Ex: 20" />
-              </div>
-            </div>
-
-            {/* Status + Prazo */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700">Status do Tratamento</Label>
-                <Select value={form.status} onValueChange={(v: "ativo" | "concluido" | "suspenso") => setForm({ ...form, status: v })}>
-                  <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ativo">Ativo</SelectItem>
-                    <SelectItem value="concluido">Concluído</SelectItem>
-                    <SelectItem value="suspenso">Suspenso</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700">Prazo do plano (meses)</Label>
-                <Select
-                  value={String(form.durationMonths ?? 12)}
-                  onValueChange={v => setForm({ ...form, durationMonths: Number(v) })}
-                >
-                  <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[1, 2, 3, 6, 12, 24, 36].map(m => (
-                      <SelectItem key={m} value={String(m)}>{m} {m === 1 ? "mês" : "meses"}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-slate-400">
-                  Define até quando as consultas e faturas mensais serão geradas.
-                </p>
-              </div>
-            </div>
-
-            {/* Sprint 2 — Aceite formal (vira "venda"): faturas + créditos */}
-            <AcceptanceBlock
-              patientId={patientId}
-              planId={selectedPlanId!}
-              plan={selectedPlan}
-              onChanged={() => {
-                queryClient.invalidateQueries({ queryKey: plansKey });
-                queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
-                queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/credits`] });
-              }}
-            />
-
-            {/* Materialização */}
-            <MaterializeBlock
-              planId={selectedPlanId!}
-              materializedAt={selectedPlan?.materializedAt ?? null}
-              planItems={planItems}
-              onChanged={() => {
-                queryClient.invalidateQueries({ queryKey: plansKey });
-                queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
-                queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
-              }}
-            />
-
-            {/* Sprint 2 — Faturamento e validade de créditos */}
-            <BillingSettingsBlock
-              form={form}
-              setForm={setForm}
-              isAccepted={!!selectedPlan?.acceptedAt}
-            />
-
-            {/* Sprint 4 — Fechamento mensal de avulsos */}
-            {selectedPlan?.acceptedAt && form.avulsoBillingMode === "mensalConsolidado" && (
-              <CloseMonthBlock
-                patientId={patientId}
-                planId={selectedPlanId!}
-                onClosed={() => {
-                  queryClient.invalidateQueries({ queryKey: plansKey });
-                  queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
-                  queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
-                }}
-              />
-            )}
-
-            {/* Sprint 3 — Extrato de créditos do paciente */}
-            <CreditsStatementBlock patientId={patientId} />
-
-            {/* Session progress */}
-            {(form.estimatedSessions || completedSessions > 0) && (
-              <div className="pt-2 border-t border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary" /> Progresso Geral de Sessões
-                  </Label>
-                  <span className={`text-sm font-bold ${form.estimatedSessions && completedSessions >= Number(form.estimatedSessions) ? "text-green-600" : "text-primary"}`}>
-                    {completedSessions} / {form.estimatedSessions || "—"}
-                  </span>
+              {/* ── Aba Itens ────────────────────────────────────────────── */}
+              <TabsContent value="itens" className="p-6 space-y-6 mt-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                      <Target className="w-4 h-4 text-primary" /> Objetivos do Tratamento
+                    </Label>
+                    <Textarea
+                      className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                      placeholder="Quais os principais objetivos desta etapa? (ex: redução de dor, ganho de amplitude...)"
+                      value={form.objectives} onChange={e => setForm({ ...form, objectives: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                      <Stethoscope className="w-4 h-4 text-primary" /> Condutas e Técnicas
+                    </Label>
+                    <Textarea
+                      className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                      placeholder="Quais técnicas serão aplicadas? (ex: liberação miofascial, exercícios cinesioterapêuticos...)"
+                      value={form.techniques} onChange={e => setForm({ ...form, techniques: e.target.value })}
+                    />
+                  </div>
                 </div>
-                {form.estimatedSessions ? (
-                  <>
-                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                      <div className={`h-2.5 rounded-full transition-all duration-500 ${completedSessions >= Number(form.estimatedSessions) ? "bg-green-500" : "bg-primary"}`}
-                        style={{ width: `${Math.min(100, (completedSessions / Number(form.estimatedSessions)) * 100)}%` }} />
-                    </div>
+
+                <div className="space-y-2 max-w-md">
+                  <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <UserCheck className="w-4 h-4 text-primary" /> Profissional Responsável
+                  </Label>
+                  <Select value={form.responsibleProfessional} onValueChange={v => setForm({ ...form, responsibleProfessional: v })}>
+                    <SelectTrigger className="bg-slate-50 border-slate-200 focus:bg-white">
+                      <SelectValue placeholder="Selecionar profissional..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {professionals.length === 0 && <SelectItem value="__none" disabled>Nenhum profissional cadastrado</SelectItem>}
+                      {professionals.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                      Frequência
+                      {planItems.length > 0 && <span className="text-[10px] text-slate-400 font-normal">— calculado dos itens</span>}
+                    </Label>
+                    <Input className="bg-slate-50 border-slate-200 focus:bg-white"
+                      value={form.frequency} onChange={e => setForm({ ...form, frequency: e.target.value })} placeholder="Ex: 3x/semana..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700">Data de Início</Label>
+                    <DatePickerPTBR className="bg-slate-50 border-slate-200 focus:bg-white h-9"
+                      value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                      Sessões Estimadas
+                      {planItems.length > 0 && <span className="text-[10px] text-slate-400 font-normal">— calculado dos itens</span>}
+                    </Label>
+                    <Input type="number" min={1} className="bg-slate-50 border-slate-200 focus:bg-white"
+                      value={form.estimatedSessions} onChange={e => setForm({ ...form, estimatedSessions: e.target.value })} placeholder="Ex: 20" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700">Status do Tratamento</Label>
+                    <Select value={form.status} onValueChange={(v: "ativo" | "concluido" | "suspenso") => setForm({ ...form, status: v })}>
+                      <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="concluido">Concluído</SelectItem>
+                        <SelectItem value="suspenso">Suspenso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-slate-700">Prazo do plano (meses)</Label>
+                    <Select
+                      value={String(form.durationMonths ?? 12)}
+                      onValueChange={v => setForm({ ...form, durationMonths: Number(v) })}
+                    >
+                      <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 6, 12, 24, 36].map(m => (
+                          <SelectItem key={m} value={String(m)}>{m} {m === 1 ? "mês" : "meses"}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-slate-400">
-                      {completedSessions >= Number(form.estimatedSessions)
-                        ? "✓ Meta atingida! Considere registrar a alta."
-                        : `${Math.max(0, Number(form.estimatedSessions) - completedSessions)} sessão(ões) restante(s)`}
+                      Define até quando as consultas e faturas mensais serão geradas.
                     </p>
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-400">{completedSessions} sessão(ões) concluída(s). Defina o total estimado para ver o progresso.</p>
+                  </div>
+                </div>
+
+                <TreatmentPlanItemsSection planId={selectedPlanId ?? undefined} planItems={planItems} planItemsKey={planItemsKey} />
+
+                <div className="pt-3 flex sm:justify-end">
+                  <Button onClick={handleSave} className="w-full sm:w-auto h-11 sm:px-8 rounded-xl shadow-md shadow-primary/20 gap-1.5" disabled={saving}>
+                    {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                    Salvar Plano
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* ── Aba Aceite ───────────────────────────────────────────── */}
+              <TabsContent value="aceite" className="p-6 space-y-6 mt-0">
+                <AcceptanceBlock
+                  patientId={patientId}
+                  planId={selectedPlanId!}
+                  plan={selectedPlan}
+                  onChanged={() => {
+                    queryClient.invalidateQueries({ queryKey: plansKey });
+                    queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
+                    queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/credits`] });
+                  }}
+                />
+
+                <MaterializeBlock
+                  planId={selectedPlanId!}
+                  materializedAt={selectedPlan?.materializedAt ?? null}
+                  planItems={planItems}
+                  onChanged={() => {
+                    queryClient.invalidateQueries({ queryKey: plansKey });
+                    queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+                    queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                  }}
+                />
+              </TabsContent>
+
+              {/* ── Aba Cobrança ─────────────────────────────────────────── */}
+              <TabsContent value="cobranca" className="p-6 space-y-6 mt-0">
+                <BillingSettingsBlock
+                  form={form}
+                  setForm={setForm}
+                  isAccepted={!!selectedPlan?.acceptedAt}
+                />
+
+                {selectedPlan?.acceptedAt && form.avulsoBillingMode === "mensalConsolidado" && (
+                  <CloseMonthBlock
+                    patientId={patientId}
+                    planId={selectedPlanId!}
+                    onClosed={() => {
+                      queryClient.invalidateQueries({ queryKey: plansKey });
+                      queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                      queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
+                    }}
+                  />
                 )}
-              </div>
-            )}
 
-            {/* Items section */}
-            <TreatmentPlanItemsSection planId={selectedPlanId ?? undefined} planItems={planItems} planItemsKey={planItemsKey} />
+                <CreditsStatementBlock patientId={patientId} />
+              </TabsContent>
 
-            {/* Save button */}
-            <div className="pt-3 flex sm:justify-end">
-              <Button onClick={handleSave} className="w-full sm:w-auto h-11 sm:px-8 rounded-xl shadow-md shadow-primary/20 gap-1.5" disabled={saving}>
-                {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-                Salvar Plano
-              </Button>
-            </div>
+              {/* ── Aba Sessões ──────────────────────────────────────────── */}
+              <TabsContent value="sessoes" className="p-6 space-y-6 mt-0">
+                {(form.estimatedSessions || completedSessions > 0) ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary" /> Progresso Geral de Sessões
+                      </Label>
+                      <span className={`text-sm font-bold ${form.estimatedSessions && completedSessions >= Number(form.estimatedSessions) ? "text-green-600" : "text-primary"}`}>
+                        {completedSessions} / {form.estimatedSessions || "—"}
+                      </span>
+                    </div>
+                    {form.estimatedSessions ? (
+                      <>
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                          <div className={`h-2.5 rounded-full transition-all duration-500 ${completedSessions >= Number(form.estimatedSessions) ? "bg-green-500" : "bg-primary"}`}
+                            style={{ width: `${Math.min(100, (completedSessions / Number(form.estimatedSessions)) * 100)}%` }} />
+                        </div>
+                        <p className="text-xs text-slate-400">
+                          {completedSessions >= Number(form.estimatedSessions)
+                            ? "✓ Meta atingida! Considere registrar a alta."
+                            : `${Math.max(0, Number(form.estimatedSessions) - completedSessions)} sessão(ões) restante(s)`}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400">{completedSessions} sessão(ões) concluída(s). Defina o total estimado na aba "Itens" para ver o progresso.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 space-y-2">
+                    <Activity className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="text-sm text-slate-500">Ainda não há sessões realizadas neste plano.</p>
+                    <p className="text-xs text-slate-400">Defina o total estimado na aba "Itens" para acompanhar o progresso.</p>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       ) : (

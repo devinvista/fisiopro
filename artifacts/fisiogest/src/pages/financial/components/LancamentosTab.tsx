@@ -19,7 +19,7 @@ import { MONTH_NAMES, PIE_COLORS } from "../constants";
 import { KpiCard } from "./KpiCard";
 import { NewRecordModal } from "./NewRecordModal";
 import { EditRecordModal } from "./EditRecordModal";
-import { SubscriptionBillingPanel, type BillingStatusData } from "./lancamentos/SubscriptionBillingPanel";
+import { RecurringPackagesPanel, type BillingStatusData } from "./lancamentos/RecurringPackagesPanel";
 import { RecordsTable } from "./lancamentos/RecordsTable";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -39,6 +39,12 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
   const [billingStatusLoading, setBillingStatusLoading] = useState(true);
   const [showUpcoming, setShowUpcoming] = useState(false);
   const [billingPanelOpen, setBillingPanelOpen] = useState(false);
+  // Sprint 5 — nova fonte: monthly-plan-billing (planos de tratamento)
+  const [planBillingStatus, setPlanBillingStatus] = useState<BillingStatusData | null>(null);
+  const [planBillingStatusLoading, setPlanBillingStatusLoading] = useState(true);
+  const [planBillingResult, setPlanBillingResult] = useState<{ generated: number; skipped: number; recordIds: number[] } | null>(null);
+  const [planBillingRunning, setPlanBillingRunning] = useState(false);
+  const [showPlanBillingUpcoming, setShowPlanBillingUpcoming] = useState(false);
   const { toast } = useToast();
 
   const { data: dashboard, isLoading: dashLoading, refetch: refetchDash } = useGetFinancialDashboard({ month, year });
@@ -53,7 +59,16 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     finally { setBillingStatusLoading(false); }
   }, []);
 
-  useEffect(() => { fetchBillingStatus(); }, [fetchBillingStatus]);
+  const fetchPlanBillingStatus = useCallback(async () => {
+    setPlanBillingStatusLoading(true);
+    try {
+      const res = await fetch("/api/treatment-plans/billing/status", { headers: authHeaders() });
+      if (res.ok) setPlanBillingStatus(await res.json());
+    } catch { }
+    finally { setPlanBillingStatusLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchBillingStatus(); fetchPlanBillingStatus(); }, [fetchBillingStatus, fetchPlanBillingStatus]);
 
   const records = useMemo(() => {
     const list = ((rawRecords as any)?.data ?? rawRecords ?? []) as any[];
@@ -122,6 +137,30 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
       }
     } catch { toast({ variant: "destructive", title: "Erro ao executar cobrança." }); }
     finally { setBillingRunning(false); setShowBillingConfirm(false); }
+  };
+
+  // Sprint 5 — disparo manual do `monthlyPlanBilling` (faturas dos planos
+  // de tratamento aceitos, itens recorrenteMensal). Reuso o mesmo padrão
+  // de UX da assinatura legada para não confundir o usuário.
+  const handleRunPlanBilling = async () => {
+    setPlanBillingRunning(true); setPlanBillingResult(null);
+    try {
+      const res = await fetch("/api/treatment-plans/billing/run", { method: "POST", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ variant: "destructive", title: "Erro nas faturas mensais", description: data.message });
+      } else {
+        setPlanBillingResult(data);
+        if (data.generated > 0) {
+          toast({ title: `${data.generated} fatura(s) mensal(is) gerada(s).` });
+          refetchDash(); refetchRec();
+        } else {
+          toast({ title: data.skipped > 0 ? `Nenhuma fatura nova — ${data.skipped} já existente(s) ou fora da janela.` : "Nenhum plano com vencimento na janela atual." });
+        }
+        await fetchPlanBillingStatus();
+      }
+    } catch { toast({ variant: "destructive", title: "Erro ao executar faturas mensais." }); }
+    finally { setPlanBillingRunning(false); }
   };
 
   const netProfit = (dashboard?.monthlyRevenue ?? 0) - (dashboard?.monthlyExpenses ?? 0);
@@ -355,17 +394,24 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         )}
       </div>
 
-      {/* ── Subscription Billing Panel (Collapsible) ── */}
-      <SubscriptionBillingPanel
-        billingStatus={billingStatus}
-        billingStatusLoading={billingStatusLoading}
-        billingResult={billingResult}
-        billingRunning={billingRunning}
+      {/* ── Sprint 5 — Painel Pacotes Recorrentes (substitui SubscriptionBillingPanel) ── */}
+      <RecurringPackagesPanel
+        subscriptionStatus={billingStatus}
+        subscriptionStatusLoading={billingStatusLoading}
+        subscriptionResult={billingResult}
+        subscriptionRunning={billingRunning}
+        onRequestSubscriptionRun={() => setShowBillingConfirm(true)}
+        showSubscriptionUpcoming={showUpcoming}
+        setShowSubscriptionUpcoming={setShowUpcoming}
+        planBillingStatus={planBillingStatus}
+        planBillingStatusLoading={planBillingStatusLoading}
+        planBillingResult={planBillingResult}
+        planBillingRunning={planBillingRunning}
+        onRequestPlanBillingRun={handleRunPlanBilling}
+        showPlanBillingUpcoming={showPlanBillingUpcoming}
+        setShowPlanBillingUpcoming={setShowPlanBillingUpcoming}
         panelOpen={billingPanelOpen}
         setPanelOpen={setBillingPanelOpen}
-        showUpcoming={showUpcoming}
-        setShowUpcoming={setShowUpcoming}
-        onRequestRun={() => setShowBillingConfirm(true)}
       />
 
       {/* ── Transaction List ── */}
