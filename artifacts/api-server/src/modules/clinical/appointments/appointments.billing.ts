@@ -350,98 +350,207 @@ export async function applyBillingRules(
       console.error("[applyBillingRules] failed to create auto evolution:", err);
     }
 
-    // ── Priority 1: fatura consolidada subscription ────────────────────────
-    const consolidatedConditions: any[] = [
-      eq(patientSubscriptionsTable.patientId, patientId),
-      eq(patientSubscriptionsTable.procedureId, procedureId),
-      eq(patientSubscriptionsTable.status, "ativa"),
-      eq(patientSubscriptionsTable.subscriptionType, "faturaConsolidada"),
-    ];
-    if (resolvedClinicId) {
-      consolidatedConditions.push(eq(patientSubscriptionsTable.clinicId, resolvedClinicId));
-    }
+    // ── Priority 1: fatura consolidada (Sprint 1 — unificada em patient_packages)
+    //
+    // No regime novo (default `BILLING_FROM_PACKAGES != "0"`), procuramos um
+    // `patient_packages` com `recurrenceType='faturaConsolidada'` e linkamos
+    // `pendenteFatura` por `patientPackageId`. Se não existe e o preço veio
+    // de um plano mensal proporcional, auto-criamos a linha recorrente.
+    //
+    // No regime legado (`BILLING_FROM_PACKAGES=0`), mantemos o caminho
+    // anterior baseado em `patient_subscriptions`.
+    const fromPackages = process.env.BILLING_FROM_PACKAGES !== "0";
 
-    let [consolidatedSub] = await db
-      .select()
-      .from(patientSubscriptionsTable)
-      .where(and(...consolidatedConditions))
-      .limit(1);
+    if (fromPackages) {
+      const pkgConditions: any[] = [
+        eq(patientPackagesTable.patientId, patientId),
+        eq(patientPackagesTable.procedureId, procedureId),
+        eq(patientPackagesTable.recurrenceStatus, "ativa"),
+        eq(patientPackagesTable.recurrenceType, "faturaConsolidada"),
+      ];
+      if (resolvedClinicId) {
+        pkgConditions.push(eq(patientPackagesTable.clinicId, resolvedClinicId));
+      }
 
-    // Auto-cria assinatura faturaConsolidada quando o paciente está num plano
-    // de tratamento mensal fixo (rateio proporcional). Garante que a partir
-    // deste atendimento as parcelas serão acumuladas e consolidadas no
-    // fechamento mensal pelo job runConsolidatedBilling.
-    if (!consolidatedSub && priceResolution.priceSource === "plano_mensal_proporcional" && priceResolution.monthlyPlan) {
-      const monthly = priceResolution.monthlyPlan;
-      const startDate = monthly.monthStartDate;
-      const [created] = await db
-        .insert(patientSubscriptionsTable)
-        .values({
-          patientId,
-          procedureId,
-          startDate,
-          billingDay: monthly.billingDay,
-          monthlyAmount: monthly.monthlyAmount,
-          status: "ativa",
-          subscriptionType: "faturaConsolidada",
-          clinicId: resolvedClinicId,
-          notes: `Auto-criada a partir do plano #${priceResolution.treatmentPlanId} (pacote mensal #${monthly.packageId})`,
-        })
-        .returning();
-      consolidatedSub = created;
-    }
-
-    if (consolidatedSub) {
-      // Não cobra agora — acumula para a fatura mensal consolidada
-      const existingPendente = await db
-        .select({ id: financialRecordsTable.id })
-        .from(financialRecordsTable)
-        .where(
-          and(
-            eq(financialRecordsTable.appointmentId, appointmentId),
-            eq(financialRecordsTable.transactionType, "pendenteFatura")
-          )
-        )
+      let [recurringPkg] = await db
+        .select()
+        .from(patientPackagesTable)
+        .where(and(...pkgConditions))
+        .orderBy(desc(patientPackagesTable.createdAt))
         .limit(1);
 
-      if (existingPendente.length === 0) {
-        const [pendingInvoiceItem] = await db.insert(financialRecordsTable).values({
-          type:            "receita",
-          amount:          effectivePrice,
-          description:     `[Aguardando fatura] ${procedure.name} - ${patientName}`,
-          category:        procedure.category,
-          appointmentId,
-          patientId,
-          procedureId,
-          transactionType: "pendenteFatura",
-          status:          "pendente",
-          dueDate:         appointmentDate,
-          subscriptionId:  consolidatedSub.id,
-          clinicId:        resolvedClinicId,
-          ...priceAuditFields,
-        }).returning();
-
-        const entry = await postReceivableRevenue({
-          clinicId: resolvedClinicId,
-          entryDate: appointmentDate,
-          amount: Number(effectivePrice),
-          description: `Receita em fatura consolidada — ${procedure.name} - ${patientName}`,
-          sourceType: "financial_record",
-          sourceId: pendingInvoiceItem.id,
-          patientId,
-          appointmentId,
-          procedureId,
-          subscriptionId: consolidatedSub.id,
-          financialRecordId: pendingInvoiceItem.id,
-          revenueAccountCode: procedureRevenueAccountCode,
-        });
-
-        await db
-          .update(financialRecordsTable)
-          .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
-          .where(eq(financialRecordsTable.id, pendingInvoiceItem.id));
+      // Auto-cria pacote consolidado quando o paciente está num plano de
+      // tratamento mensal fixo (rateio proporcional). Substitui a antiga
+      // auto-criação de `patient_subscriptions`.
+      if (!recurringPkg && priceResolution.priceSource === "plano_mensal_proporcional" && priceResolution.monthlyPlan) {
+        const monthly = priceResolution.monthlyPlan;
+        const startDate = monthly.monthStartDate;
+        const [created] = await db
+          .insert(patientPackagesTable)
+          .values({
+            patientId,
+            packageId: monthly.packageId ?? null,
+            procedureId,
+            name: `Pacote mensal — ${procedure.name} (${patientName})`,
+            // Recorrência mensal: o totalSessions de "controle" não se aplica;
+            // usamos um valor alto e tracking pelo recurrenceStatus.
+            totalSessions: 0,
+            usedSessions: 0,
+            sessionsPerWeek: 1,
+            startDate,
+            price: monthly.monthlyAmount,
+            paymentStatus: "pendente",
+            clinicId: resolvedClinicId,
+            notes: `Auto-criado a partir do plano #${priceResolution.treatmentPlanId} (pacote mensal #${monthly.packageId})`,
+            billingDay: monthly.billingDay,
+            monthlyAmount: monthly.monthlyAmount,
+            recurrenceStatus: "ativa",
+            recurrenceType: "faturaConsolidada",
+          })
+          .returning();
+        recurringPkg = created;
       }
-      return;
+
+      if (recurringPkg) {
+        const existingPendente = await db
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.appointmentId, appointmentId),
+              eq(financialRecordsTable.transactionType, "pendenteFatura")
+            )
+          )
+          .limit(1);
+
+        if (existingPendente.length === 0) {
+          const [pendingInvoiceItem] = await db.insert(financialRecordsTable).values({
+            type:             "receita",
+            amount:           effectivePrice,
+            description:      `[Aguardando fatura] ${procedure.name} - ${patientName}`,
+            category:         procedure.category,
+            appointmentId,
+            patientId,
+            procedureId,
+            transactionType:  "pendenteFatura",
+            status:           "pendente",
+            dueDate:          appointmentDate,
+            patientPackageId: recurringPkg.id,
+            clinicId:         resolvedClinicId,
+            ...priceAuditFields,
+          }).returning();
+
+          const entry = await postReceivableRevenue({
+            clinicId: resolvedClinicId,
+            entryDate: appointmentDate,
+            amount: Number(effectivePrice),
+            description: `Receita em fatura consolidada — ${procedure.name} - ${patientName}`,
+            sourceType: "financial_record",
+            sourceId: pendingInvoiceItem.id,
+            patientId,
+            appointmentId,
+            procedureId,
+            patientPackageId: recurringPkg.id,
+            financialRecordId: pendingInvoiceItem.id,
+            revenueAccountCode: procedureRevenueAccountCode,
+          });
+
+          await db
+            .update(financialRecordsTable)
+            .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
+            .where(eq(financialRecordsTable.id, pendingInvoiceItem.id));
+        }
+        return;
+      }
+    } else {
+      // ── Caminho legado: patient_subscriptions ────────────────────────────
+      const consolidatedConditions: any[] = [
+        eq(patientSubscriptionsTable.patientId, patientId),
+        eq(patientSubscriptionsTable.procedureId, procedureId),
+        eq(patientSubscriptionsTable.status, "ativa"),
+        eq(patientSubscriptionsTable.subscriptionType, "faturaConsolidada"),
+      ];
+      if (resolvedClinicId) {
+        consolidatedConditions.push(eq(patientSubscriptionsTable.clinicId, resolvedClinicId));
+      }
+
+      let [consolidatedSub] = await db
+        .select()
+        .from(patientSubscriptionsTable)
+        .where(and(...consolidatedConditions))
+        .limit(1);
+
+      if (!consolidatedSub && priceResolution.priceSource === "plano_mensal_proporcional" && priceResolution.monthlyPlan) {
+        const monthly = priceResolution.monthlyPlan;
+        const startDate = monthly.monthStartDate;
+        const [created] = await db
+          .insert(patientSubscriptionsTable)
+          .values({
+            patientId,
+            procedureId,
+            startDate,
+            billingDay: monthly.billingDay,
+            monthlyAmount: monthly.monthlyAmount,
+            status: "ativa",
+            subscriptionType: "faturaConsolidada",
+            clinicId: resolvedClinicId,
+            notes: `Auto-criada a partir do plano #${priceResolution.treatmentPlanId} (pacote mensal #${monthly.packageId})`,
+          })
+          .returning();
+        consolidatedSub = created;
+      }
+
+      if (consolidatedSub) {
+        const existingPendente = await db
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.appointmentId, appointmentId),
+              eq(financialRecordsTable.transactionType, "pendenteFatura")
+            )
+          )
+          .limit(1);
+
+        if (existingPendente.length === 0) {
+          const [pendingInvoiceItem] = await db.insert(financialRecordsTable).values({
+            type:            "receita",
+            amount:          effectivePrice,
+            description:     `[Aguardando fatura] ${procedure.name} - ${patientName}`,
+            category:        procedure.category,
+            appointmentId,
+            patientId,
+            procedureId,
+            transactionType: "pendenteFatura",
+            status:          "pendente",
+            dueDate:         appointmentDate,
+            subscriptionId:  consolidatedSub.id,
+            clinicId:        resolvedClinicId,
+            ...priceAuditFields,
+          }).returning();
+
+          const entry = await postReceivableRevenue({
+            clinicId: resolvedClinicId,
+            entryDate: appointmentDate,
+            amount: Number(effectivePrice),
+            description: `Receita em fatura consolidada — ${procedure.name} - ${patientName}`,
+            sourceType: "financial_record",
+            sourceId: pendingInvoiceItem.id,
+            patientId,
+            appointmentId,
+            procedureId,
+            subscriptionId: consolidatedSub.id,
+            financialRecordId: pendingInvoiceItem.id,
+            revenueAccountCode: procedureRevenueAccountCode,
+          });
+
+          await db
+            .update(financialRecordsTable)
+            .set({ recognizedEntryId: entry.id, accountingEntryId: entry.id })
+            .where(eq(financialRecordsTable.id, pendingInvoiceItem.id));
+        }
+        return;
+      }
     }
 
     // ── Priority 2: por sessão (crédito de sessão → carteira → a receber) ──

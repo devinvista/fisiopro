@@ -229,12 +229,14 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
     }
 
     // ─── Compat: criação automática de patient_subscriptions ──────────────
-    // Mantida temporariamente durante o Sprint 1 para que jobs antigos
-    // (`runBilling`/`runConsolidatedBilling`) continuem operando. Ligada
-    // por padrão; será removida no cutover do Sprint 1.
-    // Para já desligar localmente: env `LEGACY_AUTO_SUBSCRIPTION=0`.
+    // CUTOVER Sprint 1 — Default agora DESLIGADO. A recorrência vive 100% em
+    // `patient_packages` (campos `recurrence_*` populados acima) e os jobs
+    // `runBilling`/`runConsolidatedBilling` iteram nesta tabela.
+    // A criação espelhada em `patient_subscriptions` é mantida apenas como
+    // pista de migração reversível: setar `LEGACY_AUTO_SUBSCRIPTION=1` para
+    // reativar (até a remoção definitiva no Sprint 6).
     let subscription: typeof patientSubscriptionsTable.$inferSelect | null = null;
-    const legacyAutoSub = process.env.LEGACY_AUTO_SUBSCRIPTION !== "0";
+    const legacyAutoSub = process.env.LEGACY_AUTO_SUBSCRIPTION === "1";
 
     if (legacyAutoSub && isRecurring && pkg) {
       const [sub] = await db
@@ -254,7 +256,7 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
         .returning();
 
       subscription = sub;
-      console.log(`[patient-packages] (legado) Assinatura #${sub.id} criada — patient_package #${pp.id} já tem campos de recorrência preenchidos.`);
+      console.log(`[patient-packages] (legado, LEGACY_AUTO_SUBSCRIPTION=1) Assinatura espelhada #${sub.id} criada — patient_package #${pp.id} já tem campos de recorrência preenchidos.`);
     }
 
     res.status(201).json({ ...pp, subscription, subscriptionCreated: !!subscription });

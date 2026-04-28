@@ -15,7 +15,7 @@ import { useToast } from "@/lib/toast";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 import { formatCurrency, formatDateTime } from "../utils/format";
 import { statusLabel, txTypeLabel } from "./HistoryTab";
-import { SubscriptionsSection } from "./FinancialTab/SubscriptionsSection";
+import { RecurringPackageSection } from "./FinancialTab/RecurringPackageSection";
 import { CreditsSection } from "./FinancialTab/CreditsSection";
 import { WalletSection } from "./FinancialTab/WalletSection";
 import { PAYMENT_METHODS, emptyPaymentForm } from "./FinancialTab/constants";
@@ -41,7 +41,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
   const [showPayForm, setShowPayForm] = useState(false);
   const [payForm, setPayForm] = useState(emptyPaymentForm);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<"history" | "subscriptions" | "carteira">("history");
+  const [activeSection, setActiveSection] = useState<"history" | "recurring" | "carteira">("history");
   const [estornoTarget, setEstornoTarget] = useState<{ id: number; description: string; amount: number } | null>(null);
   const [estornoReason, setEstornoReason] = useState("");
   const [estorning, setEstorning] = useState(false);
@@ -129,9 +129,9 @@ export function FinancialTab({ patientId }: { patientId: number }) {
               className={`px-3 h-9 sm:h-8 whitespace-nowrap transition-colors ${activeSection === "history" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
               Histórico
             </button>
-            <button onClick={() => setActiveSection("subscriptions")}
-              className={`px-3 h-9 sm:h-8 whitespace-nowrap border-l border-slate-200 transition-colors ${activeSection === "subscriptions" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
-              Assinaturas
+            <button onClick={() => setActiveSection("recurring")}
+              className={`px-3 h-9 sm:h-8 whitespace-nowrap border-l border-slate-200 transition-colors ${activeSection === "recurring" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
+              Pacotes Recorrentes
             </button>
             <button onClick={() => setActiveSection("carteira")}
               className={`px-3 h-9 sm:h-8 whitespace-nowrap border-l border-slate-200 transition-colors flex items-center gap-1 ${activeSection === "carteira" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"}`}>
@@ -150,9 +150,9 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
       {activeSection === "carteira" ? (
         <WalletSection patientId={patientId} />
-      ) : activeSection === "subscriptions" ? (
+      ) : activeSection === "recurring" ? (
         <div className="space-y-6">
-          <SubscriptionsSection patientId={patientId} />
+          <RecurringPackageSection patientId={patientId} />
           <CreditsSection patientId={patientId} />
         </div>
       ) : (

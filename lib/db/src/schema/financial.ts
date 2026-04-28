@@ -21,6 +21,14 @@ export const financialRecordsTable = pgTable("financial_records", {
   status: text("status").notNull().default("pendente"),
   dueDate: date("due_date"),
   subscriptionId: integer("subscription_id"),
+  // ── Sprint 1 — Unificação ────────────────────────────────────────────────
+  // Vínculo com `patient_packages.id` quando este lançamento foi gerado pela
+  // recorrência unificada (jobs `runBilling`/`runConsolidatedBilling` lendo de
+  // `patient_packages` e item `pendenteFatura` criado em
+  // `appointments.billing.ts`). Substitui `subscriptionId` no novo regime.
+  // Permanece nullable: registros legados (gerados via `patient_subscriptions`)
+  // continuam usando `subscriptionId`.
+  patientPackageId: integer("patient_package_id"),
   accountingEntryId: integer("accounting_entry_id"),
   recognizedEntryId: integer("recognized_entry_id"),
   settlementEntryId: integer("settlement_entry_id"),

@@ -16,15 +16,6 @@ import { requireFeature } from "../../../middleware/plan-features.js";
 import { validateBody } from "../../../utils/validate.js";
 import { runBilling } from "../billing/billing.service.js";
 
-const createSubscriptionSchema = z.object({
-  patientId: z.number().int().positive(),
-  procedureId: z.number().int().positive(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD esperado"),
-  billingDay: z.number().int().min(1).max(31).optional(),
-  monthlyAmount: z.number().positive(),
-  notes: z.string().optional().nullable(),
-});
-
 const updateSubscriptionSchema = z.object({
   status: z.enum([...PATIENT_SUBSCRIPTION_STATUSES, "pausada"] as const).optional(),
   billingDay: z.number().int().min(1).max(31).optional(),
@@ -35,19 +26,6 @@ const updateSubscriptionSchema = z.object({
 const router = Router();
 router.use(authMiddleware);
 router.use(requireFeature("module.patient_subscriptions"));
-
-function calcInitialNextBillingDate(startDate: string, billingDay: number): string {
-  const start = new Date(startDate + "T12:00:00Z");
-  const year = start.getUTCFullYear();
-  const month = start.getUTCMonth() + 1;
-  const startDay = start.getUTCDate();
-  const targetMonth = billingDay >= startDay ? month : month + 1;
-  const targetYear = targetMonth > 12 ? year + 1 : year;
-  const normalizedMonth = targetMonth > 12 ? 1 : targetMonth;
-  const lastDay = new Date(targetYear, normalizedMonth, 0).getDate();
-  const day = Math.min(billingDay, lastDay);
-  return `${targetYear}-${String(normalizedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
 
 router.get("/", requirePermission("financial.read"), async (req, res) => {
   try {
@@ -86,50 +64,25 @@ router.get("/", requirePermission("financial.read"), async (req, res) => {
   }
 });
 
-router.post("/", requirePermission("financial.write"), async (req, res) => {
-  const parsed = validateBody(createSubscriptionSchema, req, res);
-  if (!parsed) return;
-
-  try {
-    const authReq = req as AuthRequest;
-    const { patientId, procedureId, startDate, billingDay, monthlyAmount, notes } = parsed;
-
-    const rawDay = billingDay ?? new Date(startDate + "T12:00:00Z").getUTCDate();
-    const day = Math.max(1, Math.min(31, rawDay));
-
-    const [subscription] = await db
-      .insert(patientSubscriptionsTable)
-      .values({
-        patientId,
-        procedureId,
-        startDate,
-        billingDay: day,
-        monthlyAmount: String(monthlyAmount),
-        status: "ativa",
-        notes: notes ?? null,
-        clinicId: authReq.clinicId ?? null,
-        nextBillingDate: calcInitialNextBillingDate(startDate, day),
-      })
-      .returning();
-
-    const result = await db
-      .select({
-        subscription: patientSubscriptionsTable,
-        patient: patientsTable,
-        procedure: proceduresTable,
-      })
-      .from(patientSubscriptionsTable)
-      .leftJoin(patientsTable, eq(patientSubscriptionsTable.patientId, patientsTable.id))
-      .leftJoin(proceduresTable, eq(patientSubscriptionsTable.procedureId, proceduresTable.id))
-      .where(eq(patientSubscriptionsTable.id, subscription.id))
-      .limit(1);
-
-    const r = result[0];
-    res.status(201).json(r ? { ...r.subscription, patient: r.patient, procedure: r.procedure } : subscription);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
+/**
+ * POST /api/subscriptions — DEPRECADO (Sprint 1, cutover).
+ *
+ * A unificação de "Assinatura" e "Pacote Mensal" passou toda a recorrência
+ * para `patient_packages`. Este endpoint responde **410 Gone** com a rota
+ * sucessora para que clientes legados detectem a quebra explicitamente.
+ *
+ * Os endpoints `GET`, `PUT` e `DELETE` deste router continuam ativos para
+ * gerenciar o legado (read-mirror durante a transição).
+ */
+router.post("/", requirePermission("financial.write"), async (_req, res) => {
+  res.status(410).json({
+    error: "Gone",
+    code: "subscriptions_deprecated",
+    message:
+      "A criação de assinaturas foi descontinuada. Crie um pacote recorrente em POST /api/patients/:patientId/packages " +
+      "(usando um template de pacote com packageType = 'mensal' ou 'faturaConsolidada').",
+    successor: "POST /api/patients/:patientId/packages",
+  });
 });
 
 router.put("/:id", requirePermission("financial.write"), async (req, res) => {

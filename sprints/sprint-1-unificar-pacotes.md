@@ -23,25 +23,27 @@ A unificação acontece em camadas, mantendo retrocompatibilidade durante toda a
 | 3 | Push do schema (`db:push`) | — | ✅ |
 | 4 | Script de migração de subscriptions → packages | `scripts/migrate-subscriptions-to-packages.ts` | ✅ |
 | 5 | Routes populam os novos campos | `artifacts/api-server/src/modules/catalog/patient-packages/patient-packages.routes.ts` | ✅ |
-| 6 | Billing dual-source com flag | `billing.service.ts`, `consolidated-billing.service.ts` | ⏳ próxima rodada |
-| 7 | Endpoint `POST /api/subscriptions` retorna 410 | `subscriptions.routes.ts` | ⏳ próxima rodada |
-| 8 | Frontend: `SubscriptionsSection.tsx` lê de packages | — | ⏳ próxima rodada |
-| 9 | Cutover (`LEGACY_AUTO_SUBSCRIPTION=0` por default) | `.env`, services | ⏳ próxima rodada |
+| 6 | Billing dual-source com flag | `billing.service.ts`, `consolidated-billing.service.ts`, `billing-lock.ts` (`withPackageBillingLock`) | ✅ |
+| 7 | Endpoint `POST /api/subscriptions` retorna 410 | `subscriptions.routes.ts` | ✅ |
+| 8 | Frontend: `RecurringPackageSection.tsx` lê de packages | `FinancialTab.tsx`, `RecurringPackageSection.tsx`, re-export legado em `SubscriptionsSection.tsx` | ✅ |
+| 9 | Cutover (`LEGACY_AUTO_SUBSCRIPTION=0` por default) | `.env.example`, `patient-packages.routes.ts`, `appointments.billing.ts` | ✅ |
+| 10 | Coluna `financial_records.patient_package_id` (+ índice parcial) | `lib/db/src/schema/financial.ts`, push direto via `ALTER TABLE` | ✅ |
 
 ## Status atual da rodada
 
-**Concluído nesta rodada (Sprint 0 + Sprint 1 estrutural):**
-- Schema unificado: `patient_packages` agora tem todos os campos de recorrência.
-- Index `idx_patient_packages_recurrence` para os jobs futuros.
-- Rota `POST /api/patient-packages` popula os novos campos sempre que o pacote é mensal/consolidada. A criação automática de `patient_subscriptions` continua atrás da env `LEGACY_AUTO_SUBSCRIPTION` (default `1`) para não quebrar os jobs antigos.
-- Script de migração pronto, idempotente, dry-run por padrão. Sem subscriptions ativas no banco para migrar agora — script ficará disponível para clientes que tenham.
+**Concluído nesta rodada (cutover Sprint 1):**
+- `runBilling` e `runConsolidatedBilling` agora têm caminho **novo (default)** lendo `patient_packages WHERE recurrence_status='ativa' AND recurrence_type IN ('mensal','faturaConsolidada')`. Cobranças vinculadas via `financial_records.patient_package_id`. Lock concorrente isolado em namespace negativo (`withPackageBillingLock`). Caminho legado preservado atrás de `BILLING_FROM_PACKAGES=0`.
+- `appointments.billing.ts` no novo regime: linka `pendenteFatura` por `patient_package_id`; auto-cria a linha recorrente em `patient_packages` quando o preço veio de `plano_mensal_proporcional` e ainda não há recorrência ativa (substitui a antiga auto-criação de `patient_subscriptions`).
+- `POST /api/subscriptions` agora responde **410 Gone** em pt-BR apontando para `POST /api/patients/:patientId/packages`. `GET/PUT/DELETE` permanecem ativos para gestão do legado.
+- Default de `LEGACY_AUTO_SUBSCRIPTION` invertido: agora **desligado** (`=== "1"` para reativar). Pacotes recorrentes não geram mais espelho automático em `patient_subscriptions`.
+- UI: `SubscriptionsSection` substituída por `RecurringPackageSection` (lê `/api/patients/:patientId/packages` e filtra por `recurrenceType`). Aba renomeada de "Assinaturas" → "Pacotes Recorrentes". `SubscriptionsSection.tsx` virou re-export para preservar imports antigos.
+- Coluna `financial_records.patient_package_id` aplicada via `ALTER TABLE … ADD COLUMN IF NOT EXISTS` (push interativo do drizzle-kit estava bloqueado por prompt de outra tabela). Índice parcial `idx_financial_records_patient_package_id` criado.
+- Test do `runBilling` atualizado para a shape do novo caminho (`pkg` em vez de `subscription`).
 
-**Falta (próxima rodada do Sprint 1):**
-- Refator dos jobs `runBilling` e `runConsolidatedBilling` para iterar em `patient_packages` (atrás de `BILLING_FROM_PACKAGES=1`).
-- Cutover: ligar a flag por default + remover criação automática de subscription (`LEGACY_AUTO_SUBSCRIPTION=0`).
-- `POST /api/subscriptions` → 410 Gone com mensagem orientando a usar pacotes.
-- Migrar UI (`SubscriptionsSection.tsx` vira `RecurringPackageSection.tsx`).
-- Drop final de `patient_subscriptions` fica para o Sprint 6.
+**Pendente (Sprint 6):**
+- Drop definitivo de `patient_subscriptions` e remoção do bloco legado em `appointments.billing.ts`, `billing.service.ts`, `consolidated-billing.service.ts`.
+- Remoção do re-export `SubscriptionsSection` → `RecurringPackageSection`.
+- Remoção das envs `BILLING_FROM_PACKAGES` e `LEGACY_AUTO_SUBSCRIPTION` quando o legado for retirado.
 
 ## Schema (alvo)
 ```ts
@@ -55,8 +57,8 @@ patient_packages
 
 ## Critérios de aceite
 
-- [ ] Todas as `patient_subscriptions` ativas têm um `patient_package` correspondente com os mesmos `billing_day`/`monthly_amount`.
-- [ ] Job `runBilling` passa a iterar em `patient_packages` quando `BILLING_FROM_PACKAGES=1`.
-- [ ] Nova venda de pacote mensal não cria mais `patient_subscription` (após cutover).
-- [ ] UI continua funcionando (lê de packages).
-- [ ] Métricas baseline da Sprint 0 batem (qtd de cobranças geradas no mês = mesmo número antes/depois).
+- [x] Todas as `patient_subscriptions` ativas têm um `patient_package` correspondente com os mesmos `billing_day`/`monthly_amount` (script disponível, sem subscriptions ativas no momento).
+- [x] Job `runBilling` passa a iterar em `patient_packages` quando `BILLING_FROM_PACKAGES=1` (default no cutover).
+- [x] Nova venda de pacote mensal não cria mais `patient_subscription` (`LEGACY_AUTO_SUBSCRIPTION=0` por default).
+- [x] UI continua funcionando (lê de packages via `RecurringPackageSection`).
+- [ ] Métricas baseline da Sprint 0 batem (qtd de cobranças geradas no mês = mesmo número antes/depois) — validação fica para o primeiro ciclo mensal pós-cutover.

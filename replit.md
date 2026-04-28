@@ -90,7 +90,7 @@ O projeto é um **monorepo pnpm** hospedado no Replit. Dividido em três artefat
 ### Pacotes, mensalidades e fatura consolidada
 - Tipos de pacote: `sessoes`, `mensal`, `faturaConsolidada`.
 - Pacotes por sessão criam créditos em `session_credits` vinculados ao `patient_package_id`; o consumo de consulta usa `session_credits` e atualiza `patient_packages.used_sessions` junto.
-- Mensalidades criam assinatura `patient_subscriptions` e geram créditos quando a cobrança mensal é marcada como paga. A quantidade padrão é `sessions_per_week * 4`.
+- **Sprint 1 — cutover unificação:** mensal/faturaConsolidada agora moram em `patient_packages` (campos `recurrence_status`, `recurrence_type`, `billing_day`, `monthly_amount`, `next_billing_date`). Os jobs `runBilling`/`runConsolidatedBilling` iteram em `patient_packages` por padrão (`BILLING_FROM_PACKAGES=1`); cobranças vinculam-se via `financial_records.patient_package_id`. `LEGACY_AUTO_SUBSCRIPTION=0` por padrão — não cria mais espelho em `patient_subscriptions`. `POST /api/subscriptions` retorna **410 Gone** apontando para `POST /api/patients/:patientId/packages` (GET/PUT/DELETE preservados para gestão do legado). Drop final de `patient_subscriptions` planejado para Sprint 6.
 - `absence_credit_limit` limita quantos créditos de ausência/cancelamento podem ser gerados por mês em pacotes mensais. Limite `0` bloqueia créditos automáticos.
 - `next_billing_date` é preenchido na criação de assinaturas, tanto pela contratação de pacote quanto pela criação direta de assinatura.
 - Fatura consolidada é um produto real na UI: atendimentos concluídos geram lançamentos `pendenteFatura`, e o job mensal cria uma única `faturaConsolidada`.

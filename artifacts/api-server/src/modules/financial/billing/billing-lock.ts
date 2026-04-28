@@ -22,3 +22,24 @@ export async function withSubscriptionBillingLock<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Sprint 1 — Lock equivalente para o novo regime que itera em `patient_packages`.
+ *
+ * Usa namespace de keys distinto (`-packageId` no primeiro slot) para não
+ * colidir com o lock de `patient_subscriptions` durante a transição em que
+ * ambos os caminhos podem rodar.
+ */
+export async function withPackageBillingLock<T>(
+  patientPackageId: number,
+  year: number,
+  month: number,
+  fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    const first = -Math.abs(patientPackageId);
+    const second = year * 100 + month;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${first}::int, ${second}::int)`);
+    return fn(tx);
+  });
+}
