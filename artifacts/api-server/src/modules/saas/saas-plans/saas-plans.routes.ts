@@ -1,4 +1,9 @@
 import { Router, type Response } from "express";
+import {
+  FEATURE_CATALOG,
+  PLAN_FEATURES,
+  PLAN_TIERS,
+} from "@workspace/shared-constants";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requireSuperAdmin } from "../../../middleware/rbac.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
@@ -28,6 +33,19 @@ router.post("/plans/seed-defaults", requireSuperAdmin(), asyncHandler(async (_re
 
 router.get("/plans/stats", requireSuperAdmin(), asyncHandler(async (_req, res: Response) => {
   res.json(await svc.getPlanStats());
+}));
+
+/**
+ * Catálogo de features canônicas + matriz hardcoded default.
+ * Usado pela tela "Matriz de Features" do superadmin para renderizar o grid
+ * e oferecer o botão "Restaurar padrão" por plano.
+ */
+router.get("/plans/feature-catalog", requireSuperAdmin(), asyncHandler(async (_req, res: Response) => {
+  res.json({
+    catalog: FEATURE_CATALOG,
+    defaults: PLAN_FEATURES,
+    tiers: PLAN_TIERS,
+  });
 }));
 
 router.get("/plans/public", asyncHandler(async (_req, res: Response) => {

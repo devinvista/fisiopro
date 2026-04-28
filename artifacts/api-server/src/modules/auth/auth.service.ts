@@ -294,11 +294,10 @@ export const authService = {
     const activeClinic = clinics.find((c) => c.id === args.activeClinicId) ?? null;
 
     const { getPlanLimits } = await import("../../middleware/subscription.js");
-    const { resolveFeatures } = await import("@workspace/db");
     const subscription = args.activeClinicId ? await getPlanLimits(args.activeClinicId) : null;
-    const features = subscription
-      ? Array.from(resolveFeatures(subscription.planName))
-      : [];
+    // `features` já vem resolvida pelo middleware (DB jsonb → fallback hardcoded),
+    // garantindo coerência server↔client e tornando o catálogo configurável via UI.
+    const features = subscription?.features ?? [];
 
     // LGPD — calcula políticas pendentes para este usuário
     const [currentPolicies, acceptances] = await Promise.all([

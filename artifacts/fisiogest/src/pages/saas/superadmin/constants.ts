@@ -1,4 +1,4 @@
-import { LayoutDashboard, Package, CreditCard, Building2, Receipt, Tag, Zap, Sparkles, Crown, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, Package, CreditCard, Building2, Receipt, Tag, Zap, Sparkles, Crown, AlertTriangle, ListChecks } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 
 export const BASE = import.meta.env.BASE_URL ?? "/";
@@ -8,6 +8,7 @@ export const api = (path: string) => `${API_BASE}/api${path}`;
 export const TABS = [
   { id: "painel", label: "Painel", icon: LayoutDashboard },
   { id: "planos", label: "Planos", icon: Package },
+  { id: "matriz", label: "Matriz", icon: ListChecks },
   { id: "assinaturas", label: "Assinaturas", icon: CreditCard },
   { id: "clinicas", label: "Clínicas", icon: Building2 },
   { id: "pagamentos", label: "Pagamentos", icon: Receipt },

@@ -1,7 +1,7 @@
 import { BASE, API_BASE, api, TABS, TabId, TIER_CONFIG, getTierConfig, STATUS_CONFIG, PAYMENT_CONFIG, PAYMENT_METHOD_LABELS, PaymentRow, PaymentStats } from "./constants";
 import { Plan, PlanStats, SubRow } from "./types";
 import { fmtDate, fmtCurrency, limitLabel } from "./utils";
-import { ClinicsTab, CouponsTab, InadimplenciaTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, PlansTab, RegisterPaymentDialog, StatusBadge, SubscriptionsTab } from "./components";
+import { ClinicsTab, CouponsTab, FeatureMatrixTab, InadimplenciaTab, KpiCard, PainelTab, PaymentBadge, PaymentsTab, PlansTab, RegisterPaymentDialog, StatusBadge, SubscriptionsTab } from "./components";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -131,6 +131,7 @@ export default function SuperAdmin() {
         {/* Tab Content */}
         {activeTab === "painel" && <PainelTab />}
         {activeTab === "planos" && <PlansTab />}
+        {activeTab === "matriz" && <FeatureMatrixTab />}
         {activeTab === "assinaturas" && <SubscriptionsTab />}
         {activeTab === "clinicas" && <ClinicsTab />}
         {activeTab === "pagamentos" && <PaymentsTab />}

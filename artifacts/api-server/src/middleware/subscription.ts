@@ -2,6 +2,7 @@ import { Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import { clinicSubscriptionsTable, subscriptionPlansTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { resolvePlanFeatures, type Feature } from "@workspace/shared-constants";
 import type { AuthRequest } from "./auth.js";
 
 const BLOCKED_STATUSES = new Set(["suspended", "cancelled"]);
@@ -18,6 +19,12 @@ export interface SubscriptionInfo {
   maxUsers: number | null;
   trialEndDate: string | null;
   currentPeriodEnd: string | null;
+  /**
+   * Features efetivas resolvidas via `resolvePlanFeatures`:
+   * usa a coluna jsonb se ela tiver chaves canônicas,
+   * senão cai no PLAN_FEATURES hardcoded do tier.
+   */
+  features: Feature[];
 }
 
 declare module "./auth.js" {
@@ -71,6 +78,7 @@ export function requireActiveSubscription() {
             maxUsers: row.plan.maxUsers,
             trialEndDate: row.sub.trialEndDate,
             currentPeriodEnd: row.sub.currentPeriodEnd,
+            features: resolvePlanFeatures(row.plan.name, row.plan.features),
           }
         : null;
 
@@ -105,6 +113,7 @@ export async function getPlanLimits(clinicId: number): Promise<SubscriptionInfo 
       maxUsers: row.plan.maxUsers,
       trialEndDate: row.sub.trialEndDate,
       currentPeriodEnd: row.sub.currentPeriodEnd,
+      features: resolvePlanFeatures(row.plan.name, row.plan.features),
     };
   } catch {
     return null;

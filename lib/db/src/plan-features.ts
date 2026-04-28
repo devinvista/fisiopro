@@ -7,12 +7,18 @@ export {
   PLAN_TIERS,
   FEATURES,
   PLAN_FEATURES,
+  FEATURE_CATALOG,
   isPlanTier,
   planHasFeature,
   resolveFeatures,
+  resolvePlanFeatures,
+  extractCanonicalFeatures,
+  planUsesCustomFeatures,
 } from "@workspace/shared-constants";
 
 export type {
   PlanTier,
   Feature,
+  FeatureCategory,
+  FeatureMeta,
 } from "@workspace/shared-constants";

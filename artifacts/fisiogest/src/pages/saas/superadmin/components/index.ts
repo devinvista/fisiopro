@@ -1,5 +1,6 @@
 export { ClinicsTab } from "./ClinicsTab";
 export { CouponsTab } from "./CouponsTab";
+export { FeatureMatrixTab } from "./FeatureMatrixTab";
 export { InadimplenciaTab } from "./InadimplenciaTab";
 export { KpiCard } from "./KpiCard";
 export { PainelTab } from "./PainelTab";
