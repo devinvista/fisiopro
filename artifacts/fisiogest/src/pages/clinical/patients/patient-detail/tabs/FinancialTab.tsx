@@ -64,6 +64,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
         amount: Number(payForm.amount),
         paymentMethod: payForm.paymentMethod || undefined,
         description: payForm.description || undefined,
+        paymentDate: payForm.paymentDate || undefined,
       });
       toast({ title: "Pagamento registrado", description: "O saldo do paciente foi atualizado." });
       invalidate();
@@ -186,12 +187,26 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-semibold text-slate-700">Descrição <span className="text-slate-400 font-normal">(opcional)</span></Label>
-                  <Input className="bg-white border-slate-200"
-                    value={payForm.description}
-                    onChange={e => setPayForm({ ...payForm, description: e.target.value })}
-                    placeholder="Ex: Pagamento das sessões de março…" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold text-slate-700">Data do Pagamento <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                    <Input
+                      type="date"
+                      className="bg-white border-slate-200 focus:border-green-400"
+                      value={payForm.paymentDate}
+                      onChange={e => setPayForm({ ...payForm, paymentDate: e.target.value })}
+                      max={new Date().toISOString().slice(0, 10)}
+                      placeholder="Hoje"
+                    />
+                    <p className="text-xs text-slate-500">Deixe em branco para usar a data de hoje.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm font-semibold text-slate-700">Descrição <span className="text-slate-400 font-normal">(opcional)</span></Label>
+                    <Input className="bg-white border-slate-200"
+                      value={payForm.description}
+                      onChange={e => setPayForm({ ...payForm, description: e.target.value })}
+                      placeholder="Ex: Pagamento das sessões de março…" />
+                  </div>
                 </div>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 pt-1">
                   <Button variant="outline" onClick={() => setShowPayForm(false)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>

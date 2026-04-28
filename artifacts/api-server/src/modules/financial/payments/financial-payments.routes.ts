@@ -109,10 +109,11 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
     }
     const body = validateBody(createPaymentSchema, req.body, res);
     if (!body) return;
-    const { amount, paymentMethod, description, procedureId } = body;
+    const { amount, paymentMethod, description, procedureId, paymentDate: paymentDateInput } = body;
     const numAmount = Number(amount);
 
-    const today = todayBRT();
+    // Permite registrar pagamento com data passada (até hoje); default = hoje.
+    const today = paymentDateInput || todayBRT();
 
     const [patient] = await db.select({ name: patientsTable.name }).from(patientsTable).where(eq(patientsTable.id, patientId));
 

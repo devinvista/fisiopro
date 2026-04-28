@@ -35,6 +35,7 @@ export const createPaymentSchema = z.object({
   paymentMethod: z.string().max(50).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
   procedureId: z.number().int().positive().optional().nullable(),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "paymentDate deve estar no formato YYYY-MM-DD").optional().nullable(),
 });
 
 export const updateRecordStatusSchema = z.object({

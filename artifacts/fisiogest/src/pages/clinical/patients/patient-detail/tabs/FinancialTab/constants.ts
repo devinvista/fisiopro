@@ -3,7 +3,7 @@ export const PAYMENT_METHODS = [
   "Transferência", "Boleto", "Outro",
 ];
 
-export const emptyPaymentForm = { amount: "", paymentMethod: "", description: "" };
+export const emptyPaymentForm = { amount: "", paymentMethod: "", description: "", paymentDate: "" };
 
 export const WALLET_TX_LABELS: Record<string, { label: string; color: string; sign: "+" | "-" | "" }> = {
   deposito:    { label: "Depósito",     color: "text-emerald-700 bg-emerald-50 border-emerald-200", sign: "+" },
