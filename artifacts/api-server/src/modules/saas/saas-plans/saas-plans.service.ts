@@ -6,7 +6,7 @@ import {
   userRolesTable,
   schedulesTable,
 } from "@workspace/db";
-import { eq, count, and } from "drizzle-orm";
+import { eq, count, and, inArray } from "drizzle-orm";
 import { todayBRT, addDays } from "../../../utils/dateUtils.js";
 import { HttpError } from "../../../utils/httpError.js";
 import { DEFAULT_PLANS } from "./saas-plans.constants.js";
@@ -31,6 +31,34 @@ export function listPublicPlans() {
 
 export function getPlanStats() {
   return repo.getPlanStats();
+}
+
+/**
+ * Conta clínicas com assinaturas "em uso" (status active ou trial) por plano.
+ * Usado pela tela "Matriz de Features" para alertar antes de remover uma feature.
+ */
+export async function getActiveClinicCountsPerPlan(): Promise<
+  Record<number, { active: number; trial: number; total: number }>
+> {
+  const rows = await db
+    .select({
+      planId: clinicSubscriptionsTable.planId,
+      status: clinicSubscriptionsTable.status,
+      n: count(),
+    })
+    .from(clinicSubscriptionsTable)
+    .where(inArray(clinicSubscriptionsTable.status, ["active", "trial"]))
+    .groupBy(clinicSubscriptionsTable.planId, clinicSubscriptionsTable.status);
+
+  const out: Record<number, { active: number; trial: number; total: number }> = {};
+  for (const r of rows) {
+    const cur = out[r.planId] ?? { active: 0, trial: 0, total: 0 };
+    if (r.status === "active") cur.active = Number(r.n);
+    else if (r.status === "trial") cur.trial = Number(r.n);
+    cur.total = cur.active + cur.trial;
+    out[r.planId] = cur;
+  }
+  return out;
 }
 
 export async function seedDefaultPlans() {

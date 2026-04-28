@@ -48,6 +48,14 @@ router.get("/plans/feature-catalog", requireSuperAdmin(), asyncHandler(async (_r
   });
 }));
 
+/**
+ * Quantas clínicas ativas/em trial estão em cada plano hoje.
+ * Usado pela "Matriz de Features" para alertar antes de remover uma feature.
+ */
+router.get("/plans/active-clinic-counts", requireSuperAdmin(), asyncHandler(async (_req, res: Response) => {
+  res.json(await svc.getActiveClinicCountsPerPlan());
+}));
+
 router.get("/plans/public", asyncHandler(async (_req, res: Response) => {
   res.json(await svc.listPublicPlans());
 }));

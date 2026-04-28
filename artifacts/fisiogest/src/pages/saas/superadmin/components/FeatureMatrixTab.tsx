@@ -27,9 +27,21 @@ import {
   Info,
   AlertTriangle,
   CheckCircle2,
+  ShieldAlert,
+  Users,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { apiFetch, apiFetchJson } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { api } from "../constants";
 import type { Plan } from "../types";
 import {
@@ -44,6 +56,11 @@ type CatalogResponse = {
   defaults: Record<string, Feature[]>;
   tiers: readonly string[];
 };
+
+type ActiveCounts = Record<
+  number,
+  { active: number; trial: number; total: number }
+>;
 
 const CATEGORY_META: Record<
   FeatureCategory,
@@ -112,8 +129,23 @@ export function FeatureMatrixTab() {
     queryFn: () => apiFetchJson(api("/plans/feature-catalog")),
   });
 
+  const { data: activeCounts = {} } = useQuery<ActiveCounts>({
+    queryKey: ["plans", "active-clinic-counts"],
+    queryFn: () => apiFetchJson(api("/plans/active-clinic-counts")),
+  });
+
   const catalog = catalogResp?.catalog ?? [];
   const defaults = catalogResp?.defaults ?? {};
+
+  /** Mapa rápido feature.key → label, usado pelo diálogo de confirmação. */
+  const featureLabels = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const f of catalog) m[f.key] = f.label;
+    return m;
+  }, [catalog]);
+
+  /** Diálogo de confirmação de downgrade. */
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   /** Estado local: planId → Set<Feature> selecionadas. */
   const [pending, setPending] = useState<Record<number, Set<Feature>>>({});
@@ -171,6 +203,34 @@ export function FeatureMatrixTab() {
     return ids;
   }, [pending, original, plans]);
 
+  /**
+   * Para cada plano, lista as features que foram REMOVIDAS (estavam em original
+   * e não estão mais em pending) — i.e., quem perderia acesso ao salvar.
+   */
+  const removalsByPlan = useMemo(() => {
+    const out: Record<number, Feature[]> = {};
+    for (const p of plans) {
+      const a = pending[p.id];
+      const b = original[p.id];
+      if (!a || !b) continue;
+      const removed: Feature[] = [];
+      for (const f of b) if (!a.has(f)) removed.push(f);
+      if (removed.length > 0) out[p.id] = removed;
+    }
+    return out;
+  }, [pending, original, plans]);
+
+  /** Resumo de impacto: planos com remoções E clínicas ativas/em trial. */
+  const impactedPlans = useMemo(() => {
+    return plans
+      .map((p) => {
+        const removed = removalsByPlan[p.id] ?? [];
+        const counts = activeCounts[p.id] ?? { active: 0, trial: 0, total: 0 };
+        return { plan: p, removed, counts };
+      })
+      .filter((r) => r.removed.length > 0 && r.counts.total > 0);
+  }, [plans, removalsByPlan, activeCounts]);
+
   const togglePlan = (planId: number, feature: Feature, checked: boolean) => {
     setPending((prev) => {
       const next = { ...prev };
@@ -226,6 +286,8 @@ export function FeatureMatrixTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plans"] });
+      qc.invalidateQueries({ queryKey: ["plans", "active-clinic-counts"] });
+      setConfirmOpen(false);
       toast({
         title: "Matriz atualizada",
         description: `${dirtyPlanIds.length} plano(s) salvos. As clínicas verão as mudanças no próximo carregamento.`,
@@ -234,6 +296,23 @@ export function FeatureMatrixTab() {
     onError: (err: any) =>
       toast({ variant: "destructive", title: "Erro ao salvar", description: err.message }),
   });
+
+  /**
+   * Decide se mostra o diálogo de confirmação ou salva direto.
+   * Diálogo aparece quando há remoções de feature que afetam clínicas ativas/em trial.
+   */
+  const handleSaveClick = () => {
+    if (impactedPlans.length > 0) {
+      setConfirmOpen(true);
+    } else {
+      saveMutation.mutate();
+    }
+  };
+
+  const totalImpactedClinics = useMemo(
+    () => impactedPlans.reduce((acc, r) => acc + r.counts.total, 0),
+    [impactedPlans],
+  );
 
   if (loadingPlans || loadingCatalog) {
     return (
@@ -268,7 +347,7 @@ export function FeatureMatrixTab() {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => saveMutation.mutate()}
+              onClick={handleSaveClick}
               disabled={dirtyCount === 0 || saveMutation.isPending}
               className="rounded-xl gap-2"
             >
@@ -429,12 +508,19 @@ export function FeatureMatrixTab() {
                             const checked = pending[plan.id]?.has(feat.key) ?? false;
                             const wasChecked = original[plan.id]?.has(feat.key) ?? false;
                             const changed = checked !== wasChecked;
+                            const isRemoval = wasChecked && !checked;
+                            const counts = activeCounts[plan.id] ?? {
+                              active: 0,
+                              trial: 0,
+                              total: 0,
+                            };
+                            const showImpactWarning = isRemoval && counts.total > 0;
                             return (
                               <TableCell
                                 key={plan.id}
                                 className="text-center py-2.5"
                               >
-                                <div className="flex items-center justify-center">
+                                <div className="flex items-center justify-center gap-1.5">
                                   <Checkbox
                                     checked={checked}
                                     onCheckedChange={(v) =>
@@ -442,10 +528,43 @@ export function FeatureMatrixTab() {
                                     }
                                     className={
                                       changed
-                                        ? "data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500 border-amber-400"
+                                        ? isRemoval && showImpactWarning
+                                          ? "data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500 border-rose-400"
+                                          : "data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500 border-amber-400"
                                         : ""
                                     }
                                   />
+                                  {showImpactWarning && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-full">
+                                          <ShieldAlert className="w-3 h-3" />
+                                          {counts.total}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-[260px]">
+                                        <div className="text-xs space-y-1">
+                                          <p className="font-semibold">
+                                            Remoção de risco
+                                          </p>
+                                          <p>
+                                            <strong>{counts.total}</strong>{" "}
+                                            clínica
+                                            {counts.total > 1 ? "s" : ""}{" "}
+                                            assinante
+                                            {counts.total > 1 ? "s" : ""} do{" "}
+                                            <strong>{plan.displayName}</strong>{" "}
+                                            perderá acesso a "{feat.label}" ao salvar.
+                                          </p>
+                                          <p className="text-slate-300">
+                                            ({counts.active} ativa
+                                            {counts.active === 1 ? "" : "s"} ·{" "}
+                                            {counts.trial} em trial)
+                                          </p>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </TableCell>
                             );
@@ -474,6 +593,91 @@ export function FeatureMatrixTab() {
           </div>
           <div>{catalog.length} features no catálogo</div>
         </div>
+
+        {/* Diálogo de confirmação para downgrade que afeta clínicas */}
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent className="max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-rose-700">
+                <ShieldAlert className="w-5 h-5" />
+                Confirmar remoção de acesso
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 text-sm text-slate-700">
+                  <p>
+                    Você está prestes a <strong>remover features</strong> de planos
+                    com clínicas ativas. Ao salvar,{" "}
+                    <strong className="text-rose-700">
+                      {totalImpactedClinics} clínica
+                      {totalImpactedClinics === 1 ? "" : "s"}
+                    </strong>{" "}
+                    perderá acesso imediato aos recursos abaixo no próximo
+                    carregamento.
+                  </p>
+                  <div className="space-y-2.5">
+                    {impactedPlans.map(({ plan, removed, counts }) => (
+                      <div
+                        key={plan.id}
+                        className="rounded-lg border border-rose-200 bg-rose-50/60 p-3"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-sm font-bold text-slate-900">
+                            {plan.displayName}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700">
+                            <Users className="w-3 h-3" />
+                            {counts.total} clínica{counts.total === 1 ? "" : "s"}
+                            <span className="text-slate-400 font-normal ml-1">
+                              ({counts.active} ativa
+                              {counts.active === 1 ? "" : "s"} · {counts.trial} em
+                              trial)
+                            </span>
+                          </span>
+                        </div>
+                        <ul className="text-xs text-slate-700 space-y-0.5 ml-1">
+                          {removed.map((f) => (
+                            <li key={f} className="flex items-start gap-1.5">
+                              <span className="text-rose-500 mt-0.5">−</span>
+                              <span>
+                                {featureLabels[f] ?? f}{" "}
+                                <code className="text-[10px] text-slate-400">
+                                  {f}
+                                </code>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Recomendação: avise as clínicas afetadas antes ou faça as
+                    remoções em janela de manutenção. Esta ação não cria
+                    notificação automática para os clientes.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={saveMutation.isPending}>
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  saveMutation.mutate();
+                }}
+                disabled={saveMutation.isPending}
+                className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+              >
+                {saveMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                Confirmar e salvar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
