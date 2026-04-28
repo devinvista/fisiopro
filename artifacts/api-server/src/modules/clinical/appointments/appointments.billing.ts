@@ -60,7 +60,7 @@ export async function applyBillingRules(
   //   2) override de preço da clínica (procedure_costs.priceOverride)
   //   3) preço de tabela do procedimento
   // Ver: artifacts/api-server/src/modules/clinical/appointments/appointments.pricing.ts
-  const priceResolution = await resolveEffectivePrice(patientId, procedureId, resolvedClinicId);
+  const priceResolution = await resolveEffectivePrice(patientId, procedureId, resolvedClinicId, appointmentDate);
   const effectivePrice = priceResolution.effectivePrice;
   const priceAuditFields = {
     priceSource: priceResolution.priceSource,
@@ -110,11 +110,35 @@ export async function applyBillingRules(
       consolidatedConditions.push(eq(patientSubscriptionsTable.clinicId, resolvedClinicId));
     }
 
-    const [consolidatedSub] = await db
+    let [consolidatedSub] = await db
       .select()
       .from(patientSubscriptionsTable)
       .where(and(...consolidatedConditions))
       .limit(1);
+
+    // Auto-cria assinatura faturaConsolidada quando o paciente está num plano
+    // de tratamento mensal fixo (rateio proporcional). Garante que a partir
+    // deste atendimento as parcelas serão acumuladas e consolidadas no
+    // fechamento mensal pelo job runConsolidatedBilling.
+    if (!consolidatedSub && priceResolution.priceSource === "plano_mensal_proporcional" && priceResolution.monthlyPlan) {
+      const monthly = priceResolution.monthlyPlan;
+      const startDate = monthly.monthStartDate;
+      const [created] = await db
+        .insert(patientSubscriptionsTable)
+        .values({
+          patientId,
+          procedureId,
+          startDate,
+          billingDay: monthly.billingDay,
+          monthlyAmount: monthly.monthlyAmount,
+          status: "ativa",
+          subscriptionType: "faturaConsolidada",
+          clinicId: resolvedClinicId,
+          notes: `Auto-criada a partir do plano #${priceResolution.treatmentPlanId} (pacote mensal #${monthly.packageId})`,
+        })
+        .returning();
+      consolidatedSub = created;
+    }
 
     if (consolidatedSub) {
       // Não cobra agora — acumula para a fatura mensal consolidada

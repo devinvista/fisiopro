@@ -175,8 +175,16 @@ export async function runConsolidatedBilling(options: {
         continue;
       }
 
-      const totalAmount = pendingRecords.reduce((sum, r) => sum + Number(r.amount), 0);
+      const accruedAmount = pendingRecords.reduce((sum, r) => sum + Number(r.amount), 0);
       const sessionCount = pendingRecords.length;
+      // Para planos mensais fixos (faturaConsolidada com monthly_amount > 0)
+      // o valor da fatura é o **valor contratual mensal**, não a soma das
+      // parcelas acumuladas (que podem divergir por arredondamento ou por
+      // mudanças no número de sessões agendadas durante o mês).
+      // Quando monthly_amount é 0 ou nulo, caímos no comportamento legado de
+      // somar as parcelas (faturas baseadas em sessões variáveis).
+      const contractedMonthly = Number(sub.monthlyAmount ?? 0);
+      const totalAmount = contractedMonthly > 0 ? contractedMonthly : accruedAmount;
 
       if (dryRun) {
         result.generated++;
