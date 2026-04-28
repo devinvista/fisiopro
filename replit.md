@@ -137,6 +137,16 @@ O preço pode ser **menor OU maior** que a tabela: o "Preço negociado" do plano
 - Idempotência por `(plan_id, plan_procedure_id [, plan_month_ref])`.
 - Falhas no efeito financeiro **não derrubam o aceite** (operador reemite manualmente; `audit_log` com prefixo `[ALERTA]`).
 
+#### Geração lazy de `faturaPlano` (Sprint 3 Refactor — abr/2026)
+Substituiu a materialização antecipada de 12 meses pela geração mês a mês via job diário. Detalhes completos em `sprints/sprint-3-faturamento-lazy.md`.
+
+- **Serviço:** `runMonthlyPlanBilling()` em `artifacts/api-server/src/modules/financial/billing/monthly-plan-billing.service.ts`. Idempotente por `(treatmentPlanId, treatmentPlanProcedureId, planMonthRef)` e protegido por advisory lock por item (namespace `-1_000_000 - itemId`).
+- **Job:** `monthlyPlanBilling` registrado em `scheduler/index.ts` com cron `30 9 * * *` (06:30 BRT). Para cada item `recorrenteMensal` de plano `vigente`/`ativo`: gera o mês corrente em **D-5 do `billingDay`** (clamp para o último dia do mês quando `billingDay` excede) e faz **gap-fill** de meses passados ainda ausentes em ordem cronológica. Re-vincula appointments daquele mês cujo `monthlyInvoiceId` estava nulo.
+- **Roll-up de avulsos no mês:** o bloco `creditoAReceber` em `appointments.billing.ts` agora seta `parent_record_id` para a `faturaPlano` do mês de competência da sessão sempre que `priceResolution.treatmentPlanId` está definido. Quando a fatura mensal for paga, o handler de pagamento cascateará para os filhos (Sprint 4 do refator).
+- **Log:** linha em `billing_run_logs` com `triggered_by = 'monthlyPlanBilling:<scheduler|manual>'` (o schema é compartilhado com os demais jobs e não tem coluna para `jobName`/`details`).
+- **Limpeza de legado:** `artifacts/api-server/src/scripts/cleanup-future-faturaplano.ts` (`--dry-run` por padrão; `--apply`, `--plan=<id>`, `--clinic=<id>`, `--month=YYYY-MM`). Remove `faturaPlano` `pendente` com `recognized_entry_id IS NULL` e `plan_month_ref > <mês de corte>` (default mês corrente em BRT) e zera `appointments.monthlyInvoiceId` antes da exclusão.
+- **Testes:** 12 casos unitários em `monthly-plan-billing.service.test.ts` cobrem `iterMonths` (virada de ano, intervalo invertido, range longo) e `isMonthDue` (gap-fill, mês corrente com tolerância, billingDay no início do mês, clamp em fevereiro, `tolerance=0`).
+
 ### Fluxo de Caixa Projetado (Sprint 3 — T7)
 
 - **Endpoint:** `GET /api/financial/cash-flow-projection?days=N` (1..180), gated por `requireFeature("financial.view.cash_flow")` + `requirePermission("financial.read")`.

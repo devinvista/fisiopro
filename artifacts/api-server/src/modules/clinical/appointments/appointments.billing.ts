@@ -741,6 +741,31 @@ export async function applyBillingRules(
           .limit(1);
 
         if (existing.length === 0) {
+          // Sprint 3 — Roll-up de avulsos no mês: se o paciente está num plano
+          // aceito (`treatmentPlanId` veio da resolução de preço) e existe uma
+          // `faturaPlano` para o mês de competência da sessão, esta linha vira
+          // FILHA dela (mesmo `parent_record_id`). Quando a fatura mensal for
+          // paga, todos os filhos são marcados em cascata pelo handler de
+          // pagamento (Sprint 4 do refator). Se não há `faturaPlano` (plano só
+          // com itens avulso), `parentRecordId` fica null e o item será
+          // consolidado depois por `closeAvulsoMonth` em `faturaMensalAvulso`.
+          let parentRecordId: number | null = null;
+          if (priceResolution.treatmentPlanId) {
+            const apptMonthRef = monthRangeFromDate(appointmentDate).startDate;
+            const [parentInvoice] = await tx
+              .select({ id: financialRecordsTable.id })
+              .from(financialRecordsTable)
+              .where(
+                and(
+                  eq(financialRecordsTable.treatmentPlanId, priceResolution.treatmentPlanId),
+                  eq(financialRecordsTable.transactionType, "faturaPlano"),
+                  eq(financialRecordsTable.planMonthRef, apptMonthRef),
+                ),
+              )
+              .limit(1);
+            if (parentInvoice) parentRecordId = parentInvoice.id;
+          }
+
           const [receivableRecord] = await tx.insert(financialRecordsTable).values({
             type:            "receita",
             amount:          effectivePrice,
@@ -753,6 +778,10 @@ export async function applyBillingRules(
             status:          "pendente",
             dueDate:         dueDatePorSessao,
             clinicId:        resolvedClinicId,
+            parentRecordId,
+            ...(parentRecordId
+              ? { planMonthRef: monthRangeFromDate(appointmentDate).startDate }
+              : {}),
             ...priceAuditFields,
           }).returning();
 
