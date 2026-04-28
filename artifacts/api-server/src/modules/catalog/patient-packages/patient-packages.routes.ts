@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { patientPackagesTable, packagesTable, proceduresTable, patientsTable, patientSubscriptionsTable, sessionCreditsTable, financialRecordsTable } from "@workspace/db";
+import { patientPackagesTable, packagesTable, proceduresTable, patientsTable, sessionCreditsTable, financialRecordsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
@@ -137,11 +137,9 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
       resolvedExpiryDate = start.toISOString().slice(0, 10);
     }
 
-    // ─── Sprint 1 — Unificação ─────────────────────────────────────────────
     // Quando o pacote é recorrente (mensal/faturaConsolidada), popula os
-    // novos campos de recorrência no próprio `patient_packages`. A criação
-    // automática de `patient_subscriptions` mais abaixo continua por
-    // retrocompatibilidade durante a sprint (será removida no cutover).
+    // campos de recorrência diretamente em `patient_packages`. Os jobs
+    // `runBilling`/`runConsolidatedBilling` iteram nesta tabela.
     const isRecurring = pkg && (pkg.packageType === "mensal" || pkg.packageType === "faturaConsolidada");
     let resolvedBillingDay: number | null = null;
     let resolvedMonthlyAmount: string | null = null;
@@ -228,38 +226,7 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
         .where(eq(financialRecordsTable.id, financialRecord.id));
     }
 
-    // ─── Compat: criação automática de patient_subscriptions ──────────────
-    // CUTOVER Sprint 1 — Default agora DESLIGADO. A recorrência vive 100% em
-    // `patient_packages` (campos `recurrence_*` populados acima) e os jobs
-    // `runBilling`/`runConsolidatedBilling` iteram nesta tabela.
-    // A criação espelhada em `patient_subscriptions` é mantida apenas como
-    // pista de migração reversível: setar `LEGACY_AUTO_SUBSCRIPTION=1` para
-    // reativar (até a remoção definitiva no Sprint 6).
-    let subscription: typeof patientSubscriptionsTable.$inferSelect | null = null;
-    const legacyAutoSub = process.env.LEGACY_AUTO_SUBSCRIPTION === "1";
-
-    if (legacyAutoSub && isRecurring && pkg) {
-      const [sub] = await db
-        .insert(patientSubscriptionsTable)
-        .values({
-          patientId: resolvedPatientId,
-          procedureId: Number(procedureId),
-          startDate,
-          billingDay: resolvedBillingDay!,
-          monthlyAmount: resolvedMonthlyAmount!,
-          status: "ativa",
-          subscriptionType: resolvedRecurrenceType!,
-          clinicId: req.clinicId ?? null,
-          notes: `[LEGADO] Gerada a partir do pacote: ${name} (será removido no cutover Sprint 1)`,
-          nextBillingDate: resolvedNextBillingDate,
-        })
-        .returning();
-
-      subscription = sub;
-      console.log(`[patient-packages] (legado, LEGACY_AUTO_SUBSCRIPTION=1) Assinatura espelhada #${sub.id} criada — patient_package #${pp.id} já tem campos de recorrência preenchidos.`);
-    }
-
-    res.status(201).json({ ...pp, subscription, subscriptionCreated: !!subscription });
+    res.status(201).json(pp);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

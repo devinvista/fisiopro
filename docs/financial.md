@@ -108,7 +108,7 @@ O schema já tem tudo que os gateways precisam para integração:
 - `financial_records.paymentMethod` → suporta "Pix", "Boleto", "Cartão de Crédito" etc.
 - `financial_records.transactionType` → rastreia origem do pagamento
 - `accounting_journal_entries` + `accounting_journal_lines` → double-entry ledger pronto para reconciliação automática
-- `patient_subscriptions.nextBillingDate` → sincroniza com cobrança recorrente do gateway
+- `patient_packages.nextBillingDate` → sincroniza com cobrança recorrente do gateway (mensalidades)
 - `billing_run_logs` → log de execuções de billing para auditoria
 
 ### Gateways recomendados por caso de uso
@@ -157,7 +157,7 @@ Fase 3 — PIX dinâmico (Efí)
 └── Salvar txid em gateway_charges.externalId
 
 Fase 4 — Assinatura via gateway (Asaas/Stripe)
-├── Sincronizar patient_subscriptions com assinatura do gateway
+├── Sincronizar patient_packages (recorrentes) com assinatura do gateway
 ├── Gateway dispara cobrança mensal → webhook cria financial_record automaticamente
 └── Eliminar billing scheduler manual (billingService.ts)
 ```

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
-  financialRecordsTable, proceduresTable, patientSubscriptionsTable, sessionCreditsTable,
+  financialRecordsTable, proceduresTable, sessionCreditsTable,
   usersTable, patientsTable,
 } from "@workspace/db";
 import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or, lt, desc } from "drizzle-orm";
@@ -28,13 +28,12 @@ import {
 import {
   RECEIVABLE_TYPES,
   monthDateRange,
-  monthlyCreditQuantity,
 } from "../shared/financial-reports.service.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
   reverseRecordSchema, listReversalsQuerySchema,
 } from "../financial.schemas.js";
-import { clinicCond, resolvePackageForSubscription } from "../financial.repository.js";
+import { clinicCond } from "../financial.repository.js";
 
 const router = Router();
 
@@ -324,39 +323,6 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
     if (!record) {
       res.status(404).json({ error: "Not Found" });
       return;
-    }
-
-    // Gera session_credit automaticamente quando cobrança de assinatura é paga
-    if (
-      status === "pago" &&
-      existing.status !== "pago" &&
-      existing.subscriptionId != null
-    ) {
-      try {
-        const [sub] = await db
-          .select()
-          .from(patientSubscriptionsTable)
-          .where(eq(patientSubscriptionsTable.id, existing.subscriptionId));
-
-        if (sub && sub.subscriptionType !== "faturaConsolidada" && existing.transactionType !== "faturaConsolidada") {
-          const patientPackage = await resolvePackageForSubscription(sub, req.clinicId);
-          const quantity = monthlyCreditQuantity(patientPackage?.sessionsPerWeek);
-          await db.insert(sessionCreditsTable).values({
-            patientId: sub.patientId,
-            procedureId: sub.procedureId,
-            quantity,
-            usedQuantity: 0,
-            patientPackageId: patientPackage?.id ?? null,
-            clinicId: sub.clinicId ?? req.clinicId ?? null,
-            notes: `Créditos gerados automaticamente — mensalidade #${record.id} paga (${quantity} sessão${quantity === 1 ? "" : "ões"})`,
-          });
-          console.log(
-            `[session-credit] ${quantity} crédito(s) gerado(s) para paciente #${sub.patientId} / procedimento #${sub.procedureId} — registro financeiro #${record.id}`
-          );
-        }
-      } catch (creditErr) {
-        console.error("[session-credit] Erro ao gerar crédito de sessão:", creditErr);
-      }
     }
 
     res.json(record);

@@ -57,7 +57,7 @@ describe("requireFeature middleware", () => {
     const res = makeRes();
     const next = vi.fn();
 
-    await requireFeature("module.patient_subscriptions")(req as any, res as any, next);
+    await requireFeature("module.recurring_expenses")(req as any, res as any, next);
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
@@ -65,7 +65,7 @@ describe("requireFeature middleware", () => {
     expect(payload).toMatchObject({
       error: "Forbidden",
       planRestricted: true,
-      feature: "module.patient_subscriptions",
+      feature: "module.recurring_expenses",
       currentPlan: "essencial",
     });
   });
@@ -77,7 +77,7 @@ describe("requireFeature middleware", () => {
     const res = makeRes();
     const next = vi.fn();
 
-    await requireFeature("module.patient_subscriptions")(req as any, res as any, next);
+    await requireFeature("module.recurring_expenses")(req as any, res as any, next);
 
     expect(getPlanLimitsMock).toHaveBeenCalledWith(1);
     expect(next).toHaveBeenCalledOnce();

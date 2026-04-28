@@ -50,21 +50,6 @@ export const FINANCIAL_RECORD_STATUS_LABELS: Record<FinancialRecordStatus, strin
   cancelado: "Cancelado",
 };
 
-// ─── Assinaturas de pacientes (patient_subscriptions) ───────────────────────
-
-export const PATIENT_SUBSCRIPTION_STATUSES = [
-  "ativa",
-  "inativa",
-  "cancelada",
-] as const;
-export type PatientSubscriptionStatus = (typeof PATIENT_SUBSCRIPTION_STATUSES)[number];
-
-export const PATIENT_SUBSCRIPTION_STATUS_LABELS: Record<PatientSubscriptionStatus, string> = {
-  ativa:     "Ativa",
-  inativa:   "Inativa",
-  cancelada: "Cancelada",
-};
-
 // ─── Assinaturas SaaS (clinic_subscriptions) ─────────────────────────────────
 
 export const SAAS_SUBSCRIPTION_STATUSES = [

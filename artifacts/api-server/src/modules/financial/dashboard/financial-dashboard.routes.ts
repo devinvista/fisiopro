@@ -172,7 +172,7 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
       mrr,
       // Sprint 5: "activeSubscriptions" é mantido no payload para compat com a
       // UI atual (chips em LancamentosTab), mas representa itens recorrentes do
-      // plano de tratamento (kind='recorrenteMensal') em vez de patient_subscriptions.
+      // plano de tratamento (kind='recorrenteMensal').
       activeSubscriptions: activeRecurringCount,
       pendingSubscriptionCharges: {
         count: Number(pendingRecurringRecords[0]?.count ?? 0),

@@ -35,7 +35,6 @@ vi.mock("@workspace/db", () => ({
   sessionCreditsTable: {},
   patientPackagesTable: {},
   packagesTable: {},
-  patientSubscriptionsTable: {},
   patientWalletTable: {},
   patientWalletTransactionsTable: {},
   procedureCostsTable: {},

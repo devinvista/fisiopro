@@ -5,7 +5,6 @@ import { patientsTable } from "./patients";
 import { appointmentsTable } from "./appointments";
 import { proceduresTable } from "./procedures";
 import { patientPackagesTable } from "./patient-packages";
-import { patientSubscriptionsTable } from "./subscriptions";
 import { patientWalletTransactionsTable } from "./patient-wallet";
 
 export const accountingAccountsTable = pgTable("accounting_accounts", {
@@ -35,7 +34,7 @@ export const accountingJournalEntriesTable = pgTable("accounting_journal_entries
   appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
   procedureId: integer("procedure_id").references(() => proceduresTable.id),
   patientPackageId: integer("patient_package_id").references(() => patientPackagesTable.id),
-  subscriptionId: integer("subscription_id").references(() => patientSubscriptionsTable.id),
+  subscriptionId: integer("subscription_id"),
   walletTransactionId: integer("wallet_transaction_id").references(() => patientWalletTransactionsTable.id),
   financialRecordId: integer("financial_record_id"),
   status: text("status").notNull().default("posted"),

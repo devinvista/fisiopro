@@ -258,7 +258,7 @@ function maxMonthForItem(
 
 /**
  * Adquire um lock advisory por (itemId, year*100+month) com namespace
- * distinto do `withPackageBillingLock` e do `withSubscriptionBillingLock`
+ * distinto do `withPackageBillingLock`
  * (usa offset negativo no primeiro slot).
  */
 async function withMonthlyPlanItemLock<T>(

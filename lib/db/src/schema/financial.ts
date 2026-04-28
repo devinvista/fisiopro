@@ -20,14 +20,12 @@ export const financialRecordsTable = pgTable("financial_records", {
   transactionType: text("transaction_type"),
   status: text("status").notNull().default("pendente"),
   dueDate: date("due_date"),
+  // Coluna histórica preservada (sem FK) para auditoria de lançamentos
+  // legados — o domínio `patient_subscriptions` foi removido na Sprint 6.
   subscriptionId: integer("subscription_id"),
-  // ── Sprint 1 — Unificação ────────────────────────────────────────────────
-  // Vínculo com `patient_packages.id` quando este lançamento foi gerado pela
-  // recorrência unificada (jobs `runBilling`/`runConsolidatedBilling` lendo de
-  // `patient_packages` e item `pendenteFatura` criado em
-  // `appointments.billing.ts`). Substitui `subscriptionId` no novo regime.
-  // Permanece nullable: registros legados (gerados via `patient_subscriptions`)
-  // continuam usando `subscriptionId`.
+  // Vínculo com `patient_packages.id` para a recorrência unificada
+  // (`runBilling` lendo de `patient_packages` e `pendenteFatura` criados em
+  // `appointments.billing.ts`).
   patientPackageId: integer("patient_package_id"),
   accountingEntryId: integer("accounting_entry_id"),
   recognizedEntryId: integer("recognized_entry_id"),

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  BarChart3, Clock, DollarSign, Loader2, PiggyBank, RefreshCw, Repeat,
+  BarChart3, Clock, DollarSign, Loader2, PiggyBank, Repeat,
   Stethoscope, Ticket, TrendingDown, TrendingUp,
 } from "lucide-react";
 import {
@@ -32,14 +32,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; description: string; amount: number } | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [billingRunning, setBillingRunning] = useState(false);
-  const [billingResult, setBillingResult] = useState<{ generated: number; skipped: number; recordIds: number[] } | null>(null);
-  const [showBillingConfirm, setShowBillingConfirm] = useState(false);
-  const [billingStatus, setBillingStatus] = useState<BillingStatusData | null>(null);
-  const [billingStatusLoading, setBillingStatusLoading] = useState(true);
-  const [showUpcoming, setShowUpcoming] = useState(false);
   const [billingPanelOpen, setBillingPanelOpen] = useState(false);
-  // Sprint 5 — nova fonte: monthly-plan-billing (planos de tratamento)
   const [planBillingStatus, setPlanBillingStatus] = useState<BillingStatusData | null>(null);
   const [planBillingStatusLoading, setPlanBillingStatusLoading] = useState(true);
   const [planBillingResult, setPlanBillingResult] = useState<{ generated: number; skipped: number; recordIds: number[] } | null>(null);
@@ -50,15 +43,6 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
   const { data: dashboard, isLoading: dashLoading, refetch: refetchDash } = useGetFinancialDashboard({ month, year });
   const { data: rawRecords, isLoading: recLoading, refetch: refetchRec } = useListFinancialRecords({ month, year });
 
-  const fetchBillingStatus = useCallback(async () => {
-    setBillingStatusLoading(true);
-    try {
-      const res = await fetch("/api/subscriptions/billing-status", { headers: authHeaders() });
-      if (res.ok) setBillingStatus(await res.json());
-    } catch { }
-    finally { setBillingStatusLoading(false); }
-  }, []);
-
   const fetchPlanBillingStatus = useCallback(async () => {
     setPlanBillingStatusLoading(true);
     try {
@@ -68,7 +52,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     finally { setPlanBillingStatusLoading(false); }
   }, []);
 
-  useEffect(() => { fetchBillingStatus(); fetchPlanBillingStatus(); }, [fetchBillingStatus, fetchPlanBillingStatus]);
+  useEffect(() => { fetchPlanBillingStatus(); }, [fetchPlanBillingStatus]);
 
   const records = useMemo(() => {
     const list = ((rawRecords as any)?.data ?? rawRecords ?? []) as any[];
@@ -118,30 +102,8 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     finally { setIsDeleting(false); }
   };
 
-  const handleRunBilling = async () => {
-    setBillingRunning(true); setBillingResult(null);
-    try {
-      const res = await fetch("/api/subscriptions/run-billing", { method: "POST", headers: authHeaders() });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ variant: "destructive", title: "Erro na cobrança mensal", description: data.message });
-      } else {
-        setBillingResult(data);
-        if (data.generated > 0) {
-          toast({ title: `${data.generated} lançamento(s) gerado(s).` });
-          refetchDash(); refetchRec();
-        } else {
-          toast({ title: data.skipped > 0 ? `Nenhuma cobrança nova — ${data.skipped} já registrada(s) ou fora da janela.` : "Nenhum pacote recorrente (legado) com vencimento na janela atual." });
-        }
-        await fetchBillingStatus();
-      }
-    } catch { toast({ variant: "destructive", title: "Erro ao executar cobrança." }); }
-    finally { setBillingRunning(false); setShowBillingConfirm(false); }
-  };
-
-  // Sprint 5 — disparo manual do `monthlyPlanBilling` (faturas dos planos
-  // de tratamento aceitos, itens recorrenteMensal). Reuso o mesmo padrão
-  // de UX da assinatura legada para não confundir o usuário.
+  // Disparo manual do `monthlyPlanBilling` (faturas dos planos de tratamento
+  // aceitos, itens recorrenteMensal).
   const handleRunPlanBilling = async () => {
     setPlanBillingRunning(true); setPlanBillingResult(null);
     try {
@@ -394,15 +356,8 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         )}
       </div>
 
-      {/* ── Sprint 5 — Painel Pacotes Recorrentes (substitui SubscriptionBillingPanel) ── */}
+      {/* ── Painel Faturas dos Planos de Tratamento ── */}
       <RecurringPackagesPanel
-        subscriptionStatus={billingStatus}
-        subscriptionStatusLoading={billingStatusLoading}
-        subscriptionResult={billingResult}
-        subscriptionRunning={billingRunning}
-        onRequestSubscriptionRun={() => setShowBillingConfirm(true)}
-        showSubscriptionUpcoming={showUpcoming}
-        setShowSubscriptionUpcoming={setShowUpcoming}
         planBillingStatus={planBillingStatus}
         planBillingStatusLoading={planBillingStatusLoading}
         planBillingResult={planBillingResult}
@@ -449,23 +404,6 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showBillingConfirm} onOpenChange={setShowBillingConfirm}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>Executar Cobrança Mensal (Pacotes Legados)</DialogTitle>
-            <DialogDescription>
-              Gera lançamentos financeiros para pacotes recorrentes do modelo legado (assinaturas pré-Sprint 2) com vencimento em aberto na janela atual (3 dias). Ação segura e idempotente — itens já cobrados no mês não são duplicados. Para Planos de Tratamento aceitos, use a aba "Faturas dos Planos" no painel acima.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBillingConfirm(false)}>Cancelar</Button>
-            <Button onClick={handleRunBilling} disabled={billingRunning}>
-              {billingRunning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -4,9 +4,7 @@ import { format, differenceInDays, parseISO } from "date-fns";
 import { Loader2, AlertCircle, Repeat } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/use-auth";
 import { apiFetchJson } from "@/lib/api";
-import { PlanBadge } from "@/components/guards/plan-badge";
 import { formatCurrency } from "../../utils/format";
 
 /**
@@ -58,11 +56,6 @@ function statusStyle(status: string | null): string {
 }
 
 export function RecurringPackageSection({ patientId }: { patientId: number }) {
-  const { hasFeature } = useAuth();
-  // Feature flag transicional: o módulo "patient_subscriptions" ainda
-  // controla acesso à área de recorrência durante a transição.
-  const subscriptionsEnabled = hasFeature("module.patient_subscriptions");
-
   const { data: packages = [], isLoading } = useQuery<PatientPackage[]>({
     queryKey: [`/api/patients/${patientId}/packages`, "recurring"],
     queryFn: () => apiFetchJson<PatientPackage[]>(`/api/patients/${patientId}/packages`),
@@ -87,7 +80,6 @@ export function RecurringPackageSection({ patientId }: { patientId: number }) {
               {recurring.length} pacote(s) recorrente(s) vinculado(s)
             </p>
           </div>
-          {!subscriptionsEnabled && <PlanBadge feature="module.patient_subscriptions" />}
         </div>
       </div>
 

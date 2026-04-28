@@ -41,12 +41,12 @@ describe("isPlanTier", () => {
 describe("planHasFeature", () => {
   it("returns true for features included in the plan", () => {
     expect(planHasFeature("essencial", "module.patients")).toBe(true);
-    expect(planHasFeature("profissional", "module.patient_subscriptions")).toBe(true);
+    expect(planHasFeature("profissional", "module.recurring_expenses")).toBe(true);
     expect(planHasFeature("premium", "module.multi_clinic")).toBe(true);
   });
 
   it("returns false for features above the plan tier", () => {
-    expect(planHasFeature("essencial", "module.patient_subscriptions")).toBe(false);
+    expect(planHasFeature("essencial", "module.recurring_expenses")).toBe(false);
     expect(planHasFeature("essencial", "module.audit_log")).toBe(false);
     expect(planHasFeature("profissional", "module.multi_clinic")).toBe(false);
     expect(planHasFeature("profissional", "module.whitelabel")).toBe(false);
@@ -56,7 +56,7 @@ describe("planHasFeature", () => {
     expect(planHasFeature(null, "module.patients")).toBe(true);
     expect(planHasFeature(undefined, "module.patients")).toBe(true);
     expect(planHasFeature("foo", "module.patients")).toBe(true);
-    expect(planHasFeature(null, "module.patient_subscriptions")).toBe(false);
+    expect(planHasFeature(null, "module.recurring_expenses")).toBe(false);
     expect(planHasFeature("foo", "module.multi_clinic")).toBe(false);
   });
 });
@@ -72,6 +72,6 @@ describe("resolveFeatures", () => {
   it("falls back to essencial for unknown plan", () => {
     const fallback = resolveFeatures("ghost-plan");
     expect(fallback.has("module.patients")).toBe(true);
-    expect(fallback.has("module.patient_subscriptions")).toBe(false);
+    expect(fallback.has("module.recurring_expenses")).toBe(false);
   });
 });

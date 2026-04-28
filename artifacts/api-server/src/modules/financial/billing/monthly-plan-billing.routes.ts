@@ -1,11 +1,8 @@
 /**
- * Sprint 5 — Endpoints HTTP para o job `monthlyPlanBilling`.
+ * Endpoints HTTP para o job `monthlyPlanBilling` (Sprint 3+).
  *
- * Espelha a interface de `/api/subscriptions/billing-status` e
- * `/api/subscriptions/run-billing`, mas para o novo fluxo de Planos de
- * Tratamento (Sprint 3+). Permite à UI exibir status do job, próximas
- * cobranças (faturas que serão geradas nos próximos 7 dias) e disparar
- * execução manual.
+ * Permite à UI exibir status do último run, próximas cobranças (faturas que
+ * serão geradas nos próximos 7 dias) e disparar execução manual do job.
  *
  * Mounted em `/api/treatment-plans/billing` (ver `modules/index.ts`).
  */

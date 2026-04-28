@@ -22,11 +22,11 @@ export const patientPackagesTable = pgTable("patient_packages", {
   clinicId: integer("clinic_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   // ─── Sprint 1 — Unificação de recorrência ───────────────────────────────
-  // Os campos abaixo absorvem o que antes vivia em `patient_subscriptions`.
+  // Os campos abaixo controlam recorrência mensal (cobrança/fatura consolidada).
   // Quando `recurrence_type` é null, o pacote NÃO é recorrente (pacote por
   // sessões à vista). Quando `recurrence_type` é 'mensal' ou
   // 'faturaConsolidada', os jobs `runBilling`/`runConsolidatedBilling`
-  // passam a iterar nesta tabela em vez de `patient_subscriptions`.
+  // iteram nesta tabela.
   billingDay: integer("billing_day"),
   monthlyAmount: numeric("monthly_amount", { precision: 10, scale: 2 }),
   nextBillingDate: date("next_billing_date"),

@@ -201,11 +201,15 @@ financial_records
 
 ---
 
-### Sprint 6 — Limpeza Final (≈ 2 dias)
-- [ ] Drop tabela `patient_subscriptions`, `subscription_billing_logs` (após backup).
-- [ ] Remover `consolidated-billing.service.ts`, endpoints deprecated.
-- [ ] Atualizar `replit.md`, `docs/financial.md`, `docs/clinical.md`.
-- [ ] Comunicado de release notes interno.
+### Sprint 6 — Limpeza Final (≈ 2 dias) ✅
+- [x] Drop tabela `patient_subscriptions` (após backup em `sprints/_baselines/sprint-6-patient-subscriptions.json`).
+- [x] Remover `consolidated-billing.service.ts`, `subscriptions/` (rotas + service + schemas), `subscription_billing_logs` (não existia separado), `migrate-legacy-plans.ts`, `migrate-subscriptions-to-packages.ts`, `backfill-treatment-plans-v2.ts`, `baseline-metrics.ts`.
+- [x] Limpar schema (`subscriptions.ts` deletado, FK removida em `accounting.ts`, colunas `subscription_id` em `financial_records`/`accounting_journal_entries` mantidas como `integer` puro para preservação histórica).
+- [x] Limpar plan-features (`module.patient_subscriptions` removido) e `PATIENT_SUBSCRIPTION_STATUSES`.
+- [x] Limpar backend (`billing.service.ts`, `billing-lock.ts`, `appointments.billing.ts`, `patient-packages.routes.ts` LEGACY_AUTO_SUBSCRIPTION, `financial.repository.ts`, `financial-payments.routes.ts`, `financial-records.routes.ts`, `financial-dashboard.routes.ts`, `monthly-plan-billing.service.ts`, `scheduler/jobs/billing.job.ts`, `scheduler/index.ts`, `modules/index.ts`).
+- [x] Limpar frontend (`SubscriptionsSection.tsx` deletado, `RecurringPackageSection.tsx` sem feature gate, `RecurringPackagesPanel.tsx` reescrito como single-source para planos de tratamento, `LancamentosTab.tsx` sem fetch/handler/Dialog legado).
+- [x] Atualizar `.env.example`, `replit.md`, `docs/financial.md`, `docs/database.md`.
+- [x] `pnpm db:push` (drop manual em SQL para evitar prompt sobre `password_reset_tokens`), `pnpm typecheck` ✅, `pnpm test` ✅ 318/318.
 
 ---
 

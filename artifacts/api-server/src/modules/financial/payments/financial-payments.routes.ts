@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
-  financialRecordsTable, proceduresTable, patientSubscriptionsTable, sessionCreditsTable, patientsTable,
+  financialRecordsTable, proceduresTable, sessionCreditsTable, patientsTable,
 } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -390,31 +390,6 @@ router.get("/patients/:patientId/credits", requirePermission("financial.read"), 
 
     const totalAvailable = withBalance.reduce((s, c) => s + c.availableCount, 0);
     res.json({ credits: withBalance, totalAvailable });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
-router.get("/patients/:patientId/subscriptions", requirePermission("financial.read"), async (req, res) => {
-  try {
-    const patientId = parseInt(req.params.patientId as string);
-    if (!await assertPatientInClinic(patientId, req as AuthRequest)) {
-      res.status(403).json({ error: "Forbidden", message: "Acesso negado a este paciente" });
-      return;
-    }
-
-    const subs = await db
-      .select({
-        subscription: patientSubscriptionsTable,
-        procedure: proceduresTable,
-      })
-      .from(patientSubscriptionsTable)
-      .leftJoin(proceduresTable, eq(patientSubscriptionsTable.procedureId, proceduresTable.id))
-      .where(eq(patientSubscriptionsTable.patientId, patientId))
-      .orderBy(patientSubscriptionsTable.createdAt);
-
-    res.json(subs.map(({ subscription, procedure }) => ({ ...subscription, procedure })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

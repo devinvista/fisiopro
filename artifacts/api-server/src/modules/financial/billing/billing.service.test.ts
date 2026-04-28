@@ -64,10 +64,6 @@ import { nowBRT } from "../../../utils/dateUtils.js";
 const brt = nowBRT();
 const todayDay = brt.day;
 
-/**
- * Sprint 1 — Default `BILLING_FROM_PACKAGES=1`: o job itera em
- * `patient_packages`. O helper retorna a shape esperada pelo novo caminho.
- */
 function activeSub(overrides: Partial<any> = {}) {
   return {
     pkg: {
