@@ -119,7 +119,16 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
       return;
     }
     const { name, type, cnpj, cpf, crefito, responsibleTechnical, phone, email, address, website, logoUrl,
-            cancellationPolicyHours, autoConfirmHours, noShowFeeEnabled, noShowFeeAmount } = req.body;
+            cancellationPolicyHours, autoConfirmHours, noShowFeeEnabled, noShowFeeAmount,
+            cancellationWindowHours, lateCancellationPolicy } = req.body;
+    const ALLOWED_LATE_POLICIES = ["creditoNormal", "semCredito", "taxa"] as const;
+    const normalizedLatePolicy = (() => {
+      if (lateCancellationPolicy === undefined) return undefined;
+      if (lateCancellationPolicy === null || lateCancellationPolicy === "") return null;
+      return ALLOWED_LATE_POLICIES.includes(lateCancellationPolicy)
+        ? lateCancellationPolicy
+        : undefined;
+    })();
     const [clinic] = await db
       .update(clinicsTable)
       .set({
@@ -138,6 +147,17 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
         ...(autoConfirmHours !== undefined && { autoConfirmHours: autoConfirmHours === null || autoConfirmHours === "" ? null : Number(autoConfirmHours) }),
         ...(noShowFeeEnabled !== undefined && { noShowFeeEnabled: Boolean(noShowFeeEnabled) }),
         ...(noShowFeeAmount !== undefined && { noShowFeeAmount: noShowFeeAmount || null }),
+        // cancellationWindowHours / lateCancellationPolicy são notNull com
+        // default no schema. Só sobrescrevemos quando vier um valor explícito.
+        ...(cancellationWindowHours !== undefined &&
+          cancellationWindowHours !== null &&
+          cancellationWindowHours !== "" && {
+            cancellationWindowHours: Number(cancellationWindowHours),
+          }),
+        ...(normalizedLatePolicy !== undefined &&
+          normalizedLatePolicy !== null && {
+            lateCancellationPolicy: normalizedLatePolicy,
+          }),
       })
       .where(eq(clinicsTable.id, clinicId))
       .returning();

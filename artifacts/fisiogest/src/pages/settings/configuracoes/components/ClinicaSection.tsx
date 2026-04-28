@@ -112,6 +112,8 @@ export function ClinicaSection() {
     autoConfirmHours: "" as string | number,
     noShowFeeEnabled: false,
     noShowFeeAmount: "",
+    cancellationWindowHours: "" as string | number,
+    lateCancellationPolicy: "creditoNormal" as "creditoNormal" | "semCredito" | "taxa",
   });
   const [logoPreview, setLogoPreview] = useState<string>("");
 
@@ -138,6 +140,11 @@ export function ClinicaSection() {
         autoConfirmHours: clinic.autoConfirmHours ?? "",
         noShowFeeEnabled: clinic.noShowFeeEnabled ?? false,
         noShowFeeAmount: clinic.noShowFeeAmount ?? "",
+        cancellationWindowHours: clinic.cancellationWindowHours ?? "",
+        lateCancellationPolicy: (clinic.lateCancellationPolicy ?? "creditoNormal") as
+          | "creditoNormal"
+          | "semCredito"
+          | "taxa",
       });
       setLogoPreview(clinic.logoUrl ?? "");
     }
@@ -177,6 +184,10 @@ export function ClinicaSection() {
       ...formData,
       cancellationPolicyHours: formData.cancellationPolicyHours !== "" ? Number(formData.cancellationPolicyHours) : null,
       autoConfirmHours: formData.autoConfirmHours !== "" ? Number(formData.autoConfirmHours) : null,
+      // Sprint 5 — janela é notNull no DB; só envia quando preenchido
+      cancellationWindowHours:
+        formData.cancellationWindowHours !== "" ? Number(formData.cancellationWindowHours) : undefined,
+      lateCancellationPolicy: formData.lateCancellationPolicy,
     };
     updateMutation.mutate(payload);
   };
@@ -501,6 +512,60 @@ export function ClinicaSection() {
                 Essa cláusula aparecerá automaticamente nos contratos gerados.
               </div>
             )}
+
+            {/* Sprint 5 — Janela operacional de crédito por cancelamento */}
+            <div className="space-y-3 rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-3">
+              <div>
+                <p className="text-sm font-medium">Janela de cancelamento (regra de crédito)</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Quando o paciente cancela <strong>dentro</strong> dessa janela, aplica-se a política
+                  abaixo. Cancelamentos <strong>fora</strong> da janela seguem o comportamento padrão
+                  (crédito de reposição).
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min="0"
+                  max="168"
+                  value={formData.cancellationWindowHours}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, cancellationWindowHours: e.target.value }))
+                  }
+                  placeholder="Ex: 24"
+                  className="w-32"
+                />
+                <span className="text-sm text-muted-foreground">horas antes do horário</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(
+                  [
+                    { value: "creditoNormal", label: "Crédito normal", hint: "gera reposição como hoje" },
+                    { value: "semCredito", label: "Sem crédito", hint: "vaga é descartada" },
+                    { value: "taxa", label: "Cobrar taxa", hint: "registra cobrança (no-show)" },
+                  ] as const
+                ).map((opt) => {
+                  const active = formData.lateCancellationPolicy === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() =>
+                        setFormData((p) => ({ ...p, lateCancellationPolicy: opt.value }))
+                      }
+                      className={`text-left rounded-md border px-3 py-2 transition ${
+                        active
+                          ? "border-amber-500 bg-amber-100/70 ring-1 ring-amber-300"
+                          : "border-muted bg-background hover:bg-muted/40"
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.hint}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <Separator />

@@ -130,7 +130,22 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   });
 
   // ─── Form state per selected plan ───────────────────────────────────────
-  const emptyForm = { objectives: "", techniques: "", frequency: "", estimatedSessions: "" as string | number, startDate: "", responsibleProfessional: "", status: "ativo" as "ativo" | "concluido" | "suspenso", durationMonths: 12 as number };
+  const emptyForm = {
+    objectives: "",
+    techniques: "",
+    frequency: "",
+    estimatedSessions: "" as string | number,
+    startDate: "",
+    responsibleProfessional: "",
+    status: "ativo" as "ativo" | "concluido" | "suspenso",
+    durationMonths: 12 as number,
+    // Sprint 2 — modelo de faturamento e validade de créditos
+    paymentMode: "" as "" | "prepago" | "postpago",
+    monthlyCreditValidityDays: "" as string | number,
+    replacementCreditValidityDays: "" as string | number,
+    avulsoBillingMode: "porSessao" as "porSessao" | "mensalConsolidado",
+    avulsoBillingDay: "" as string | number,
+  };
   const [form, setForm] = useState(emptyForm);
   const planItemsInitRef = useRef(false);
 
@@ -146,6 +161,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         responsibleProfessional: selectedPlan.responsibleProfessional || "",
         status: (selectedPlan.status as "ativo" | "concluido" | "suspenso") || "ativo",
         durationMonths: selectedPlan.durationMonths ?? 12,
+        paymentMode: (selectedPlan.paymentMode as "" | "prepago" | "postpago") || "",
+        monthlyCreditValidityDays: selectedPlan.monthlyCreditValidityDays ?? "",
+        replacementCreditValidityDays: selectedPlan.replacementCreditValidityDays ?? "",
+        avulsoBillingMode:
+          (selectedPlan.avulsoBillingMode as "porSessao" | "mensalConsolidado") || "porSessao",
+        avulsoBillingDay: selectedPlan.avulsoBillingDay ?? "",
       });
     } else {
       setForm(emptyForm);
@@ -174,6 +195,17 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         ...form,
         estimatedSessions: form.estimatedSessions ? Number(form.estimatedSessions) : null,
         durationMonths: form.durationMonths ? Number(form.durationMonths) : null,
+        // Sprint 2 — campos de faturamento (vazio → null para o backend ignorar/limpar)
+        paymentMode: form.paymentMode || null,
+        monthlyCreditValidityDays:
+          form.monthlyCreditValidityDays === "" ? null : Number(form.monthlyCreditValidityDays),
+        replacementCreditValidityDays:
+          form.replacementCreditValidityDays === ""
+            ? null
+            : Number(form.replacementCreditValidityDays),
+        avulsoBillingMode: form.avulsoBillingMode || "porSessao",
+        avulsoBillingDay:
+          form.avulsoBillingDay === "" ? null : Number(form.avulsoBillingDay),
       });
       queryClient.invalidateQueries({ queryKey: plansKey });
       toast({ title: "Plano de tratamento salvo!" });
@@ -423,6 +455,28 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               }}
             />
 
+            {/* Sprint 2 — Faturamento e validade de créditos */}
+            <BillingSettingsBlock
+              form={form}
+              setForm={setForm}
+              isAccepted={!!selectedPlan?.acceptedAt}
+            />
+
+            {/* Sprint 4 — Fechamento mensal de avulsos */}
+            {selectedPlan?.acceptedAt && form.avulsoBillingMode === "mensalConsolidado" && (
+              <CloseMonthBlock
+                patientId={patientId}
+                planId={selectedPlanId!}
+                onClosed={() => {
+                  queryClient.invalidateQueries({ queryKey: plansKey });
+                  queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                  queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
+                }}
+              />
+            )}
+
+            {/* Sprint 3 — Extrato de créditos do paciente */}
+            <CreditsStatementBlock patientId={patientId} />
 
             {/* Session progress */}
             {(form.estimatedSessions || completedSessions > 0) && (
@@ -616,6 +670,303 @@ function MaterializeBlock({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Sprint 2 — Faturamento e validade de créditos ──────────────────────────
+function BillingSettingsBlock({
+  form, setForm, isAccepted,
+}: {
+  form: any;
+  setForm: (fn: (prev: any) => any) => void;
+  isAccepted: boolean;
+}) {
+  const lockMode = isAccepted; // paymentMode é comercial — após aceite, só renegociação muda
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <DollarSign className="w-4 h-4 text-amber-700" />
+        <h4 className="text-sm font-semibold text-slate-700">Faturamento e validade de créditos</h4>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-slate-600">Modo de pagamento</Label>
+          <Select
+            value={form.paymentMode || "_default"}
+            onValueChange={(v) =>
+              setForm((p: any) => ({ ...p, paymentMode: v === "_default" ? "" : v }))
+            }
+            disabled={lockMode}
+          >
+            <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_default">Padrão do pacote</SelectItem>
+              <SelectItem value="prepago">Pré-pago (cobrar antes)</SelectItem>
+              <SelectItem value="postpago">Pós-pago (cobrar após uso)</SelectItem>
+            </SelectContent>
+          </Select>
+          {lockMode && (
+            <p className="text-[11px] text-slate-400">
+              Já aceito — para mudar, use renegociação.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-slate-600">Cobrança de itens avulsos</Label>
+          <Select
+            value={form.avulsoBillingMode || "porSessao"}
+            onValueChange={(v: "porSessao" | "mensalConsolidado") =>
+              setForm((p: any) => ({ ...p, avulsoBillingMode: v }))
+            }
+          >
+            <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="porSessao">Por sessão (uma fatura por consulta)</SelectItem>
+              <SelectItem value="mensalConsolidado">Mensal consolidado (uma fatura/mês)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-slate-600">
+            Validade do crédito mensal (dias após o fim do mês)
+          </Label>
+          <Input
+            type="number" min="0" max="365"
+            placeholder="Padrão da clínica"
+            value={form.monthlyCreditValidityDays}
+            onChange={(e) =>
+              setForm((p: any) => ({ ...p, monthlyCreditValidityDays: e.target.value }))
+            }
+            className="h-9 bg-white"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-slate-600">
+            Validade do crédito de reposição (dias)
+          </Label>
+          <Input
+            type="number" min="1" max="365"
+            placeholder="Padrão da clínica"
+            value={form.replacementCreditValidityDays}
+            onChange={(e) =>
+              setForm((p: any) => ({ ...p, replacementCreditValidityDays: e.target.value }))
+            }
+            className="h-9 bg-white"
+          />
+        </div>
+
+        {form.avulsoBillingMode === "mensalConsolidado" && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-600">
+              Dia do vencimento da fatura mensal
+            </Label>
+            <Input
+              type="number" min="1" max="28"
+              placeholder="Ex: 10"
+              value={form.avulsoBillingDay}
+              onChange={(e) =>
+                setForm((p: any) => ({ ...p, avulsoBillingDay: e.target.value }))
+              }
+              className="h-9 bg-white"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sprint 4 — Botão de fechamento mensal de avulsos ───────────────────────
+function CloseMonthBlock({
+  patientId, planId, onClosed,
+}: {
+  patientId: number;
+  planId: number;
+  onClosed: () => void;
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const [ref, setRef] = useState(() => new Date().toISOString().slice(0, 7));
+
+  async function doClose() {
+    setBusy(true);
+    try {
+      const res = await apiSendJson<any>(
+        `/api/patients/${patientId}/treatment-plans/${planId}/close-month?ref=${ref}`,
+        "POST", {},
+      );
+      if (res?.alreadyClosed) {
+        toast({ title: "Mês já fechado", description: `Fatura #${res.financialRecordId} já existe.` });
+      } else {
+        toast({
+          title: "Mês fechado!",
+          description: `Fatura consolidada criada: R$ ${Number(res?.amount ?? 0).toFixed(2)} — ${res?.sessionsCount ?? 0} sessão(ões).`,
+        });
+      }
+      onClosed();
+    } catch (err: any) {
+      toast({ title: "Erro ao fechar mês", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-blue-700" />
+        <h4 className="text-sm font-semibold text-slate-700">Fechar mês de avulsos</h4>
+      </div>
+      <p className="text-xs text-slate-600">
+        Consolida todas as sessões avulsas concluídas do mês em uma única fatura.
+        A operação é idempotente.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="month" value={ref}
+          onChange={(e) => setRef(e.target.value)}
+          className="h-9 w-44 bg-white"
+        />
+        <Button
+          size="sm"
+          className="h-9 gap-1.5 rounded-lg"
+          onClick={doClose}
+          disabled={busy || !ref}
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          Fechar mês
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sprint 3 — Extrato de créditos do paciente ─────────────────────────────
+function CreditsStatementBlock({ patientId }: { patientId: number }) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery<any>({
+    queryKey: [`/api/patients/${patientId}/session-credits/statement`],
+    queryFn: () =>
+      apiFetchJson<any>(`/api/patients/${patientId}/session-credits/statement`),
+    enabled: open && !!patientId,
+  });
+
+  const labelsByOrigin: Record<string, string> = {
+    mensal: "Pacote mensal",
+    avulso: "Avulso",
+    pacoteFechado: "Pacote fechado",
+    reposicaoFalta: "Reposição (falta)",
+    reposicaoRemarcacao: "Reposição (cancelamento)",
+    cortesia: "Cortesia",
+    ajuste: "Ajuste manual",
+  };
+  const labelsByStatus: Record<string, string> = {
+    disponivel: "Disponível",
+    pendentePagamento: "Pendente pagamento",
+    consumido: "Consumido",
+    expirado: "Expirado",
+    estornado: "Estornado",
+  };
+  const colorByStatus: Record<string, string> = {
+    disponivel: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    pendentePagamento: "bg-amber-100 text-amber-700 border-amber-200",
+    consumido: "bg-slate-100 text-slate-600 border-slate-200",
+    expirado: "bg-red-100 text-red-700 border-red-200",
+    estornado: "bg-purple-100 text-purple-700 border-purple-200",
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between p-4 text-left"
+      >
+        <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <Activity className="w-4 h-4 text-primary" />
+          Extrato de créditos do paciente
+        </span>
+        <span className="text-xs text-slate-400">{open ? "Recolher" : "Expandir"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100 p-4 space-y-3">
+          {isLoading && (
+            <div className="text-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary opacity-30" />
+            </div>
+          )}
+          {!isLoading && data && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                {(["disponivel", "pendentePagamento", "consumido", "expirado", "estornado"] as const).map((s) => (
+                  <div key={s} className={`rounded-lg border px-2 py-2 ${colorByStatus[s]}`}>
+                    <p className="text-[11px] font-medium">{labelsByStatus[s]}</p>
+                    <p className="text-base font-bold">
+                      {data.totalsByStatus?.[s]?.remaining ?? 0}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {Array.isArray(data.entries) && data.entries.length === 0 && (
+                <p className="text-center text-xs text-slate-400 py-4">
+                  Nenhum crédito registrado.
+                </p>
+              )}
+              {Array.isArray(data.entries) && data.entries.length > 0 && (
+                <div className="overflow-x-auto -mx-4">
+                  <table className="w-full text-xs">
+                    <thead className="text-slate-500 bg-slate-50">
+                      <tr className="text-left">
+                        <th className="px-3 py-2 font-medium">Procedimento</th>
+                        <th className="px-3 py-2 font-medium">Origem</th>
+                        <th className="px-3 py-2 font-medium">Mês ref.</th>
+                        <th className="px-3 py-2 font-medium">Validade</th>
+                        <th className="px-3 py-2 font-medium text-right">Restante</th>
+                        <th className="px-3 py-2 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {data.entries.slice(0, 50).map((e: any) => (
+                        <tr key={e.id} className="hover:bg-slate-50/60">
+                          <td className="px-3 py-2 text-slate-700">{e.procedureName ?? "—"}</td>
+                          <td className="px-3 py-2 text-slate-600">
+                            {labelsByOrigin[e.origin] ?? e.origin}
+                          </td>
+                          <td className="px-3 py-2 text-slate-500">{e.monthRef ?? "—"}</td>
+                          <td className="px-3 py-2 text-slate-500">
+                            {e.validUntil
+                              ? new Date(e.validUntil).toLocaleDateString("pt-BR")
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-700">
+                            {Math.max(0, (e.quantity ?? 0) - (e.usedQuantity ?? 0))}
+                            <span className="text-slate-400 font-normal"> / {e.quantity}</span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-block rounded px-1.5 py-0.5 border text-[10px] ${colorByStatus[e.status] ?? ""}`}>
+                              {labelsByStatus[e.status] ?? e.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {data.entries.length > 50 && (
+                    <p className="text-[11px] text-slate-400 text-center py-2">
+                      Exibindo 50 de {data.entries.length} créditos.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

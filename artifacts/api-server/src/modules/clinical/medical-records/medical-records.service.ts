@@ -314,6 +314,12 @@ export async function updatePatientTreatmentPlanById(
     "objectives",
     "techniques",
     "responsibleProfessional",
+    // Campos operacionais de política de crédito — não são comerciais
+    // (não alteram preço/itens), portanto liberados após aceite.
+    "monthlyCreditValidityDays",
+    "replacementCreditValidityDays",
+    "avulsoBillingMode",
+    "avulsoBillingDay",
   ]);
 
   const update: Record<string, unknown> = {};
@@ -324,6 +330,12 @@ export async function updatePatientTreatmentPlanById(
     "estimatedSessions",
     "status",
     "responsibleProfessional",
+    "durationMonths",
+    "paymentMode",
+    "monthlyCreditValidityDays",
+    "replacementCreditValidityDays",
+    "avulsoBillingMode",
+    "avulsoBillingDay",
   ] as const) {
     if (data[key] !== undefined) {
       if (isAccepted && !ALLOWED_AFTER_ACCEPT.has(key)) {
@@ -332,7 +344,14 @@ export async function updatePatientTreatmentPlanById(
             `Para alterar "${key}" use a renegociação (gera nova versão do plano).`,
         );
       }
-      update[key] = data[key] || null;
+      // Campos numéricos/string opcionais: undefined → ignora; null/"" → null;
+      // valor → mantém. avulsoBillingMode tem default not-null, então rejeita "".
+      const v = data[key];
+      if (key === "avulsoBillingMode") {
+        update[key] = v && typeof v === "string" ? v : "porSessao";
+      } else {
+        update[key] = v === "" ? null : v;
+      }
     }
   }
   if (data.startDate !== undefined) {

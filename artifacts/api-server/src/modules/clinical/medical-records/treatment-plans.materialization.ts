@@ -34,12 +34,36 @@ import {
   patientsTable,
   schedulesTable,
   accountingJournalEntriesTable,
+  sessionCreditsTable,
 } from "@workspace/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   postReceivableRevenue,
   resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
+
+// ─── Sprint 1/2 — Resolução de política de crédito do plano ─────────────────
+//
+// Hierarquia para `paymentMode` e `monthlyCreditValidityDays`:
+//   1. override no `treatment_plans` (campo do plano)
+//   2. valor do `packages` referenciado pelo item
+//   3. fallback do sistema ("postpago" / 30 dias)
+function resolvePaymentMode(
+  planOverride: string | null | undefined,
+  packageMode: string | null | undefined,
+): "prepago" | "postpago" {
+  const v = (planOverride || packageMode || "postpago") as string;
+  return v === "prepago" ? "prepago" : "postpago";
+}
+
+function resolveMonthlyValidityDays(
+  planOverride: number | null | undefined,
+  packageDays: number | null | undefined,
+): number {
+  if (typeof planOverride === "number") return Math.max(0, planOverride);
+  if (typeof packageDays === "number") return Math.max(0, packageDays);
+  return 30;
+}
 
 const WEEK_DAY_INDEX: Record<string, number> = {
   sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
@@ -75,6 +99,9 @@ interface PlanItem {
   packageType: string | null;
   packageBillingDay: number | null;
   packageProcedureId: number | null;
+  // Sprint 1/2 — política de crédito do pacote (defaults para o pool mensal)
+  packagePaymentMode: string | null;
+  packageMonthlyCreditValidityDays: number | null;
 }
 
 function parseWeekDays(raw: string | null): number[] {
@@ -152,6 +179,8 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
       packageType: packagesTable.packageType,
       packageBillingDay: packagesTable.billingDay,
       packageProcedureId: packagesTable.procedureId,
+      packagePaymentMode: packagesTable.paymentMode,
+      packageMonthlyCreditValidityDays: packagesTable.monthlyCreditValidityDays,
     })
     .from(treatmentPlanProceduresTable)
     .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
@@ -244,6 +273,13 @@ export async function materializeTreatmentPlan(
   let monthsCoveredCount = 0;
   let totalContracted = 0;
 
+  // Sprint 2 — política de crédito efetiva (plano sobrescreve pacote).
+  const effectivePaymentMode = resolvePaymentMode(
+    plan.paymentMode,
+    null, // resolvido por item abaixo (cada item pode ter pacote diferente)
+  );
+  const planMonthlyValidityOverride = plan.monthlyCreditValidityDays;
+
   await db.transaction(async (tx) => {
     for (const item of monthlyItems) {
       const procedureId = item.packageProcedureId ?? item.procedureId;
@@ -268,6 +304,13 @@ export async function materializeTreatmentPlan(
       const billingDay = item.packageBillingDay ?? 10;
       const weekDays = parseWeekDays(item.weekDays);
       const duration = item.sessionDurationMinutes ?? 60;
+
+      // Política específica deste item (override do plano > pacote > default).
+      const itemPaymentMode = resolvePaymentMode(plan.paymentMode, item.packagePaymentMode);
+      const itemMonthlyValidityDays = resolveMonthlyValidityDays(
+        planMonthlyValidityOverride,
+        item.packageMonthlyCreditValidityDays,
+      );
 
       // 1) Para cada mês de competência, gera 1 fatura + N appointments.
       for (let m = 0; m < durationMonths; m++) {
@@ -409,6 +452,54 @@ export async function materializeTreatmentPlan(
           await tx.insert(appointmentsTable).values(rows);
           appointmentsCreated += datesToInsert.length;
         }
+
+        // ── Sprint 2 — Pool mensal de créditos ────────────────────────────
+        // Cria 1 linha em session_credits para representar o saldo
+        // contratado deste mês×item. Quantity = nº de sessões previstas.
+        // Status:
+        //   • postpago → `disponivel` (pode consumir imediatamente)
+        //   • prepago  → `pendentePagamento` (libera ao pagar a fatura)
+        // Validade = último dia do mês + monthlyCreditValidityDays.
+        // Idempotência: 1 linha por (treatmentPlanProcedureId, monthRef).
+        // Em re-materialização (force=true) o cleanup de dematerialize já
+        // apagou os pools anteriores não consumidos.
+        const poolValidUntil = (() => {
+          const d = new Date(`${monthEnd}T00:00:00Z`);
+          d.setUTCDate(d.getUTCDate() + itemMonthlyValidityDays);
+          return d.toISOString().slice(0, 10);
+        })();
+        const poolStatus = itemPaymentMode === "prepago" ? "pendentePagamento" : "disponivel";
+        const existingPool = await tx
+          .select({ id: sessionCreditsTable.id })
+          .from(sessionCreditsTable)
+          .where(
+            and(
+              eq(sessionCreditsTable.patientId, plan.patientId),
+              eq(sessionCreditsTable.procedureId, procedureId),
+              eq(sessionCreditsTable.origin, "mensal"),
+              eq(sessionCreditsTable.monthRef, monthStart),
+              eq(sessionCreditsTable.financialRecordId, invoice.id),
+            ),
+          )
+          .limit(1);
+        if (existingPool.length === 0) {
+          await tx.insert(sessionCreditsTable).values({
+            patientId: plan.patientId,
+            procedureId,
+            quantity: dates.length,
+            usedQuantity: 0,
+            clinicId: plan.clinicId,
+            origin: "mensal",
+            status: poolStatus,
+            monthRef: monthStart,
+            validUntil: poolValidUntil,
+            financialRecordId: invoice.id,
+            notes:
+              `Pool mensal — plano #${planId} — ${monthStart.slice(0, 7)} — ` +
+              `${dates.length} sessão(ões) ${itemPaymentMode === "prepago" ? "(aguardando pagamento)" : "contratada(s)"}. ` +
+              `Validade até ${poolValidUntil}.`,
+          });
+        }
       }
     }
 
@@ -490,6 +581,48 @@ export async function dematerializeTreatmentPlan(
     // entries são apenas reconhecimento de receita futura — apagar não
     // afeta caixa.
     if (pendingIds.length > 0) {
+      // Sprint 2 — Limpa o pool mensal vinculado às faturas que serão
+      // apagadas. Apenas créditos que NUNCA foram consumidos (usedQuantity=0
+      // E sem appointment vinculado) podem ser removidos. Os demais são
+      // marcados como `estornado` para preservar histórico contábil.
+      const poolRows = await tx
+        .select({
+          id: sessionCreditsTable.id,
+          usedQuantity: sessionCreditsTable.usedQuantity,
+          consumedByAppointmentId: sessionCreditsTable.consumedByAppointmentId,
+        })
+        .from(sessionCreditsTable)
+        .where(
+          and(
+            eq(sessionCreditsTable.origin, "mensal"),
+            inArray(sessionCreditsTable.financialRecordId, pendingIds),
+          ),
+        );
+      const deletableIds: number[] = [];
+      const reversibleIds: number[] = [];
+      for (const r of poolRows) {
+        if (r.usedQuantity === 0 && r.consumedByAppointmentId == null) {
+          deletableIds.push(r.id);
+        } else {
+          reversibleIds.push(r.id);
+        }
+      }
+      if (deletableIds.length > 0) {
+        await tx
+          .delete(sessionCreditsTable)
+          .where(inArray(sessionCreditsTable.id, deletableIds));
+      }
+      if (reversibleIds.length > 0) {
+        await tx
+          .update(sessionCreditsTable)
+          .set({
+            status: "estornado",
+            financialRecordId: null,
+            notes: sql`COALESCE(${sessionCreditsTable.notes}, '') || E'\n[estornado: dematerialize do plano]'`,
+          })
+          .where(inArray(sessionCreditsTable.id, reversibleIds));
+      }
+
       await tx
         .delete(accountingJournalEntriesTable)
         .where(
@@ -523,4 +656,62 @@ export async function dematerializeTreatmentPlan(
   });
 
   return { appointmentsDeleted, invoicesDeleted, appointmentsUnlinked };
+}
+
+/**
+ * Sprint 2 — Trigger pós-pagamento de fatura mensal de plano.
+ *
+ * Quando uma `financial_records` com `transactionType='faturaPlano'` muda
+ * para `status='pago'`, promovemos o pool mensal correspondente:
+ *   • `pendentePagamento` → `disponivel`
+ *
+ * Idempotente: chamar várias vezes para o mesmo `financialRecordId` é
+ * inofensivo (apenas linhas com status `pendentePagamento` são afetadas).
+ *
+ * Retorna o nº de linhas promovidas.
+ */
+export async function promotePrepaidCreditsForFinancialRecord(
+  financialRecordId: number,
+): Promise<number> {
+  const result = await db
+    .update(sessionCreditsTable)
+    .set({
+      status: "disponivel",
+      notes: sql`COALESCE(${sessionCreditsTable.notes}, '') || E'\n[liberado: fatura paga]'`,
+    })
+    .where(
+      and(
+        eq(sessionCreditsTable.financialRecordId, financialRecordId),
+        eq(sessionCreditsTable.status, "pendentePagamento"),
+      ),
+    )
+    .returning({ id: sessionCreditsTable.id });
+  return result.length;
+}
+
+/**
+ * Sprint 2 — Reverso de pagamento.
+ *
+ * Quando uma fatura mensal `faturaPlano` é estornada/cancelada após paga,
+ * volta o pool de `disponivel` → `pendentePagamento` apenas para créditos
+ * que ainda não foram consumidos.
+ */
+export async function revertPrepaidCreditsForFinancialRecord(
+  financialRecordId: number,
+): Promise<number> {
+  const result = await db
+    .update(sessionCreditsTable)
+    .set({
+      status: "pendentePagamento",
+      notes: sql`COALESCE(${sessionCreditsTable.notes}, '') || E'\n[bloqueado: pagamento estornado]'`,
+    })
+    .where(
+      and(
+        eq(sessionCreditsTable.financialRecordId, financialRecordId),
+        eq(sessionCreditsTable.status, "disponivel"),
+        eq(sessionCreditsTable.usedQuantity, 0),
+      ),
+    )
+    .returning({ id: sessionCreditsTable.id });
+  return result.length;
 }

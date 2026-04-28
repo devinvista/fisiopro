@@ -226,6 +226,23 @@ router.delete(
   }),
 );
 
+// Sprint 4 — Fechamento mensal de itens avulsos do plano.
+// Body opcional `{ ref: 'YYYY-MM' }`; querystring `?ref=YYYY-MM`; padrão: mês atual.
+router.post(
+  "/treatment-plans/:planId/close-month",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const ref =
+      (req.query.ref as string | undefined) ??
+      ((req.body ?? {}) as { ref?: string }).ref ??
+      new Date().toISOString().slice(0, 7);
+    const { closeAvulsoMonth } = await import("./treatment-plans.close-month.js");
+    const result = await closeAvulsoMonth(planId, ref);
+    res.status(result.alreadyClosed ? 200 : 201).json(result);
+  }),
+);
+
 // ─── Treatment Plan (compat, single ativo) ────────────────────────────────────
 
 router.get("/treatment-plan", requirePermission("medical.read"), asyncHandler(async (req: Request<P>, res: Response) => {

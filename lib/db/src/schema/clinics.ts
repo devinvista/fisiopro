@@ -24,6 +24,15 @@ export const clinicsTable = pgTable("clinics", {
   noShowFeeAmount: text("no_show_fee_amount"),
   // Prazo padrão de vencimento de recebíveis gerados por sessão (dias após o atendimento)
   defaultDueDays: integer("default_due_days").notNull().default(3),
+  // ── Sprint 5 — Política de cancelamento ──────────────────────────────────
+  // Janela mínima de antecedência (em horas) para cancelar/remarcar sem
+  // ônus. Cancelamentos dentro da janela seguem `lateCancellationPolicy`.
+  cancellationWindowHours: integer("cancellation_window_hours").notNull().default(24),
+  // Política aplicada quando o cancelamento ocorre dentro da janela:
+  //   - "creditoNormal": gera crédito de reposição como hoje (default).
+  //   - "semCredito"   : não gera crédito (paciente perde a sessão).
+  //   - "taxa"         : cobra taxa de no-show configurada na clínica.
+  lateCancellationPolicy: text("late_cancellation_policy").notNull().default("creditoNormal"),
 });
 
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ id: true, createdAt: true });

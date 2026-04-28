@@ -2,7 +2,7 @@ import { db } from "@workspace/db";
 import {
   appointmentsTable, financialRecordsTable, sessionCreditsTable,
   patientSubscriptionsTable, patientWalletTable, patientWalletTransactionsTable,
-  patientPackagesTable, treatmentPlansTable, packagesTable,
+  patientPackagesTable, treatmentPlansTable, packagesTable, clinicsTable,
 } from "@workspace/db";
 import { eq, and, gt, sql, asc, desc } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
@@ -58,6 +58,69 @@ function addDaysISO(dateISO: string, days: number): string {
   const d = new Date(`${dateISO}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+// ─── Sprint 5 — Política de cancelamento (janela) ────────────────────────────
+//
+// Resolve a política aplicável a um cancelamento:
+//   • janela = `clinics.cancellation_window_hours` (default 24)
+//   • política = `clinics.late_cancellation_policy` (default "creditoNormal")
+//
+// Se não há clínica resolvida ou o appointment está SEM hora de início,
+// a política é "creditoNormal" (comportamento legado).
+//
+// `late = true` quando faltam menos de `windowHours` horas para o
+// horário do appointment (em BRT). Para cancelamentos com `appointmentDate`
+// no passado, `late = true` (o paciente já passou da janela).
+type LateCancellationPolicy = "creditoNormal" | "semCredito" | "taxa";
+
+interface CancellationDecision {
+  isLate: boolean;
+  policy: LateCancellationPolicy;
+  windowHours: number;
+}
+
+async function resolveCancellationDecision(
+  clinicId: number | null,
+  newStatus: string,
+  oldStatus: string,
+  appointmentDate: string,
+  appointmentStartTime: string | null,
+): Promise<CancellationDecision> {
+  // Política só importa para cancelamentos saindo de estado ativo.
+  // No-show ("faltou") é por definição além da janela e não é coberto aqui.
+  const isCancel = newStatus === "cancelado" && (oldStatus === "agendado" || oldStatus === "confirmado");
+  let windowHours = 24;
+  let policy: LateCancellationPolicy = "creditoNormal";
+  if (clinicId) {
+    const [clinic] = await db
+      .select({
+        windowHours: clinicsTable.cancellationWindowHours,
+        policy: clinicsTable.lateCancellationPolicy,
+      })
+      .from(clinicsTable)
+      .where(eq(clinicsTable.id, clinicId))
+      .limit(1);
+    if (clinic) {
+      if (typeof clinic.windowHours === "number") windowHours = clinic.windowHours;
+      const p = clinic.policy as LateCancellationPolicy | null;
+      if (p === "semCredito" || p === "taxa" || p === "creditoNormal") policy = p;
+    }
+  }
+  if (!isCancel) return { isLate: false, policy, windowHours };
+
+  // Calcula horas restantes (apptStart - now) em BRT (Sao_Paulo).
+  // Comparação SQL pois o servidor pode estar em outro fuso.
+  const startTime = appointmentStartTime ?? "00:00";
+  const [{ hoursUntil }] = await db.execute<{ hoursUntil: number | null }>(
+    sql`SELECT EXTRACT(EPOCH FROM (
+          (${appointmentDate}::date + ${startTime}::time)
+          - (NOW() AT TIME ZONE 'America/Sao_Paulo')
+        )) / 3600.0 AS "hoursUntil"`,
+  ) as unknown as [{ hoursUntil: number | null }];
+  const hours = typeof hoursUntil === "number" ? hoursUntil : 0;
+  const isLate = hours < windowHours;
+  return { isLate, policy, windowHours };
 }
 
 // ─── Billing rules ────────────────────────────────────────────────────────────
@@ -141,7 +204,76 @@ export async function applyBillingRules(
       return;
     }
 
-    // Outros status (cancelado, agendado→agendado etc.) — no-op.
+    // ── Sprint 5 — Cancelamento em plano materializado ───────────────────
+    // Cancelamentos respeitam a janela `cancellationWindowHours` da clínica.
+    // Quando dentro da janela e a política for `semCredito`/`taxa`, NÃO gera
+    // o crédito de reposição padrão (e taxa fica para o roadmap futuro).
+    if (newStatus === "cancelado" && (oldStatus === "agendado" || oldStatus === "confirmado")) {
+      const startTime = (details as any).startTime ?? null;
+      const decision = await resolveCancellationDecision(
+        resolvedClinicId,
+        newStatus,
+        oldStatus,
+        appointmentDate,
+        startTime,
+      );
+
+      if (procedureId) {
+        const { sessionCreditsTable: scTable } = await import("@workspace/db");
+        const existing = await db
+          .select({ id: scTable.id })
+          .from(scTable)
+          .where(eq(scTable.sourceAppointmentId, appointmentId))
+          .limit(1);
+        if (existing.length === 0) {
+          const planId = (details as any).treatmentPlanId ?? null;
+          const validityDays = await resolveReplacementValidityDays(planId, null);
+          const validUntil = addDaysISO(appointmentDate, validityDays);
+
+          if (!decision.isLate || decision.policy === "creditoNormal") {
+            await db.insert(scTable).values({
+              patientId,
+              procedureId,
+              quantity: 1,
+              usedQuantity: 0,
+              sourceAppointmentId: appointmentId,
+              clinicId: resolvedClinicId,
+              origin: "reposicaoRemarcacao",
+              status: "disponivel",
+              validUntil,
+              notes:
+                `Cancelamento em ${appointmentDate}` +
+                (decision.isLate
+                  ? ` (dentro da janela de ${decision.windowHours}h, política=creditoNormal)`
+                  : ` (fora da janela de ${decision.windowHours}h)`) +
+                `. Crédito de reposição válido até ${validUntil}.`,
+            });
+          } else {
+            // Política `semCredito` ou `taxa`: deixa marca contábil "0,00"
+            // como auditoria do bloqueio. Implementação de cobrança de taxa
+            // fica para módulo de no-show fee.
+            await db.insert(financialRecordsTable).values({
+              type: "receita",
+              amount: "0",
+              description:
+                `Crédito não gerado — cancelamento dentro da janela de ${decision.windowHours}h ` +
+                `(política=${decision.policy}) — ${procedure.name} - ${patientName}`,
+              category: procedure.category,
+              appointmentId,
+              patientId,
+              procedureId,
+              transactionType: "creditoSessao",
+              status: "cancelado",
+              dueDate: today,
+              clinicId: resolvedClinicId,
+            });
+          }
+        }
+      }
+      return;
+    }
+
+    // Outros status (agendado→agendado etc.) — no-op.
     return;
   }
 
@@ -664,6 +796,35 @@ export async function applyBillingRules(
 
   // ── BILLING: absence/cancellation on monthly plan → generate limited session credit ─────────
   if (absenceCreditStatuses.includes(newStatus) && !absenceCreditStatuses.includes(oldStatus) && !confirmedStatuses.includes(oldStatus)) {
+    // Sprint 5 — janela de cancelamento (apenas para "cancelado").
+    const lateDecision =
+      newStatus === "cancelado"
+        ? await resolveCancellationDecision(
+            resolvedClinicId,
+            newStatus,
+            oldStatus,
+            appointmentDate,
+            (details as any).startTime ?? null,
+          )
+        : null;
+    if (lateDecision && lateDecision.isLate && lateDecision.policy !== "creditoNormal") {
+      await db.insert(financialRecordsTable).values({
+        type: "receita",
+        amount: "0",
+        description:
+          `Crédito não gerado — cancelamento dentro da janela de ${lateDecision.windowHours}h ` +
+          `(política=${lateDecision.policy}) — ${procedure.name} - ${patientName}`,
+        category: procedure.category,
+        appointmentId,
+        patientId,
+        procedureId,
+        transactionType: "creditoSessao",
+        status: "cancelado",
+        dueDate: today,
+        clinicId: resolvedClinicId,
+      });
+      return;
+    }
     if (billingType === "mensal") {
       await db.transaction(async (tx) => {
         const { patientPackageId, absenceCreditLimit } = await resolveMonthlyPackageCreditPolicy(tx, patientId, procedureId, resolvedClinicId);

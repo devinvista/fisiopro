@@ -50,6 +50,10 @@ export const sessionCreditsTable = pgTable("session_credits", {
   status: text("status").notNull().default("disponivel"),
   consumedByAppointmentId: integer("consumed_by_appointment_id"),
   expiredAt: timestamp("expired_at"),
+  // Sprint 2 — vínculo com fatura mensal materializada que paga este crédito.
+  // Quando a fatura é paga (modo prepago), o trigger promove esta linha de
+  // `pendentePagamento` → `disponivel`. Em modo postpago não é usado.
+  financialRecordId: integer("financial_record_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_session_credits_patient_id").on(table.patientId),

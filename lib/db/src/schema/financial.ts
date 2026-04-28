@@ -39,6 +39,11 @@ export const financialRecordsTable = pgTable("financial_records", {
   // Mês de competência da fatura (sempre dia 01). Usado para localizar
   // rapidamente a fatura ao agendar/reagendar appointments.
   planMonthRef: date("plan_month_ref"),
+  // ── Sprint 4 — Vínculo com fatura consolidada ─────────────────────────────
+  // Quando este lançamento é um item detalhado consolidado em uma
+  // `faturaMensalAvulso`, aponta para o `id` da fatura agrupadora.
+  // A fatura agrupadora tem `parentRecordId = null`.
+  parentRecordId: integer("parent_record_id"),
   // ── Auditoria de estornos (Sprint 3 T9) ───────────────────────────────────
   // Valor original do lançamento antes do estorno (preserva valor mesmo se
   // o `amount` for editado depois). Preenchido quando `status` muda para

@@ -203,6 +203,14 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
             .update(financialRecordsTable)
             .set({ status: "pago", paymentDate: today, paymentMethod: paymentMethod || null, settlementEntryId: paymentEntry.id })
             .where(eq(financialRecordsTable.id, pending.id));
+          // Sprint 2 — Trigger pós-pagamento de plano: promove pool mensal
+          // `pendentePagamento` → `disponivel` quando a fatura faturaPlano
+          // (modo prepago) é integralmente paga.
+          if (pending.transactionType === "faturaPlano") {
+            const { promotePrepaidCreditsForFinancialRecord } =
+              await import("../../clinical/medical-records/treatment-plans.materialization.js");
+            await promotePrepaidCreditsForFinancialRecord(pending.id);
+          }
         }
 
         remaining = Math.round((remaining - allocationAmount) * 100) / 100;

@@ -95,7 +95,15 @@ export const createTreatmentPlanSchema = z.object({
   estimatedSessions: z.number().int().positive().optional().nullable(),
   status: treatmentPlanStatusEnum.default("ativo"),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate deve estar no formato YYYY-MM-DD").optional().nullable(),
+  durationMonths: z.number().int().min(1).max(60).optional().nullable(),
   responsibleProfessional: z.string().max(200).optional().nullable(),
+  // ── Sprint 1 — Política de crédito (override do pacote) ─────────────────
+  paymentMode: z.enum(["prepago", "postpago"]).optional().nullable(),
+  monthlyCreditValidityDays: z.number().int().min(0).max(365).optional().nullable(),
+  replacementCreditValidityDays: z.number().int().min(1).max(365).optional().nullable(),
+  // ── Sprint 4 — Modo de cobrança de itens avulsos ────────────────────────
+  avulsoBillingMode: z.enum(["porSessao", "mensalConsolidado"]).optional(),
+  avulsoBillingDay: z.number().int().min(1).max(28).optional().nullable(),
 });
 
 export const updateTreatmentPlanSchema = createTreatmentPlanSchema.partial();

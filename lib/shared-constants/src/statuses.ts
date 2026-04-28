@@ -132,3 +132,76 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const FINANCIAL_RECORD_TYPES = ["receita", "despesa"] as const;
 export type FinancialRecordType = (typeof FINANCIAL_RECORD_TYPES)[number];
+
+// ─── Sprint 1 — Créditos de sessão (session_credits) ─────────────────────────
+
+export const SESSION_CREDIT_STATUSES = [
+  "disponivel",        // saldo > 0 e dentro da validade
+  "pendentePagamento", // crédito de plano prepago aguardando fatura paga
+  "consumido",         // totalmente consumido por um appointment
+  "expirado",          // validUntil passou antes do consumo
+  "estornado",         // crédito anulado (erro de lançamento, cancelamento)
+] as const;
+export type SessionCreditStatus = (typeof SESSION_CREDIT_STATUSES)[number];
+
+export const SESSION_CREDIT_STATUS_LABELS: Record<SessionCreditStatus, string> = {
+  disponivel:        "Disponível",
+  pendentePagamento: "Pendente pagamento",
+  consumido:         "Consumido",
+  expirado:          "Expirado",
+  estornado:         "Estornado",
+};
+
+export const SESSION_CREDIT_ORIGINS = [
+  "mensal",              // pool gerado pela materialização
+  "reposicaoFalta",      // reposição automática por falta em sessão paga
+  "reposicaoRemarcacao", // reposição por remarcação dentro da política
+  "compraPacote",        // sessões compradas em pacote `sessoes`
+  "cortesia",            // crédito manual concedido pela clínica
+  "legacy",              // créditos pré-existentes ao schema atual
+] as const;
+export type SessionCreditOrigin = (typeof SESSION_CREDIT_ORIGINS)[number];
+
+export const SESSION_CREDIT_ORIGIN_LABELS: Record<SessionCreditOrigin, string> = {
+  mensal:              "Pool mensal",
+  reposicaoFalta:      "Reposição (falta)",
+  reposicaoRemarcacao: "Reposição (remarcação)",
+  compraPacote:        "Compra de pacote",
+  cortesia:            "Cortesia",
+  legacy:              "Legado",
+};
+
+// ─── Sprint 1/2 — Modos de pagamento de plano mensal ─────────────────────────
+
+export const PAYMENT_MODES = ["postpago", "prepago"] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
+
+export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
+  postpago: "Pós-pago (créditos imediatos)",
+  prepago:  "Antecipado (libera ao pagar)",
+};
+
+// ─── Sprint 4 — Modo de cobrança de itens avulsos ────────────────────────────
+
+export const AVULSO_BILLING_MODES = ["porSessao", "mensalConsolidado"] as const;
+export type AvulsoBillingMode = (typeof AVULSO_BILLING_MODES)[number];
+
+export const AVULSO_BILLING_MODE_LABELS: Record<AvulsoBillingMode, string> = {
+  porSessao:         "Cobra por sessão",
+  mensalConsolidado: "Fatura mensal consolidada",
+};
+
+// ─── Sprint 5 — Política de cancelamento dentro da janela ────────────────────
+
+export const LATE_CANCELLATION_POLICIES = [
+  "creditoNormal", // gera crédito como hoje
+  "semCredito",    // não gera crédito (paciente perde a sessão)
+  "taxa",          // cobra taxa de no-show configurada
+] as const;
+export type LateCancellationPolicy = (typeof LATE_CANCELLATION_POLICIES)[number];
+
+export const LATE_CANCELLATION_POLICY_LABELS: Record<LateCancellationPolicy, string> = {
+  creditoNormal: "Gera crédito normal",
+  semCredito:    "Sem crédito (perde a sessão)",
+  taxa:          "Cobra taxa de no-show",
+};

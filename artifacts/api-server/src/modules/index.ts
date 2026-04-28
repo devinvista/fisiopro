@@ -15,6 +15,7 @@ import medicalRecordsRouter from "./clinical/medical-records/medical-records.rou
 import blockedSlotsRouter from "./clinical/blocked-slots/blocked-slots.routes.js";
 import patientJourneyRouter from "./clinical/patient-journey/patient-journey.routes.js";
 import patientPhotosRouter from "./clinical/patient-photos/patient-photos.routes.js";
+import sessionCreditsRouter from "./clinical/session-credits/session-credits.routes.js";
 
 // Catalog domain (procedures, packages)
 import proceduresRouter from "./catalog/procedures/procedures.routes.js";
@@ -75,6 +76,7 @@ router.use("/patients/:patientId", patientJourneyRouter);
 router.use("/patients/:patientId/photos", patientPhotosRouter);
 router.use("/patients/:patientId/packages", patientPackagesRouter);
 router.use("/patients/:patientId", patientWalletRouter);
+router.use("/", sessionCreditsRouter); // GET /patients/:patientId/session-credits/statement
 router.use("/", walletListRouter);
 router.use("/appointments", appointmentsRouter);
 router.use("/schedules", schedulesRouter);

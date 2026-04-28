@@ -140,6 +140,15 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // null, herda do pacote. Mensal = dias após o fim do mês de competência.
   monthlyCreditValidityDays: integer("monthly_credit_validity_days"),
   replacementCreditValidityDays: integer("replacement_credit_validity_days"),
+  // ── Sprint 4 — Fechamento mensal de itens avulsos ───────────────────────
+  // Modo de cobrança dos itens NÃO mensais (porSessao | mensalConsolidado).
+  // Quando `mensalConsolidado`, sessões avulsas geram lançamentos
+  // `creditoAReceber` que serão consolidados em `faturaMensalAvulso` no
+  // fechamento do mês (manual via endpoint ou automático via job).
+  avulsoBillingMode: text("avulso_billing_mode").notNull().default("porSessao"),
+  // Dia de vencimento da fatura consolidada de avulsos (1..28). Null = usa
+  // o dia configurado no pacote ou padrão da clínica.
+  avulsoBillingDay: integer("avulso_billing_day"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
