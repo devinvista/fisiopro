@@ -9,6 +9,7 @@ export type PatientBasic = {
   cpf?: string | null;
   birthDate?: string | null;
   phone?: string | null;
+  email?: string | null;
 };
 
 export interface ClinicInfo {

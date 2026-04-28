@@ -492,6 +492,10 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                   patientId={patientId}
                   planId={selectedPlanId!}
                   plan={selectedPlan}
+                  patientName={patient?.name ?? ""}
+                  patientPhone={patient?.phone ?? null}
+                  patientEmail={(patient as any)?.email ?? null}
+                  clinicName={clinic?.name ?? null}
                   onChanged={() => {
                     queryClient.invalidateQueries({ queryKey: plansKey });
                     queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/financial-records`] });
@@ -1032,13 +1036,79 @@ function CreditsStatementBlock({ patientId }: { patientId: number }) {
 //   2) Gerar link público (válido 7 dias) p/ o paciente abrir e aceitar remoto.
 //
 // Após aceite: trilha imutável (data, nome, IP, dispositivo, via).
+
+/**
+ * Monta a URL `https://wa.me/<telefone>?text=...` a partir de um telefone
+ * livre (com máscara, parênteses, traços etc.). Removemos tudo que não é
+ * dígito; se o telefone tiver 10 ou 11 dígitos (formato BR sem DDI),
+ * prefixamos com 55. Telefones que já vêm com DDI são preservados.
+ */
+function buildWhatsAppUrl(rawPhone: string, message: string): string {
+  const digits = rawPhone.replace(/\D/g, "");
+  const withCountry = digits.length === 10 || digits.length === 11
+    ? `55${digits}`
+    : digits;
+  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
+}
+
+/**
+ * Monta um `mailto:` clássico — o cliente de e-mail do dispositivo abre com
+ * destinatário, assunto e corpo já preenchidos.
+ */
+function buildMailtoUrl(
+  to: string,
+  opts: { subject: string; body: string },
+): string {
+  const params = new URLSearchParams();
+  params.set("subject", opts.subject);
+  params.set("body", opts.body);
+  // URLSearchParams troca espaço por '+', mas mailto espera %20.
+  const qs = params.toString().replace(/\+/g, "%20");
+  return `mailto:${to}?${qs}`;
+}
+
+/**
+ * Texto-padrão amistoso que vai dentro da mensagem do WhatsApp e no corpo do
+ * e-mail. Mantemos curto e escaneável; o link aparece em linha própria para
+ * que os apps detectem como hyperlink.
+ */
+function buildShareMessage(opts: {
+  patientName: string;
+  clinicName: string | null;
+  url: string;
+  expiresAt: string;
+}): string {
+  const firstName = (opts.patientName || "").trim().split(/\s+/)[0] || "";
+  const greet = firstName ? `Olá, ${firstName}!` : "Olá!";
+  const clinicLine = opts.clinicName
+    ? `Aqui é da ${opts.clinicName}.`
+    : "Aqui é da clínica.";
+  const expires = new Date(opts.expiresAt).toLocaleDateString("pt-BR");
+  return [
+    greet,
+    "",
+    `${clinicLine} Preparamos seu contrato do plano de tratamento.`,
+    "Para revisar e assinar digitalmente, acesse o link abaixo:",
+    "",
+    opts.url,
+    "",
+    `O link é pessoal e fica disponível até ${expires}.`,
+    "Qualquer dúvida, é só responder esta mensagem.",
+  ].join("\n");
+}
+
 function AcceptanceBlock({
   patientId, planId, plan, onChanged,
+  patientName, patientPhone, patientEmail, clinicName,
 }: {
   patientId: number;
   planId: number;
   plan: any;
   onChanged: () => void;
+  patientName: string;
+  patientPhone: string | null;
+  patientEmail: string | null;
+  clinicName: string | null;
 }) {
   const { toast } = useToast();
   const [openPresencial, setOpenPresencial] = useState(false);
@@ -1233,21 +1303,69 @@ function AcceptanceBlock({
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs font-mono break-all">
               {linkInfo?.url ?? ""}
             </div>
-            <Button
-              variant="outline"
-              className="w-full gap-1.5"
-              onClick={async () => {
-                if (!linkInfo) return;
-                try {
-                  await navigator.clipboard.writeText(linkInfo.url);
-                  toast({ title: "Link copiado!" });
-                } catch {
-                  toast({ title: "Não foi possível copiar", variant: "destructive" });
-                }
-              }}
-            >
-              <Paperclip className="w-4 h-4" /> Copiar link
-            </Button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={async () => {
+                  if (!linkInfo) return;
+                  try {
+                    await navigator.clipboard.writeText(linkInfo.url);
+                    toast({ title: "Link copiado!" });
+                  } catch {
+                    toast({ title: "Não foi possível copiar", variant: "destructive" });
+                  }
+                }}
+              >
+                <Paperclip className="w-4 h-4" /> Copiar
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                disabled={!patientPhone}
+                title={!patientPhone ? "Paciente sem telefone cadastrado" : "Abrir WhatsApp"}
+                onClick={() => {
+                  if (!linkInfo || !patientPhone) return;
+                  const wa = buildWhatsAppUrl(patientPhone, buildShareMessage({
+                    patientName, clinicName, url: linkInfo.url, expiresAt: linkInfo.expiresAt,
+                  }));
+                  window.open(wa, "_blank", "noopener,noreferrer");
+                }}
+              >
+                <Phone className="w-4 h-4" /> WhatsApp
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={!patientEmail}
+                title={!patientEmail ? "Paciente sem e-mail cadastrado" : "Abrir e-mail"}
+                onClick={() => {
+                  if (!linkInfo) return;
+                  const mailto = buildMailtoUrl(patientEmail ?? "", {
+                    subject: `Contrato de plano de tratamento — ${clinicName ?? "Clínica"}`,
+                    body: buildShareMessage({
+                      patientName, clinicName, url: linkInfo.url, expiresAt: linkInfo.expiresAt,
+                    }),
+                  });
+                  window.location.href = mailto;
+                }}
+              >
+                <Mail className="w-4 h-4" /> E-mail
+              </Button>
+            </div>
+
+            {(!patientPhone || !patientEmail) && (
+              <p className="text-[11px] text-slate-500">
+                {!patientPhone && "Cadastre um telefone no paciente para enviar via WhatsApp. "}
+                {!patientEmail && "Cadastre um e-mail no paciente para enviar por e-mail."}
+              </p>
+            )}
           </div>
         </DialogContent>
       </Dialog>
