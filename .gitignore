@@ -69,3 +69,6 @@ tests/mobile/.results/
 tests/mobile/test-results/
 tests/mobile/playwright-report/
 
+
+# Snapshots locais do banco
+.snapshots/

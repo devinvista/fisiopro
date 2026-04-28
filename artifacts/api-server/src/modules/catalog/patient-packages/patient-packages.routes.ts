@@ -137,6 +137,26 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
       resolvedExpiryDate = start.toISOString().slice(0, 10);
     }
 
+    // ─── Sprint 1 — Unificação ─────────────────────────────────────────────
+    // Quando o pacote é recorrente (mensal/faturaConsolidada), popula os
+    // novos campos de recorrência no próprio `patient_packages`. A criação
+    // automática de `patient_subscriptions` mais abaixo continua por
+    // retrocompatibilidade durante a sprint (será removida no cutover).
+    const isRecurring = pkg && (pkg.packageType === "mensal" || pkg.packageType === "faturaConsolidada");
+    let resolvedBillingDay: number | null = null;
+    let resolvedMonthlyAmount: string | null = null;
+    let resolvedNextBillingDate: string | null = null;
+    let resolvedRecurrenceType: string | null = null;
+    if (isRecurring && pkg) {
+      const monthlyAmount = unitMonthlyPrice ?? pkg.monthlyPrice ?? price;
+      const rawDay = billingDay ?? pkg.billingDay ?? new Date(startDate + "T12:00:00Z").getUTCDate();
+      const day = Math.max(1, Math.min(31, parseInt(String(rawDay))));
+      resolvedBillingDay = day;
+      resolvedMonthlyAmount = String(monthlyAmount);
+      resolvedRecurrenceType = pkg.packageType === "faturaConsolidada" ? "faturaConsolidada" : "mensal";
+      resolvedNextBillingDate = calcNextBillingDate(startDate, day);
+    }
+
     const [pp] = await db
       .insert(patientPackagesTable)
       .values({
@@ -153,6 +173,11 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
         paymentStatus: paymentStatus ?? "pendente",
         notes: notes || null,
         clinicId: req.clinicId ?? null,
+        billingDay: resolvedBillingDay,
+        monthlyAmount: resolvedMonthlyAmount,
+        nextBillingDate: resolvedNextBillingDate,
+        recurrenceStatus: isRecurring ? "ativa" : null,
+        recurrenceType: resolvedRecurrenceType,
       })
       .returning();
 
@@ -203,33 +228,33 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
         .where(eq(financialRecordsTable.id, financialRecord.id));
     }
 
-    // Auto-create subscription for mensal and faturaConsolidada packages
+    // ─── Compat: criação automática de patient_subscriptions ──────────────
+    // Mantida temporariamente durante o Sprint 1 para que jobs antigos
+    // (`runBilling`/`runConsolidatedBilling`) continuem operando. Ligada
+    // por padrão; será removida no cutover do Sprint 1.
+    // Para já desligar localmente: env `LEGACY_AUTO_SUBSCRIPTION=0`.
     let subscription: typeof patientSubscriptionsTable.$inferSelect | null = null;
+    const legacyAutoSub = process.env.LEGACY_AUTO_SUBSCRIPTION !== "0";
 
-    if (pkg && (pkg.packageType === "mensal" || pkg.packageType === "faturaConsolidada")) {
-      const monthlyAmount = unitMonthlyPrice ?? pkg.monthlyPrice ?? price;
-      const rawDay = billingDay ?? pkg.billingDay ?? new Date(startDate + "T12:00:00Z").getUTCDate();
-      const day = Math.max(1, Math.min(31, parseInt(String(rawDay))));
-      const subscriptionType = pkg.packageType === "faturaConsolidada" ? "faturaConsolidada" : "mensal";
-
+    if (legacyAutoSub && isRecurring && pkg) {
       const [sub] = await db
         .insert(patientSubscriptionsTable)
         .values({
           patientId: resolvedPatientId,
           procedureId: Number(procedureId),
           startDate,
-          billingDay: day,
-          monthlyAmount: String(monthlyAmount),
+          billingDay: resolvedBillingDay!,
+          monthlyAmount: resolvedMonthlyAmount!,
           status: "ativa",
-          subscriptionType,
+          subscriptionType: resolvedRecurrenceType!,
           clinicId: req.clinicId ?? null,
-          notes: `Gerada automaticamente a partir do pacote: ${name}`,
-          nextBillingDate: calcNextBillingDate(startDate, day),
+          notes: `[LEGADO] Gerada a partir do pacote: ${name} (será removido no cutover Sprint 1)`,
+          nextBillingDate: resolvedNextBillingDate,
         })
         .returning();
 
       subscription = sub;
-      console.log(`[patient-packages] Assinatura #${sub.id} (${subscriptionType}) criada automaticamente para pacote "${name}" (paciente ${resolvedPatientId})`);
+      console.log(`[patient-packages] (legado) Assinatura #${sub.id} criada — patient_package #${pp.id} já tem campos de recorrência preenchidos.`);
     }
 
     res.status(201).json({ ...pp, subscription, subscriptionCreated: !!subscription });

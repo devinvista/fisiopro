@@ -40,7 +40,19 @@ import {
   dematerializeTreatmentPlan,
 } from "../modules/clinical/medical-records/treatment-plans.materialization.js";
 
-const DRY_RUN = process.argv.includes("--dry-run");
+// SAFETY: por padrão é DRY-RUN. Para aplicar é obrigatório passar `--apply`.
+// O flag legado `--dry-run` continua funcionando como no-op (default já é dry).
+const APPLY = process.argv.includes("--apply");
+if (APPLY && process.argv.includes("--dry-run")) {
+  console.error("ERRO: --apply e --dry-run são mutuamente exclusivos.");
+  process.exit(2);
+}
+const DRY_RUN = !APPLY;
+if (DRY_RUN) {
+  console.log("[backfill-tp-v2] >>> DRY-RUN (default). Use --apply para gravar mudanças. <<<");
+} else {
+  console.log("[backfill-tp-v2] >>> APLICANDO MUDANÇAS no banco de dados! <<<");
+}
 const DEFAULT_DURATION_MONTHS = 12;
 const ONLY_PLAN_IDS = (() => {
   const idx = process.argv.indexOf("--only");

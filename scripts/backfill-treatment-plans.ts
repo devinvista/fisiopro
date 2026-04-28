@@ -52,12 +52,24 @@ interface Args {
 }
 
 function parseArgs(): Args {
-  const out: Args = { dryRun: false, planId: null, patientId: null, defaultDuration: 12 };
-  for (const a of process.argv.slice(2)) {
-    if (a === "--dry-run") out.dryRun = true;
-    else if (a.startsWith("--plan=")) out.planId = Number(a.split("=")[1]);
+  // SAFETY: por padrão é DRY-RUN. Para aplicar é obrigatório passar `--apply`.
+  // Suporta `--dry-run` legado (no-op, já é o default).
+  const args = process.argv.slice(2);
+  const apply = args.includes("--apply");
+  if (args.includes("--dry-run") && apply) {
+    console.error("ERRO: --apply e --dry-run são mutuamente exclusivos.");
+    process.exit(2);
+  }
+  const out: Args = { dryRun: !apply, planId: null, patientId: null, defaultDuration: 12 };
+  for (const a of args) {
+    if (a.startsWith("--plan=")) out.planId = Number(a.split("=")[1]);
     else if (a.startsWith("--patient=")) out.patientId = Number(a.split("=")[1]);
     else if (a.startsWith("--duration=")) out.defaultDuration = Number(a.split("=")[1]);
+  }
+  if (out.dryRun) {
+    console.log("[backfill] >>> DRY-RUN (default). Use --apply para gravar mudanças. <<<");
+  } else {
+    console.log("[backfill] >>> APLICANDO MUDANÇAS no banco de dados! <<<");
   }
   return out;
 }
