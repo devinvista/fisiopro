@@ -99,9 +99,13 @@ router.post("/coupon-codes/validate", async (req, res) => {
 });
 
 // ─── Superadmin CRUD ─────────────────────────────────────────────────────────
+// IMPORTANTE: aplicamos os middlewares com path "/coupon-codes" para que outros
+// roteadores SaaS montados em "/" depois deste (ex.: saasPlanRouter) não sejam
+// interceptados pelo guard de superadmin quando a request não bate em nenhuma
+// rota daqui (Express continua a cadeia, mas `requireSuperAdmin` já enviou 403).
 
-router.use(authMiddleware as any);
-router.use(requireSuperAdmin() as any);
+router.use("/coupon-codes", authMiddleware as any);
+router.use("/coupon-codes", requireSuperAdmin() as any);
 
 router.get("/coupon-codes", async (_req, res) => {
   try {

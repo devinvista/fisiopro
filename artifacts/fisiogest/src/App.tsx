@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmRoot } from "@/lib/confirm";
 import { AuthProvider } from "@/contexts/auth-context";
+import { PlanLimitProvider } from "@/contexts/plan-limit-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { FeatureRoute } from "@/components/guards/feature-route";
 import { ProtectedRoute } from "@/components/guards/protected-route";
@@ -141,13 +142,15 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AuthProvider>
-            <TooltipProvider>
-              <ErrorBoundary>
-                <Router />
-              </ErrorBoundary>
-              <Toaster />
-              <ConfirmRoot />
-            </TooltipProvider>
+            <PlanLimitProvider>
+              <TooltipProvider>
+                <ErrorBoundary>
+                  <Router />
+                </ErrorBoundary>
+                <Toaster />
+                <ConfirmRoot />
+              </TooltipProvider>
+            </PlanLimitProvider>
           </AuthProvider>
         </WouterRouter>
       </QueryClientProvider>

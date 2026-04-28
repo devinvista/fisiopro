@@ -39,6 +39,8 @@ import { ROLE_LABELS } from "@/utils/permissions";
 import type { Permission, Role } from "@/utils/permissions";
 import type { Feature } from "@/utils/plan-features";
 import { PlanBadge } from "@/components/guards/plan-badge";
+import { UsageBadge } from "@/components/layout/usage-badge";
+import { usePlanUsage } from "@/hooks/use-plan-usage";
 import { differenceInDays, parseISO } from "date-fns";
 
 const BASE = import.meta.env.BASE_URL ?? "/";
@@ -156,12 +158,14 @@ interface NavItem {
   feature?: Feature;
   hideSuperAdmin?: boolean;
   superAdminOnly?: boolean;
+  /** Recurso quantitativo do plano cujo uso deve aparecer como pílula "X/Y". */
+  usageResource?: "patients" | "users" | "schedules" | "professionals";
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, permission: null },
   { href: "/agenda", label: "Agenda", icon: CalendarIcon, permission: "appointments.read" },
-  { href: "/pacientes", label: "Pacientes", icon: PatientIcon, permission: "patients.read" },
+  { href: "/pacientes", label: "Pacientes", icon: PatientIcon, permission: "patients.read", usageResource: "patients" },
   { href: "/procedimentos", label: "Procedimentos", icon: StethoscopeIcon, permission: "procedures.manage" },
   { href: "/pacotes", label: "Pacotes", icon: Package, permission: "procedures.manage", feature: "module.patient_packages" },
   { href: "/financeiro", label: "Financeiro", icon: WalletIcon, permission: "financial.read" },
@@ -172,6 +176,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: SettingsIcon,
     permission: null,
     anyPermission: ["settings.manage", "users.manage"],
+    usageResource: "users",
   },
   { href: "/clinicas", label: "Clínicas", icon: ClinicIcon, permission: "clinics.manage", feature: "module.multi_clinic" },
   { href: "/superadmin", label: "SuperAdmin", icon: ShieldIcon, permission: null, superAdminOnly: true },
@@ -213,6 +218,10 @@ function SidebarContent({
   isMobile = false,
   onNavigate,
 }: SidebarContentProps) {
+  // Snapshot de uso x limites do plano (dados para as pílulas "X/Y" da nav).
+  // Hook se auto-desabilita para super-admin / clínica sem subscription.
+  const { data: planUsage } = usePlanUsage();
+
   // Itens que o usuário tem permissão de papel para ver. Itens sem feature do
   // plano permanecem visíveis mas marcados como "trancados" (upsell).
   const visibleNavItems = NAV_ITEMS.filter((item) => {
@@ -307,6 +316,23 @@ function SidebarContent({
                 );
               }
 
+              const usageInfo =
+                item.usageResource && planUsage?.limits && planUsage?.usage
+                  ? {
+                      current: planUsage.usage[item.usageResource],
+                      limit:
+                        planUsage.limits[
+                          item.usageResource === "patients"
+                            ? "maxPatients"
+                            : item.usageResource === "users"
+                            ? "maxUsers"
+                            : item.usageResource === "schedules"
+                            ? "maxSchedules"
+                            : "maxProfessionals"
+                        ],
+                    }
+                  : null;
+
               return (
                 <Link
                   key={item.href}
@@ -329,6 +355,10 @@ function SidebarContent({
                     <span className="ml-auto flex items-center gap-1.5">
                       <PlanBadge feature={item.feature} />
                       <Lock className="h-3.5 w-3.5 text-amber-400/80" />
+                    </span>
+                  ) : usageInfo && usageInfo.limit != null ? (
+                    <span className="ml-auto">
+                      <UsageBadge current={usageInfo.current} limit={usageInfo.limit} />
                     </span>
                   ) : (
                     isActive && <ChevronRight className="ml-auto h-4 w-4 opacity-60" />

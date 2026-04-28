@@ -206,6 +206,11 @@ export async function getMineLimits(clinicId: number | null) {
     .from(schedulesTable)
     .where(and(eq(schedulesTable.clinicId, clinicId), eq(schedulesTable.isActive, true)));
 
+  const [professionalsCount] = await db
+    .select({ total: count() })
+    .from(userRolesTable)
+    .where(and(eq(userRolesTable.clinicId, clinicId), eq(userRolesTable.role, "profissional")));
+
   return {
     sub: {
       id: row.sub.id,
@@ -235,6 +240,7 @@ export async function getMineLimits(clinicId: number | null) {
       patients: patientsCount?.total ?? 0,
       users: usersCount?.total ?? 0,
       schedules: schedulesCount?.total ?? 0,
+      professionals: professionalsCount?.total ?? 0,
     },
   };
 }

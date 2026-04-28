@@ -64,18 +64,59 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
   return fetch(input, { ...init, headers, credentials: init?.credentials ?? "include" });
 }
 
-async function extractError(res: Response): Promise<string> {
-  const reqId = res.headers.get(REQUEST_ID_HEADER);
-  const suffix = reqId ? ` [reqId=${reqId}]` : "";
-  try {
-    const body = await res.json();
-    if (body && typeof body === "object" && "message" in body && body.message) {
-      return `${String((body as { message: unknown }).message)}${suffix}`;
-    }
-  } catch {
-    /* ignore */
+/**
+ * Erro lançado quando o backend retorna 402 com `limitReached: true`. Carrega
+ * todos os dados necessários para o frontend exibir o diálogo contextual de
+ * upgrade sem precisar de um round-trip extra para descobrir plano alvo.
+ */
+export interface PlanLimitInfo {
+  resource: "patients" | "users" | "professionals" | "schedules";
+  limit: number;
+  current: number;
+  planName: string;
+  planDisplayName: string;
+  requiredPlan: {
+    name: string;
+    displayName: string;
+    price: string | number;
+    limit: number | null;
+  } | null;
+  message: string;
+}
+
+export class PlanLimitError extends Error {
+  readonly info: PlanLimitInfo;
+  constructor(info: PlanLimitInfo) {
+    super(info.message);
+    this.name = "PlanLimitError";
+    this.info = info;
   }
-  return `HTTP ${res.status}${suffix}`;
+}
+
+function isPlanLimitPayload(body: unknown): body is PlanLimitInfo {
+  return (
+    !!body &&
+    typeof body === "object" &&
+    (body as { limitReached?: unknown }).limitReached === true &&
+    typeof (body as { resource?: unknown }).resource === "string"
+  );
+}
+
+async function readErrorBody(res: Response): Promise<{ body: unknown; reqId: string | null }> {
+  const reqId = res.headers.get(REQUEST_ID_HEADER);
+  try {
+    return { body: await res.json(), reqId };
+  } catch {
+    return { body: null, reqId };
+  }
+}
+
+function formatErrorMessage(body: unknown, status: number, reqId: string | null): string {
+  const suffix = reqId ? ` [reqId=${reqId}]` : "";
+  if (body && typeof body === "object" && "message" in body && (body as { message: unknown }).message) {
+    return `${String((body as { message: unknown }).message)}${suffix}`;
+  }
+  return `HTTP ${status}${suffix}`;
 }
 
 /**
@@ -93,7 +134,11 @@ export async function apiFetchJson<T = unknown>(
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
       _onUnauthorized(url);
     }
-    throw new Error(await extractError(res));
+    const { body, reqId } = await readErrorBody(res);
+    if (res.status === 402 && isPlanLimitPayload(body)) {
+      throw new PlanLimitError(body);
+    }
+    throw new Error(formatErrorMessage(body, res.status, reqId));
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

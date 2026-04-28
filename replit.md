@@ -202,6 +202,37 @@ Catálogo de features financeiras em `lib/shared-constants/src/plan-features.ts`
 
 Use `requireFeature(feature)` no backend e `<FeatureGate feature="...">` no frontend. Aplicação dos gates nas telas/rotas é a próxima iteração de Sprint 2.
 
+### Enforcement de limites quantitativos (Gap #3)
+
+Cada plano SaaS tem campos `maxPatients`, `maxUsers`, `maxSchedules` e
+`maxProfessionals` em `subscription_plans`. O middleware
+`enforceLimit(resource, options?)` em
+`artifacts/api-server/src/middleware/subscription.ts` consolida o bloqueio:
+
+* Plugado em `POST /patients`, `POST /admin/users` (duplo `enforceLimit("users")`
+  + `enforceLimit("professionals", { when })`) e `POST /schedules`.
+* Conta o uso atual respeitando regras de cada recurso (pacientes não-deletados,
+  agendas com `is_active=true`, role específica para profissionais).
+* Retorna **402 Payment Required** com payload estruturado
+  `{ limitReached, resource, limit, current, planName, planDisplayName, requiredPlan, message }`.
+* `requiredPlan` é calculado dinamicamente: plano ativo mais barato cuja coluna
+  `maxX` é `null` (ilimitado) ou estritamente maior que o consumo atual **e**
+  cujo preço é maior que o do plano vigente (downgrade nunca é sugerido).
+
+No frontend, `apiFetchJson` detecta 402 + `limitReached: true` e lança
+`PlanLimitError` (`artifacts/fisiogest/src/lib/api.ts`). Um `PlanLimitProvider`
+(`contexts/plan-limit-context.tsx`) inscreve-se na `MutationCache` do React
+Query e abre globalmente o `PlanLimitDialog`
+(`components/feedback/plan-limit-dialog.tsx`), que reaproveita o estilo do
+`FeatureRoute`: mostra consumo atual, comparativo de plano atual vs
+recomendado com diferença em BRL e CTA para `/configuracoes#plano`.
+
+Bônus — sidebar mostra pílula `X/Y` ao lado de "Pacientes" e "Configurações"
+via `usePlanUsage()` + `<UsageBadge />`. Cores escalam (cinza → âmbar em 80% →
+vermelho em 100%) para sinalizar saturação antes do bloqueio. Endpoint
+`GET /api/clinic-subscriptions/mine/limits` retorna `{plan, limits, usage}`
+com os 4 contadores (`patients`, `users`, `schedules`, `professionals`).
+
 ---
 
 

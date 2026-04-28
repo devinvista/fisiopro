@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { schedulesTable, usersTable } from "@workspace/db";
-import { eq, and, count } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
-import { requireActiveSubscription, getPlanLimits } from "../../../middleware/subscription.js";
+import { requireActiveSubscription, enforceLimit } from "../../../middleware/subscription.js";
 import { validateBody } from "../../../utils/validate.js";
 import { z } from "zod/v4";
 
@@ -93,7 +93,7 @@ router.get("/:id", requirePermission("appointments.read"), async (req, res) => {
   }
 });
 
-router.post("/", requirePermission("settings.manage"), async (req: AuthRequest, res) => {
+router.post("/", requirePermission("settings.manage"), enforceLimit("schedules"), async (req: AuthRequest, res) => {
   try {
     const body = validateBody(createScheduleSchema, req.body, res);
     if (!body) return;
@@ -102,28 +102,6 @@ router.post("/", requirePermission("settings.manage"), async (req: AuthRequest, 
     if (!req.clinicId && !req.isSuperAdmin) {
       res.status(400).json({ error: "Bad Request", message: "clinicId não encontrado" });
       return;
-    }
-
-    // Verificar limite do plano de agendas
-    if (req.clinicId && !req.isSuperAdmin) {
-      const limits = await getPlanLimits(req.clinicId);
-      if (limits?.maxSchedules != null) {
-        const [{ total }] = await db
-          .select({ total: count() })
-          .from(schedulesTable)
-          .where(and(eq(schedulesTable.clinicId, req.clinicId), eq(schedulesTable.isActive, true)));
-        if (Number(total) >= limits.maxSchedules) {
-          res.status(403).json({
-            error: "Plan Limit Reached",
-            limitReached: true,
-            resource: "schedules",
-            limit: limits.maxSchedules,
-            current: Number(total),
-            message: `Limite de ${limits.maxSchedules} agendas do seu plano atingido. Faça upgrade para continuar.`,
-          });
-          return;
-        }
-      }
     }
 
     const [schedule] = await db

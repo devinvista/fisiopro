@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { patientsTable, appointmentsTable, financialRecordsTable } from "@workspace/db";
-import { eq, ilike, or, and, sql, desc, isNull, count, lt } from "drizzle-orm";
+import { eq, ilike, or, and, sql, desc, isNull, lt } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
-import { requireActiveSubscription, getPlanLimits } from "../../../middleware/subscription.js";
+import { requireActiveSubscription, enforceLimit } from "../../../middleware/subscription.js";
 import { logAudit } from "../../../utils/auditLog.js";
 import { parseIntParam, validateBody, validateQuery } from "../../../utils/validate.js";
 import { listQuerySchema } from "../../../utils/listQuery.js";
@@ -153,7 +153,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
   }
 });
 
-router.post("/", requirePermission("patients.create"), async (req: AuthRequest, res) => {
+router.post("/", requirePermission("patients.create"), enforceLimit("patients"), async (req: AuthRequest, res) => {
   try {
     const parsed = validateBody(createPatientSchema, req.body, res);
     if (!parsed) return;
@@ -163,28 +163,6 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
     if (!validateCpf(normalizedCpf)) {
       res.status(400).json({ error: "Bad Request", message: "CPF inválido. Verifique os dígitos informados." });
       return;
-    }
-
-    // Verificar limite do plano de pacientes
-    if (req.clinicId && !req.isSuperAdmin) {
-      const limits = await getPlanLimits(req.clinicId);
-      if (limits?.maxPatients != null) {
-        const [{ total }] = await db
-          .select({ total: count() })
-          .from(patientsTable)
-          .where(eq(patientsTable.clinicId, req.clinicId));
-        if (Number(total) >= limits.maxPatients) {
-          res.status(403).json({
-            error: "Plan Limit Reached",
-            limitReached: true,
-            resource: "patients",
-            limit: limits.maxPatients,
-            current: Number(total),
-            message: `Limite de ${limits.maxPatients} pacientes do seu plano atingido. Faça upgrade para continuar cadastrando.`,
-          });
-          return;
-        }
-      }
     }
 
     const [patient] = await db

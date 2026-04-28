@@ -6,7 +6,7 @@ import type { Role } from "@workspace/db";
 import { eq, and, isNotNull, count } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
-import { requireActiveSubscription, getPlanLimits } from "../../../middleware/subscription.js";
+import { requireActiveSubscription, enforceLimit, getPlanLimits } from "../../../middleware/subscription.js";
 import { validateBody } from "../../../utils/validate.js";
 import { z } from "zod/v4";
 
@@ -147,55 +147,23 @@ router.get("/", requirePermission("users.manage"), async (req: AuthRequest, res)
   }
 });
 
-router.post("/", requirePermission("users.manage"), async (req: AuthRequest, res) => {
+router.post(
+  "/",
+  requirePermission("users.manage"),
+  enforceLimit("users"),
+  enforceLimit("professionals", {
+    when: (req) => {
+      const roles = (req.body as { roles?: unknown })?.roles;
+      const list = Array.isArray(roles) && roles.length > 0 ? (roles as string[]) : ["profissional"];
+      return list.includes("profissional");
+    },
+  }),
+  async (req: AuthRequest, res) => {
   try {
     const body = validateBody(createUserSchema, req.body, res);
     if (!body) return;
     const { name, cpf, email, password, roles } = body;
     const roleList: Role[] = Array.isArray(roles) && roles.length > 0 ? roles as Role[] : ["profissional"];
-
-    // Verificar limites do plano (usuários e profissionais)
-    if (req.clinicId && !req.isSuperAdmin) {
-      const limits = await getPlanLimits(req.clinicId);
-
-      // Limite de usuários totais
-      if (limits?.maxUsers != null) {
-        const [{ total }] = await db
-          .select({ total: count() })
-          .from(userRolesTable)
-          .where(eq(userRolesTable.clinicId, req.clinicId));
-        if (Number(total) >= limits.maxUsers) {
-          res.status(403).json({
-            error: "Plan Limit Reached",
-            limitReached: true,
-            resource: "users",
-            limit: limits.maxUsers,
-            current: Number(total),
-            message: `Limite de ${limits.maxUsers} usuário(s) do seu plano atingido. Faça upgrade para continuar adicionando usuários.`,
-          });
-          return;
-        }
-      }
-
-      // Limite de profissionais
-      if (limits?.maxProfessionals != null && roleList.includes("profissional")) {
-        const [{ total }] = await db
-          .select({ total: count() })
-          .from(userRolesTable)
-          .where(and(eq(userRolesTable.clinicId, req.clinicId), eq(userRolesTable.role, "profissional")));
-        if (Number(total) >= limits.maxProfessionals) {
-          res.status(403).json({
-            error: "Plan Limit Reached",
-            limitReached: true,
-            resource: "professionals",
-            limit: limits.maxProfessionals,
-            current: Number(total),
-            message: `Limite de ${limits.maxProfessionals} profissional(is) do seu plano atingido. Faça upgrade para adicionar mais profissionais.`,
-          });
-          return;
-        }
-      }
-    }
 
     const normalizedCpf = cpf.replace(/\D/g, "");
     const existingCpf = await db
