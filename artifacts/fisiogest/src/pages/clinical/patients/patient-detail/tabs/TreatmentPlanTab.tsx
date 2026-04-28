@@ -130,7 +130,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   });
 
   // ─── Form state per selected plan ───────────────────────────────────────
-  const emptyForm = { objectives: "", techniques: "", frequency: "", estimatedSessions: "" as string | number, startDate: "", responsibleProfessional: "", status: "ativo" as "ativo" | "concluido" | "suspenso" };
+  const emptyForm = { objectives: "", techniques: "", frequency: "", estimatedSessions: "" as string | number, startDate: "", responsibleProfessional: "", status: "ativo" as "ativo" | "concluido" | "suspenso", durationMonths: 12 as number };
   const [form, setForm] = useState(emptyForm);
   const planItemsInitRef = useRef(false);
 
@@ -145,6 +145,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         startDate: selectedPlan.startDate || "",
         responsibleProfessional: selectedPlan.responsibleProfessional || "",
         status: (selectedPlan.status as "ativo" | "concluido" | "suspenso") || "ativo",
+        durationMonths: selectedPlan.durationMonths ?? 12,
       });
     } else {
       setForm(emptyForm);
@@ -172,6 +173,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
       await apiSendJson(`/api/patients/${patientId}/treatment-plans/${selectedPlanId}`, "PUT", {
         ...form,
         estimatedSessions: form.estimatedSessions ? Number(form.estimatedSessions) : null,
+        durationMonths: form.durationMonths ? Number(form.durationMonths) : null,
       });
       queryClient.invalidateQueries({ queryKey: plansKey });
       toast({ title: "Plano de tratamento salvo!" });
@@ -377,18 +379,50 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               </div>
             </div>
 
-            {/* Status */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold text-slate-700">Status do Tratamento</Label>
-              <Select value={form.status} onValueChange={(v: "ativo" | "concluido" | "suspenso") => setForm({ ...form, status: v })}>
-                <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="concluido">Concluído</SelectItem>
-                  <SelectItem value="suspenso">Suspenso</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Status + Prazo */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-slate-700">Status do Tratamento</Label>
+                <Select value={form.status} onValueChange={(v: "ativo" | "concluido" | "suspenso") => setForm({ ...form, status: v })}>
+                  <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="concluido">Concluído</SelectItem>
+                    <SelectItem value="suspenso">Suspenso</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-slate-700">Prazo do plano (meses)</Label>
+                <Select
+                  value={String(form.durationMonths ?? 12)}
+                  onValueChange={v => setForm({ ...form, durationMonths: Number(v) })}
+                >
+                  <SelectTrigger className="bg-slate-50 border-slate-200 w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 6, 12, 24, 36].map(m => (
+                      <SelectItem key={m} value={String(m)}>{m} {m === 1 ? "mês" : "meses"}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400">
+                  Define até quando as consultas e faturas mensais serão geradas.
+                </p>
+              </div>
             </div>
+
+            {/* Materialização */}
+            <MaterializeBlock
+              planId={selectedPlanId!}
+              materializedAt={selectedPlan?.materializedAt ?? null}
+              planItems={planItems}
+              onChanged={() => {
+                queryClient.invalidateQueries({ queryKey: plansKey });
+                queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+                queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+              }}
+            />
+
 
             {/* Session progress */}
             {(form.estimatedSessions || completedSessions > 0) && (
@@ -453,3 +487,135 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
 
 // ─── Evolution Templates ──────────────────────────────────────────────────────
+
+// ─── Materialização do plano ────────────────────────────────────────────────
+function MaterializeBlock({
+  planId, materializedAt, planItems, onChanged,
+}: {
+  planId: number;
+  materializedAt: string | null;
+  planItems: any[];
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [busy, setBusy] = useState<"materialize" | "dematerialize" | null>(null);
+  const [confirmDematerialize, setConfirmDematerialize] = useState(false);
+
+  const monthlyItems = planItems.filter(i => i.packageType === "mensal");
+  const hasMonthly = monthlyItems.length > 0;
+  const isMaterialized = !!materializedAt;
+
+  const totalApptsEstimate = monthlyItems.reduce((sum, i) => {
+    let weekDaysCount = 0;
+    try {
+      const wd = i.weekDays ? (typeof i.weekDays === "string" ? JSON.parse(i.weekDays) : i.weekDays) : [];
+      weekDaysCount = Array.isArray(wd) ? wd.length : 0;
+    } catch { weekDaysCount = 0; }
+    return sum + weekDaysCount * 4 * 12; // ~4 sem/mês × 12 meses
+  }, 0);
+
+  async function doMaterialize() {
+    setBusy("materialize");
+    try {
+      const res = await apiSendJson<any>(`/api/treatment-plans/${planId}/materialize`, "POST", {});
+      toast({
+        title: "Plano materializado!",
+        description: `Geradas ${res.appointmentsCreated ?? "?"} consultas e ${res.invoicesCreated ?? "?"} faturas mensais.`,
+      });
+      onChanged();
+    } catch (err: any) {
+      toast({ title: "Erro ao materializar", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doDematerialize() {
+    setBusy("dematerialize");
+    try {
+      const res = await apiSendJson<any>(`/api/treatment-plans/${planId}/materialize`, "DELETE", {});
+      toast({
+        title: "Materialização revertida",
+        description: `Removidos ${res.appointmentsDeleted ?? "?"} consultas e ${res.invoicesDeleted ?? "?"} faturas.`,
+      });
+      onChanged();
+      setConfirmDematerialize(false);
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!hasMonthly) return null;
+
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-primary" />
+        <h4 className="text-sm font-semibold text-slate-700">Geração de consultas e faturas</h4>
+      </div>
+      {isMaterialized ? (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-600 flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+            Plano materializado em {new Date(materializedAt!).toLocaleDateString("pt-BR")}.
+            Consultas e faturas mensais já estão na agenda e no financeiro.
+          </p>
+          <Button
+            size="sm" variant="outline"
+            className="h-8 gap-1.5 rounded-lg border-red-300 text-red-600 hover:bg-red-50"
+            onClick={() => setConfirmDematerialize(true)}
+            disabled={busy !== null}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reverter materialização
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-600">
+            Será gerada uma agenda completa do plano: aproximadamente
+            {" "}<strong>{totalApptsEstimate} consultas</strong> e
+            {" "}<strong>{monthlyItems.length * 12} faturas mensais</strong>{" "}
+            (uma por mês de cada item de pacote mensal).
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Os dias da semana, horário e profissional definidos em cada item serão usados para criar as consultas.
+          </p>
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 rounded-lg shadow-md shadow-primary/20"
+            onClick={doMaterialize}
+            disabled={busy !== null}
+          >
+            {busy === "materialize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Materializar plano
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={confirmDematerialize} onOpenChange={setConfirmDematerialize}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverter materialização?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apaga todas as consultas futuras (status agendado) e faturas pendentes
+              não pagas vinculadas a este plano. Faturas já pagas permanecem.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy !== null}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={(e) => { e.preventDefault(); doDematerialize(); }}
+              disabled={busy !== null}
+            >
+              {busy === "dematerialize" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sim, reverter"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

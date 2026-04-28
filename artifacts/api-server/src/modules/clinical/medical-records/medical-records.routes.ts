@@ -200,6 +200,32 @@ router.post(
   }),
 );
 
+// ─── Materialização do plano (gera consultas + faturas mensais) ──────────────
+router.post(
+  "/treatment-plans/:planId/materialize",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const { force, durationMonths, startDate } = (req.body ?? {}) as {
+      force?: boolean; durationMonths?: number; startDate?: string;
+    };
+    const { materializeTreatmentPlan } = await import("./treatment-plans.materialization.js");
+    const result = await materializeTreatmentPlan(planId, { force, durationMonths, startDate });
+    res.json(result);
+  }),
+);
+
+router.delete(
+  "/treatment-plans/:planId/materialize",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const { dematerializeTreatmentPlan } = await import("./treatment-plans.materialization.js");
+    const result = await dematerializeTreatmentPlan(planId);
+    res.json(result);
+  }),
+);
+
 // ─── Treatment Plan (compat, single ativo) ────────────────────────────────────
 
 router.get("/treatment-plan", requirePermission("medical.read"), asyncHandler(async (req: Request<P>, res: Response) => {

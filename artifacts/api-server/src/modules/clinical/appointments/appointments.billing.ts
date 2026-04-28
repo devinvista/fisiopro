@@ -45,6 +45,58 @@ export async function applyBillingRules(
 
   const resolvedClinicId = clinicId ?? details.clinicId ?? null;
 
+  // ── Refator pós-sprint financeiro: planos materializados ─────────────────
+  // Se o appointment foi gerado pela materialização do plano de tratamento
+  // (`treatment_plan_procedure_id` preenchido), o financeiro já está
+  // resolvido pela fatura mensal pré-criada. O billing engine se torna
+  // NO-OP para presença/conclusão e gera apenas crédito de sessão para faltas.
+  const planProcId: number | null = (details as any).treatmentPlanProcedureId ?? null;
+  if (planProcId) {
+    const confirmedSet: string[] = ["compareceu", "concluido"] satisfies AppointmentStatus[];
+    const absenceSet: string[] = ["faltou"] satisfies AppointmentStatus[];
+
+    if (confirmedSet.includes(newStatus) && !confirmedSet.includes(oldStatus)) {
+      // Apenas garante a evolução clínica — financeiro já está pré-faturado.
+      try {
+        await ensureAutoEvolutionForAppointment(
+          patientId,
+          appointmentId,
+          (procedure as any)?.durationMinutes ?? null,
+        );
+      } catch (err) {
+        console.error("[applyBillingRules] failed to create auto evolution:", err);
+      }
+      return;
+    }
+
+    if (absenceSet.includes(newStatus) && !absenceSet.includes(oldStatus)) {
+      // Falta em plano materializado SEMPRE gera crédito de sessão (a vaga
+      // foi paga, o paciente tem direito a remarcar). Não há estorno.
+      const { sessionCreditsTable: scTable } = await import("@workspace/db");
+      // Idempotência: evita criar dois créditos se o status oscilar.
+      const existing = await db
+        .select({ id: scTable.id })
+        .from(scTable)
+        .where(eq(scTable.sourceAppointmentId, appointmentId))
+        .limit(1);
+      if (existing.length === 0 && procedureId) {
+        await db.insert(scTable).values({
+          patientId,
+          procedureId,
+          quantity: 1,
+          usedQuantity: 0,
+          sourceAppointmentId: appointmentId,
+          clinicId: resolvedClinicId,
+          notes: `Falta em ${appointmentDate} — plano #${(details as any).treatmentPlanId ?? planProcId}. Crédito disponível para remarcação.`,
+        });
+      }
+      return;
+    }
+
+    // Outros status (cancelado, agendado→agendado etc.) — no-op.
+    return;
+  }
+
   // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias).
   // Lê de `clinic_financial_settings` (Sprint 2 — T5); o serviço faz fallback
   // automático para `clinics.default_due_days` se a linha de settings não existir.

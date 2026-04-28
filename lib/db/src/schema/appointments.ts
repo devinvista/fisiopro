@@ -17,6 +17,17 @@ export const appointmentsTable = pgTable("appointments", {
   notes: text("notes"),
   clinicId: integer("clinic_id"),
   scheduleId: integer("schedule_id").notNull(),
+  // ── Materialização por plano de tratamento ────────────────────────────────
+  // Liga este agendamento ao item do plano que o gerou. Quando preenchido,
+  // o billing engine ignora o appointment (já está pré-cobrado pela fatura
+  // mensal) e a UI mostra o vínculo com o plano.
+  treatmentPlanProcedureId: integer("treatment_plan_procedure_id"),
+  // Fatura mensal (financial_records) à qual este appointment pertence —
+  // usado para calcular o rateio e bloquear reagendamentos cross-month.
+  monthlyInvoiceId: integer("monthly_invoice_id"),
+  // Quando o appointment é uma remarcação consumindo um crédito de falta,
+  // referencia a entrada em session_credits que está sendo usada.
+  usedCreditId: integer("used_credit_id"),
   recurrenceGroupId: text("recurrence_group_id"),
   recurrenceIndex: integer("recurrence_index"),
   bookingToken: text("booking_token"),

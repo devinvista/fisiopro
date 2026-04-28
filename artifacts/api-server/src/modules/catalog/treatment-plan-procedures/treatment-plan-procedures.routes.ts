@@ -185,7 +185,11 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
 router.post("/", requirePermission("medical.write"), async (req: AuthRequest, res) => {
   try {
     const planId = parseInt(req.params.planId as string);
-    const { procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes, unitPrice, unitMonthlyPrice, discount } = req.body;
+    const {
+      procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
+      unitPrice, unitMonthlyPrice, discount,
+      weekDays, defaultStartTime, defaultProfessionalId, sessionDurationMinutes,
+    } = req.body;
 
     if (!procedureId && !packageId) {
       res.status(400).json({ error: "Bad Request", message: "procedureId ou packageId é obrigatório" });
@@ -221,6 +225,10 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
         discount: discount != null ? String(discount) : "0",
         priority: priority ? parseInt(priority) : 1,
         notes: notes || null,
+        weekDays: weekDays ?? null,
+        defaultStartTime: defaultStartTime ?? null,
+        defaultProfessionalId: defaultProfessionalId != null ? Number(defaultProfessionalId) : null,
+        sessionDurationMinutes: sessionDurationMinutes != null ? Number(sessionDurationMinutes) : null,
       })
       .returning();
 
@@ -234,7 +242,11 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
 router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const { procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes, unitPrice, unitMonthlyPrice, discount } = req.body;
+    const {
+      procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
+      unitPrice, unitMonthlyPrice, discount,
+      weekDays, defaultStartTime, defaultProfessionalId, sessionDurationMinutes,
+    } = req.body;
 
     if (!(await verifyItemOwnership(id, req))) {
       res.status(403).json({ error: "Forbidden" });
@@ -251,6 +263,10 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     if (discount !== undefined) updateData.discount = String(discount ?? 0);
     if (priority !== undefined) updateData.priority = parseInt(priority);
     if (notes !== undefined) updateData.notes = notes;
+    if (weekDays !== undefined) updateData.weekDays = weekDays;
+    if (defaultStartTime !== undefined) updateData.defaultStartTime = defaultStartTime;
+    if (defaultProfessionalId !== undefined) updateData.defaultProfessionalId = defaultProfessionalId != null ? Number(defaultProfessionalId) : null;
+    if (sessionDurationMinutes !== undefined) updateData.sessionDurationMinutes = sessionDurationMinutes != null ? Number(sessionDurationMinutes) : null;
 
     const [updated] = await db
       .update(treatmentPlanProceduresTable)

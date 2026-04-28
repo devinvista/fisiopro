@@ -401,6 +401,13 @@ export async function deleteAppointment(id: number, ctx: AuthCtx) {
 // ─── Reschedule ──────────────────────────────────────────────────────────────
 export async function rescheduleAppointment(id: number, body: {
   date: string; startTime: string; notes?: string | null;
+  /**
+   * Override do administrador para autorizar remarcação que cruza o mês de
+   * competência da fatura do plano (ex: consulta de 30/abril → 02/maio).
+   * Sem esse flag (ou sem permissão), a operação é bloqueada — pois
+   * mover entre meses afeta o rateio das faturas mensais já materializadas.
+   */
+  crossMonthOverride?: boolean;
 }, ctx: AuthCtx) {
   const { date, startTime, notes } = body;
 
@@ -413,6 +420,26 @@ export async function rescheduleAppointment(id: number, body: {
   }
   if (!original.procedure) {
     throw unprocessable("InvalidOperation", "Procedimento do agendamento não encontrado.");
+  }
+
+  // Bloqueio cross-month para appointments materializados. Mover uma consulta
+  // entre meses muda o número de sessões dos dois meses → recalcular rateio
+  // requer ação consciente (geralmente do admin financeiro).
+  if ((original as any).treatmentPlanProcedureId) {
+    const origMonth = original.date.slice(0, 7);
+    const newMonth = date.slice(0, 7);
+    if (origMonth !== newMonth) {
+      const isAdmin = (ctx as any).roles?.includes("admin")
+        || (ctx as any).permissions?.includes("appointments.admin")
+        || body.crossMonthOverride === true;
+      if (!isAdmin) {
+        throw unprocessable(
+          "CrossMonthRescheduleBlocked",
+          `Esta consulta faz parte de um plano materializado (mês de competência ${origMonth}). ` +
+            `Mover para outro mês (${newMonth}) afeta o rateio das faturas e exige autorização de um usuário administrador.`,
+        );
+      }
+    }
   }
 
   const endTime = addMinutes(startTime, original.procedure.durationMinutes);

@@ -111,6 +111,15 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   frequency: text("frequency"),
   estimatedSessions: integer("estimated_sessions"),
   startDate: date("start_date"),
+  // Prazo do plano em meses (1, 2, 3, 6, 12, 24, 36...). Usado para
+  // materializar antecipadamente todas as consultas e faturas mensais.
+  durationMonths: integer("duration_months"),
+  // Data calculada de término (startDate + durationMonths). Persistida para
+  // consultas rápidas em relatórios e janela de materialização.
+  endDate: date("end_date"),
+  // Timestamp do momento em que o plano foi materializado (consultas e
+  // faturas geradas). Idempotência: se preenchido, não materializa de novo.
+  materializedAt: timestamp("materialized_at"),
   responsibleProfessional: text("responsible_professional"),
   status: text("status").notNull().default("ativo"),
   // Sprint 2 — aceite formal do plano (vira "venda"):
@@ -144,6 +153,18 @@ export const treatmentPlanProceduresTable = pgTable("treatment_plan_procedures",
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
   unitMonthlyPrice: numeric("unit_monthly_price", { precision: 10, scale: 2 }),
   discount: numeric("discount", { precision: 10, scale: 2 }).default("0"),
+  // ── Materialização (refator pós-sprint financeiro) ────────────────────────
+  // Para itens recorrentes (pacote mensal), define os dias da semana em que
+  // as consultas serão agendadas. Strings em inglês minúscula (compat com
+  // Date.toLocaleString): monday|tuesday|wednesday|thursday|friday|saturday|sunday.
+  // Persistido como JSON simples para flexibilidade — array vazio = não materializado.
+  weekDays: text("week_days"),
+  // Horário padrão das consultas materializadas ("HH:MM").
+  defaultStartTime: text("default_start_time"),
+  // Profissional padrão das consultas materializadas (FK lógica para users.id).
+  defaultProfessionalId: integer("default_professional_id"),
+  // Duração de cada sessão em minutos (define endTime). Default 60.
+  sessionDurationMinutes: integer("session_duration_minutes"),
   priority: integer("priority").notNull().default(1),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

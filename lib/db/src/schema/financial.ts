@@ -32,6 +32,13 @@ export const financialRecordsTable = pgTable("financial_records", {
   originalUnitPrice: numeric("original_unit_price", { precision: 10, scale: 2 }),
   // Plano de tratamento que ditou o preço (NULL quando origem = tabela/override).
   treatmentPlanId: integer("treatment_plan_id"),
+  // ── Materialização: vínculo com item do plano e mês de competência ────────
+  // Quando este registro é uma fatura mensal materializada, aponta para o
+  // item do plano (treatment_plan_procedures.id) que a originou.
+  treatmentPlanProcedureId: integer("treatment_plan_procedure_id"),
+  // Mês de competência da fatura (sempre dia 01). Usado para localizar
+  // rapidamente a fatura ao agendar/reagendar appointments.
+  planMonthRef: date("plan_month_ref"),
   // ── Auditoria de estornos (Sprint 3 T9) ───────────────────────────────────
   // Valor original do lançamento antes do estorno (preserva valor mesmo se
   // o `amount` for editado depois). Preenchido quando `status` muda para

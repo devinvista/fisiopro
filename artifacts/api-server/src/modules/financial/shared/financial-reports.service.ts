@@ -7,6 +7,7 @@ export const RECEIVABLE_TYPES = [
   "cobrancaSessao",
   "cobrancaMensal",
   "faturaConsolidada",
+  "faturaPlano",
 ];
 
 const NON_COMPETENCY_REVENUE_TYPES = [
