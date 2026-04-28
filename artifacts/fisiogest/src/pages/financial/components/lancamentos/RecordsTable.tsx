@@ -238,9 +238,19 @@ export function RecordsTable({
                       </td>
                       <td className="py-3.5 px-5 hidden md:table-cell">
                         <div className="flex flex-col gap-1">
+                          {/* Sprint 5 — `faturaConsolidada` foi descontinuada
+                              em favor de `faturaMensalAvulso` (consolidador
+                              de itens de plano de tratamento). Mantemos o
+                              badge apenas para registros legados existentes
+                              no banco; nenhum novo é criado. */}
                           {rec.transactionType === "faturaConsolidada" && (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide w-fit" title="Fatura consolidada (formato legado, mantida apenas para histórico)">
+                              Fatura Consolidada (legado)
+                            </span>
+                          )}
+                          {rec.transactionType === "faturaMensalAvulso" && (
                             <span className="inline-flex items-center gap-1 text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide w-fit">
-                              Fatura Consolidada
+                              Fatura Mensal de Avulsos
                             </span>
                           )}
                           {rec.transactionType === "pendenteFatura" && (

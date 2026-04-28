@@ -8,13 +8,21 @@ export const RECEIVABLE_TYPES = [
   "cobrancaMensal",
   "faturaConsolidada",
   "faturaPlano",
+  "faturaMensalAvulso",
 ];
 
+// Tipos que NÃO entram no sumário de receita por competência:
+//  - depositoCarteira / pagamento: caixa, não receita
+//  - vendaPacote: passivo (Adiantamentos), receita só na execução
+//  - faturaConsolidada (legado) e faturaMensalAvulso (Sprint 4): são
+//    "agrupadores"; a receita já foi reconhecida nos filhos individuais
+//    e contar o parent provocaria dupla contagem.
 const NON_COMPETENCY_REVENUE_TYPES = [
   "depositoCarteira",
   "vendaPacote",
   "pagamento",
   "faturaConsolidada",
+  "faturaMensalAvulso",
 ];
 
 export function isActiveFinancialRecord(status: string): boolean {
@@ -35,7 +43,7 @@ export function revenueSummarySql() {
   return and(
     eq(financialRecordsTable.type, "receita"),
     sql`${financialRecordsTable.status} NOT IN ('estornado', 'cancelado')`,
-    sql`(${financialRecordsTable.transactionType} IS NULL OR ${financialRecordsTable.transactionType} NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada'))`,
+    sql`(${financialRecordsTable.transactionType} IS NULL OR ${financialRecordsTable.transactionType} NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada', 'faturaMensalAvulso'))`,
   )!;
 }
 

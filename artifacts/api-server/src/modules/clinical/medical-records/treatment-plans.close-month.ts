@@ -21,6 +21,7 @@
  */
 import { db } from "@workspace/db";
 import {
+  appointmentsTable,
   financialRecordsTable,
   treatmentPlansTable,
   patientsTable,
@@ -107,9 +108,22 @@ export async function closeAvulsoMonth(
     //  - sem parent (não consolidados ainda)
     //  - tipo crédito a receber/pendenteFatura (sessão avulsa)
     //  - dueDate dentro do mês de competência (ou planMonthRef se preenchido)
-    const candidates = await tx
-      .select()
+    // Sprint 4 (B3) — A competência correta é o mês da SESSÃO
+    // (`appointments.date`), NÃO o `dueDate` (que é appointmentDate + N dias
+    // de prazo da clínica e portanto vaza para o mês seguinte para sessões
+    // dos últimos dias). Para registros novos, `planMonthRef` já vem
+    // preenchido por `appointments.billing.ts`. Para registros legados sem
+    // `planMonthRef`, fazemos o JOIN com `appointments` e filtramos pela
+    // data da sessão.
+    const candidatesRows = await tx
+      .select({
+        record: financialRecordsTable,
+      })
       .from(financialRecordsTable)
+      .leftJoin(
+        appointmentsTable,
+        eq(appointmentsTable.id, financialRecordsTable.appointmentId),
+      )
       .where(
         and(
           eq(financialRecordsTable.treatmentPlanId, planId),
@@ -120,11 +134,12 @@ export async function closeAvulsoMonth(
             (${financialRecordsTable.planMonthRef} = ${normalizedRef}::date)
             OR (
               ${financialRecordsTable.planMonthRef} IS NULL
-              AND ${financialRecordsTable.dueDate} BETWEEN ${monthStart}::date AND ${monthEnd}::date
+              AND ${appointmentsTable.date} BETWEEN ${monthStart}::date AND ${monthEnd}::date
             )
           )`,
         ),
       );
+    const candidates = candidatesRows.map((r) => r.record);
 
     if (candidates.length === 0) {
       throw new Error(

@@ -489,6 +489,22 @@ intencionais: rotas públicas `agendar/*` (sem auth) e uploads `photos/*` (FormD
   - **Sprint 4 — Fechamento mensal de avulsos:** `closeAvulsoMonth(planId, ref)` em `clinical/medical-records/treatment-plans.close-month.ts` cria 1 fatura consolidada (`transactionType='faturaMensalAvulso'`, `parentRecordId` apontando para o plano) idempotente. Endpoint `POST /api/patients/:patientId/treatment-plans/:planId/close-month?ref=YYYY-MM`. UI: bloco "Fechar mês de avulsos" aparece quando `avulsoBillingMode='mensalConsolidado'`.
   - **Sprint 5 — Janela de cancelamento:** helper `resolveCancellationDecision()` em `appointments.billing.ts` lê `cancellationWindowHours` (default 24) e `lateCancellationPolicy` (`creditoNormal`/`semCredito`/`taxa`) da clínica. Aplicado nos dois caminhos: plano materializado (gera/bloqueia crédito de reposição) e avulso/mensal (bloqueia crédito mensal). Cancelamentos fora da janela mantêm o comportamento legado. UI: nova seção "Janela de cancelamento" em `ClinicaSection.tsx` (input de horas + 3 cards de política).
 
+- **Plano de Tratamento Redesign — Sprints 2/3/4 bug-fixes + Sprint 5 parcial (abr/2026)** 🛠
+  - Conjunto separado de sprints (`sprints/sprint-2-plano-aceite.md`, `sprint-3-faturamento-lazy.md`, `sprint-4-cascade-pagamento.md`, `00-plano-geral.md`) que reorganiza o Plano de Tratamento como fonte única de aceite + cobrança recorrente lazy + cascade de pagamentos.
+  - **Bug-fixes (B0–B3):**
+    - **B0 (crítico):** `faturaMensalAvulso` faltava em `RECEIVABLE_TYPES` (`financial-reports.service.ts`), tornando o cascade do Sprint 4 **inalcançável** pelo loop de pagamento. Adicionado a `RECEIVABLE_TYPES` e a `NON_COMPETENCY_REVENUE_TYPES` (parent não tem receita própria — filhos já reconheceram).
+    - **B1:** lookup do `parentInvoice` em `appointments.billing.ts` (~L765) usava `.limit(1)` sem `orderBy`, causando atribuição não-determinística do parent quando havia múltiplas `faturaPlano` no mesmo mês. Adicionado `orderBy(financialRecordsTable.id)`.
+    - **B2:** pagamento parcial de `faturaMensalAvulso` postava settlement no parent sem alocar contra filhos → entrada de AR não-alocada. Agora pagamentos parciais **pulam o parent** e o loop aloca contra os filhos individualmente.
+    - **B3:** `closeAvulsoMonth` (`treatment-plans.close-month.ts`) usava fallback por `dueDate` quando `planMonthRef IS NULL` — `dueDate = appointmentDate + N dias` vaza para o mês seguinte. Agora faz `leftJoin` com `appointmentsTable.date`. Além disso, `appointments.billing.ts` passou a setar `planMonthRef` em **todo** lançamento ligado a plano (com ou sem parent), eliminando o uso do fallback para registros novos.
+  - **Sprint 5 parcial:**
+    - Script `artifacts/api-server/src/scripts/migrate-legacy-plans.ts`: dois passos seguros (DRY-RUN por padrão, `--apply` para gravar).
+      - **Parte A** — planos materializados sem aceite: marca `acceptedAt = materializedAt`, `acceptedVia = 'legado'`, snapshot em `frozenPricesJson`.
+      - **Parte B** — `patient_subscriptions` órfãs: cria 1 "Plano Legado" por paciente com `acceptedVia='legado'`, 1 `treatment_plan_procedure` (`kind='recorrenteMensal'`) por subscription, e cancela as subscriptions originais.
+      - Filtros: `--only-clinic <id>`, `--skip-part-a`, `--skip-part-b`. Dry-run reporta totais.
+    - UI: `RecordsTable.tsx` desmarcou `faturaConsolidada` como tipo principal (badge agora cinza com sufixo "(legado)") e adicionou badge `faturaMensalAvulso` (indigo) para o novo agregador.
+  - **Pendente para próxima iteração do Sprint 5:** redesenho da tela "Plano de Tratamento" no prontuário em tabs (Itens / Aceite / Cobrança / Sessões) + substituição do `SubscriptionBillingPanel` por `RecurringPackagesPanel`. Backend já está pronto para suportar a UI nova (endpoints estáveis).
+  - Tests/Typecheck: 318/318 passando, `pnpm typecheck` clean.
+
 - **Sprint 7.2 + 7.4 (abr/2026)** — **Cobrança SaaS via Asaas + painel de inadimplência** ✅
   - Schema: estendido `clinic_subscriptions` com `asaas_customer_id`, `asaas_subscription_id`, `asaas_checkout_url`, `billing_mode`; criada `asaas_webhook_events` com UNIQUE `event_id` (idempotência).
   - Backend: `lib/asaas/` (cliente HTTP), `modules/saas/billing/` (subscribe/cancel/status/listDelinquent/sendDunningReminder/processWebhookEvent), `modules/webhooks/asaas.routes.ts` (POST `/api/webhooks/asaas` autenticado por `asaas-access-token` constant-time).

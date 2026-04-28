@@ -750,8 +750,15 @@ export async function applyBillingRules(
           // com itens avulso), `parentRecordId` fica null e o item será
           // consolidado depois por `closeAvulsoMonth` em `faturaMensalAvulso`.
           let parentRecordId: number | null = null;
+          const apptMonthRef = priceResolution.treatmentPlanId
+            ? monthRangeFromDate(appointmentDate).startDate
+            : null;
           if (priceResolution.treatmentPlanId) {
-            const apptMonthRef = monthRangeFromDate(appointmentDate).startDate;
+            // Sprint 3 — busca determinística do parent: ordena por id ASC para
+            // que execuções concorrentes sempre escolham o MESMO parent quando
+            // existirem múltiplas `faturaPlano` no mesmo mês (caso raro de
+            // plano com vários procedimentos `recorrenteMensal`, geradas em
+            // tempos diferentes pelo job `monthlyPlanBilling`).
             const [parentInvoice] = await tx
               .select({ id: financialRecordsTable.id })
               .from(financialRecordsTable)
@@ -759,9 +766,10 @@ export async function applyBillingRules(
                 and(
                   eq(financialRecordsTable.treatmentPlanId, priceResolution.treatmentPlanId),
                   eq(financialRecordsTable.transactionType, "faturaPlano"),
-                  eq(financialRecordsTable.planMonthRef, apptMonthRef),
+                  eq(financialRecordsTable.planMonthRef, apptMonthRef!),
                 ),
               )
+              .orderBy(financialRecordsTable.id)
               .limit(1);
             if (parentInvoice) parentRecordId = parentInvoice.id;
           }
@@ -779,9 +787,11 @@ export async function applyBillingRules(
             dueDate:         dueDatePorSessao,
             clinicId:        resolvedClinicId,
             parentRecordId,
-            ...(parentRecordId
-              ? { planMonthRef: monthRangeFromDate(appointmentDate).startDate }
-              : {}),
+            // Sprint 3/4 — sempre persiste a competência quando o lançamento
+            // é de um plano (com OU sem parent). Sem isso, a consolidação
+            // mensal de avulsos (`closeAvulsoMonth`) precisa cair no
+            // fallback de `dueDate`, que vaza para o mês seguinte (B3).
+            ...(apptMonthRef ? { planMonthRef: apptMonthRef } : {}),
             ...priceAuditFields,
           }).returning();
 

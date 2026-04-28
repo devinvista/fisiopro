@@ -209,6 +209,14 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         // `recognizedEntryId` de cada filho. Em seguida cascateia o status
         // `pago` para os filhos. Pagamento parcial não cascateia.
         if (pending.transactionType === "faturaMensalAvulso") {
+          // Sprint 4 (B2) — Pagamento parcial NÃO cascateia, e tampouco posta
+          // settlement no parent. O parent é apenas um "agrupador" sem receita
+          // própria; quem carrega o recebível contabilmente são os filhos.
+          // Pulamos o parent e deixamos o loop alocar contra os filhos
+          // individualmente (cada filho tem seu `recognizedEntryId`).
+          if (allocationAmount < Number(pending.amount)) {
+            continue;
+          }
           const settlementEntry = await postReceivableSettlement({
             clinicId: pending.clinicId ?? req.clinicId ?? null,
             entryDate: today,

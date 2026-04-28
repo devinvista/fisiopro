@@ -16,6 +16,7 @@ describe("financialReportsService — pure helpers", () => {
         "cobrancaMensal",
         "faturaConsolidada",
         "faturaPlano",
+        "faturaMensalAvulso",
       ]);
     });
   });
@@ -52,8 +53,8 @@ describe("financialReportsService — pure helpers", () => {
       expect(isRevenueSummaryRecord({ ...baseRecord, status: "cancelado" })).toBe(false);
     });
 
-    it("exclui tipos não-competência (depósito, venda de pacote, pagamento, fatura consolidada)", () => {
-      for (const tt of ["depositoCarteira", "vendaPacote", "pagamento", "faturaConsolidada"]) {
+    it("exclui tipos não-competência (depósito, venda de pacote, pagamento, fatura consolidada, fatura mensal avulso)", () => {
+      for (const tt of ["depositoCarteira", "vendaPacote", "pagamento", "faturaConsolidada", "faturaMensalAvulso"]) {
         expect(isRevenueSummaryRecord({ ...baseRecord, transactionType: tt })).toBe(false);
       }
     });
