@@ -210,3 +210,22 @@ export function resolvePlanFeatures(
 export function planUsesCustomFeatures(dbFeatures: unknown): boolean {
   return extractCanonicalFeatures(dbFeatures).length > 0;
 }
+
+/**
+ * Plano mínimo (entre essencial → profissional → premium) que possui a feature.
+ *
+ * Usa a matriz hardcoded como base. Caso queira considerar customizações por
+ * plano feitas via UI, passe `customMatrix` no formato {planName: features[]}.
+ *
+ * Retorna `null` se nenhum plano contém a feature.
+ */
+export function getMinimumPlanForFeature(
+  feature: Feature,
+  customMatrix?: Partial<Record<string, readonly Feature[]>>,
+): PlanTier | null {
+  for (const tier of PLAN_TIERS) {
+    const list = customMatrix?.[tier] ?? PLAN_FEATURES[tier];
+    if (list?.includes(feature)) return tier;
+  }
+  return null;
+}

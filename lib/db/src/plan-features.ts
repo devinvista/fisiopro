@@ -14,6 +14,7 @@ export {
   resolvePlanFeatures,
   extractCanonicalFeatures,
   planUsesCustomFeatures,
+  getMinimumPlanForFeature,
 } from "@workspace/shared-constants";
 
 export type {

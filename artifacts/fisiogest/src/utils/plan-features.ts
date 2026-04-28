@@ -13,6 +13,7 @@ export {
   resolvePlanFeatures,
   extractCanonicalFeatures,
   planUsesCustomFeatures,
+  getMinimumPlanForFeature,
   type PlanTier,
   type Feature,
   type FeatureCategory,
