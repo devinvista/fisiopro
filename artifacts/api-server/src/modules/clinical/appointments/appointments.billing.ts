@@ -2,9 +2,9 @@ import { db } from "@workspace/db";
 import {
   appointmentsTable, financialRecordsTable, sessionCreditsTable,
   patientSubscriptionsTable, patientWalletTable, patientWalletTransactionsTable,
-  patientPackagesTable,
+  patientPackagesTable, treatmentPlansTable, packagesTable,
 } from "@workspace/db";
-import { eq, and, gt, sql, desc } from "drizzle-orm";
+import { eq, and, gt, sql, asc, desc } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
   postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
@@ -17,6 +17,48 @@ import { resolveEffectivePrice } from "./appointments.pricing.js";
 import { ensureAutoEvolutionForAppointment } from "../medical-records/medical-records.repository.js";
 import { getClinicFinancialSettings } from "../../financial/settings/clinic-financial-settings.service.js";
 import type { AppointmentStatus } from "@workspace/shared-constants";
+
+// ─── Política de validade de créditos ────────────────────────────────────────
+/**
+ * Resolve a validade (em dias) do crédito de reposição (falta/remarcação)
+ * para um plano de tratamento. Hierarquia:
+ *   1. `treatment_plans.replacement_credit_validity_days` (override do plano)
+ *   2. `packages.replacement_credit_validity_days` (default do pacote)
+ *   3. 30 dias (fallback do sistema)
+ */
+async function resolveReplacementValidityDays(
+  treatmentPlanId: number | null,
+  patientPackageId?: number | null,
+): Promise<number> {
+  if (treatmentPlanId) {
+    const [plan] = await db
+      .select({
+        override: treatmentPlansTable.replacementCreditValidityDays,
+      })
+      .from(treatmentPlansTable)
+      .where(eq(treatmentPlansTable.id, treatmentPlanId))
+      .limit(1);
+    if (plan?.override != null) return plan.override;
+  }
+
+  if (patientPackageId) {
+    const [pkg] = await db
+      .select({ days: packagesTable.replacementCreditValidityDays })
+      .from(patientPackagesTable)
+      .innerJoin(packagesTable, eq(packagesTable.id, patientPackagesTable.packageId))
+      .where(eq(patientPackagesTable.id, patientPackageId))
+      .limit(1);
+    if (pkg?.days != null) return pkg.days;
+  }
+
+  return 30;
+}
+
+function addDaysISO(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 // ─── Billing rules ────────────────────────────────────────────────────────────
 export async function applyBillingRules(
@@ -80,6 +122,9 @@ export async function applyBillingRules(
         .where(eq(scTable.sourceAppointmentId, appointmentId))
         .limit(1);
       if (existing.length === 0 && procedureId) {
+        const planId = (details as any).treatmentPlanId ?? null;
+        const validityDays = await resolveReplacementValidityDays(planId, null);
+        const validUntil = addDaysISO(appointmentDate, validityDays);
         await db.insert(scTable).values({
           patientId,
           procedureId,
@@ -87,7 +132,10 @@ export async function applyBillingRules(
           usedQuantity: 0,
           sourceAppointmentId: appointmentId,
           clinicId: resolvedClinicId,
-          notes: `Falta em ${appointmentDate} — plano #${(details as any).treatmentPlanId ?? planProcId}. Crédito disponível para remarcação.`,
+          origin: "reposicaoFalta",
+          status: "disponivel",
+          validUntil,
+          notes: `Falta em ${appointmentDate} — plano #${planId ?? planProcId}. Crédito de reposição válido até ${validUntil}.`,
         });
       }
       return;
@@ -248,7 +296,10 @@ export async function applyBillingRules(
     // ── Priority 2: por sessão (crédito de sessão → carteira → a receber) ──
     if (billingType === "porSessao") {
       await db.transaction(async (tx) => {
-        // 2a. Verifica créditos de sessão
+        // 2a. Verifica créditos de sessão (FIFO por vencimento)
+        // Apenas créditos `disponivel` e ainda não vencidos. Pendentes de
+        // pagamento (modo prepago) e expirados ficam fora.
+        const todayISO = todayBRT();
         const availableCredit = await tx
           .select()
           .from(sessionCreditsTable)
@@ -256,16 +307,29 @@ export async function applyBillingRules(
             and(
               eq(sessionCreditsTable.patientId, patientId),
               eq(sessionCreditsTable.procedureId, procedureId),
-              gt(sql`${sessionCreditsTable.quantity} - ${sessionCreditsTable.usedQuantity}`, 0)
+              eq(sessionCreditsTable.status, "disponivel"),
+              gt(sql`${sessionCreditsTable.quantity} - ${sessionCreditsTable.usedQuantity}`, 0),
+              sql`(${sessionCreditsTable.validUntil} IS NULL OR ${sessionCreditsTable.validUntil} >= ${todayISO}::date)`
             )
+          )
+          .orderBy(
+            sql`${sessionCreditsTable.validUntil} ASC NULLS LAST`,
+            asc(sessionCreditsTable.id),
           )
           .limit(1);
 
         if (availableCredit.length > 0) {
           const credit = availableCredit[0];
+          const newUsed = credit.usedQuantity + 1;
+          // Se este consumo zera o saldo da linha, marcar como `consumido`.
+          const becameFullyConsumed = newUsed >= credit.quantity;
           await tx
             .update(sessionCreditsTable)
-            .set({ usedQuantity: credit.usedQuantity + 1 })
+            .set({
+              usedQuantity: newUsed,
+              consumedByAppointmentId: appointmentId,
+              ...(becameFullyConsumed ? { status: "consumido" as const } : {}),
+            })
             .where(eq(sessionCreditsTable.id, credit.id));
 
           if (credit.patientPackageId) {
@@ -533,23 +597,45 @@ export async function applyBillingRules(
 
     if (creditUsage.length > 0) {
       await db.transaction(async (tx) => {
-        const [credit] = await tx
+        // Estorno preciso: localiza o crédito que foi consumido por este
+        // appointment (consumedByAppointmentId) e o devolve ao saldo.
+        // Fallback: se não encontrou (créditos legados sem o vínculo), usa
+        // a heurística antiga (mais recente com usedQuantity > 0).
+        let [credit] = await tx
           .select()
           .from(sessionCreditsTable)
           .where(
             and(
               eq(sessionCreditsTable.patientId, patientId),
               eq(sessionCreditsTable.procedureId, procedureId),
-              gt(sessionCreditsTable.usedQuantity, 0)
+              eq(sessionCreditsTable.consumedByAppointmentId, appointmentId)
             )
           )
-          .orderBy(desc(sessionCreditsTable.createdAt))
           .limit(1);
+
+        if (!credit) {
+          [credit] = await tx
+            .select()
+            .from(sessionCreditsTable)
+            .where(
+              and(
+                eq(sessionCreditsTable.patientId, patientId),
+                eq(sessionCreditsTable.procedureId, procedureId),
+                gt(sessionCreditsTable.usedQuantity, 0)
+              )
+            )
+            .orderBy(desc(sessionCreditsTable.createdAt))
+            .limit(1);
+        }
 
         if (credit) {
           await tx
             .update(sessionCreditsTable)
-            .set({ usedQuantity: Math.max(0, credit.usedQuantity - 1) })
+            .set({
+              usedQuantity: Math.max(0, credit.usedQuantity - 1),
+              status: "disponivel",
+              consumedByAppointmentId: null,
+            })
             .where(eq(sessionCreditsTable.id, credit.id));
 
           if (credit.patientPackageId) {
@@ -619,6 +705,8 @@ export async function applyBillingRules(
           }
         }
 
+        const validityDays = await resolveReplacementValidityDays(null, patientPackageId);
+        const validUntil = addDaysISO(appointmentDate, validityDays);
         await tx
           .insert(sessionCreditsTable)
           .values({
@@ -629,7 +717,10 @@ export async function applyBillingRules(
             sourceAppointmentId: appointmentId,
             patientPackageId,
             clinicId: resolvedClinicId,
-            notes: `Crédito por ${newStatus === "faltou" ? "falta" : "cancelamento"} — ${procedure.name}`,
+            origin: "reposicaoFalta",
+            status: "disponivel",
+            validUntil,
+            notes: `Crédito por ${newStatus === "faltou" ? "falta" : "cancelamento"} — ${procedure.name} (válido até ${validUntil})`,
           });
 
         await tx.insert(financialRecordsTable).values({
@@ -679,9 +770,15 @@ export async function applyBillingRules(
         .limit(1);
 
       if (credit) {
+        // Reverte o crédito: marca como `estornado`. Quantity é zerado para
+        // que o crédito não possa mais ser consumido por engano.
         await tx
           .update(sessionCreditsTable)
-          .set({ quantity: credit.usedQuantity })
+          .set({
+            quantity: credit.usedQuantity,
+            status: "estornado",
+            notes: `${credit.notes ?? ""}\n[estornado em ${todayBRT()}: appt voltou a status ativo]`,
+          })
           .where(eq(sessionCreditsTable.id, credit.id));
       }
 

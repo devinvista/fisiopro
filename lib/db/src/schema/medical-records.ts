@@ -131,6 +131,15 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   frozenPricesJson: text("frozen_prices_json"),
   // Quando o plano é renegociado, o novo plano referencia o anterior aqui.
   parentPlanId: integer("parent_plan_id"),
+  // ── Política de crédito (override do pacote) ────────────────────────────
+  // Modo de pagamento das faturas mensais: "prepago" | "postpago" | null
+  // (herda do pacote). Postpago = créditos disponíveis imediatamente;
+  // prepago = só ficam disponíveis após pagamento da fatura do mês.
+  paymentMode: text("payment_mode"),
+  // Override da validade do crédito mensal e de reposição (em dias). Se
+  // null, herda do pacote. Mensal = dias após o fim do mês de competência.
+  monthlyCreditValidityDays: integer("monthly_credit_validity_days"),
+  replacementCreditValidityDays: integer("replacement_credit_validity_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

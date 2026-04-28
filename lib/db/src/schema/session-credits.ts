@@ -1,10 +1,38 @@
-import { pgTable, serial, text, integer, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { patientsTable } from "./patients";
 import { proceduresTable } from "./procedures";
 import { appointmentsTable } from "./appointments";
 
+/**
+ * Camada de saldo de crédito do paciente.
+ *
+ * Cada linha representa uma "emissão" de N créditos (quantity) de um
+ * procedimento. O saldo disponível em uma linha é `quantity - usedQuantity`
+ * quando `status='disponivel'`. Linhas com status `consumido | expirado |
+ * estornado` não compõem saldo.
+ *
+ * Origem (origin) — de onde o crédito veio:
+ *   - mensal              : pool mensal gerado pela materialização do plano.
+ *   - reposicaoFalta      : reposição automática por falta em sessão paga.
+ *   - reposicaoRemarcacao : reposição por remarcação dentro da política.
+ *   - compraPacote        : sessões compradas em pacote `sessoes`.
+ *   - cortesia            : crédito manual concedido pela clínica.
+ *   - legacy              : créditos pré-existentes ao schema atual.
+ *
+ * Status — ciclo de vida do crédito:
+ *   - disponivel        : saldo > 0 e dentro da validade — pode ser consumido.
+ *   - pendentePagamento : crédito de plano `prepago` aguardando fatura paga.
+ *   - consumido         : totalmente consumido (ver `consumedByAppointmentId`).
+ *   - expirado          : `validUntil` passou antes do consumo.
+ *   - estornado         : crédito anulado (ex.: erro de lançamento, cancelamento).
+ *
+ * Validade:
+ *   - `validUntil` nullable. Créditos sem validade nunca expiram.
+ *   - `monthRef` opcional, identifica o mês de competência ao qual o
+ *     crédito pertence (usado pelo pool mensal e relatórios).
+ */
 export const sessionCreditsTable = pgTable("session_credits", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
@@ -15,10 +43,19 @@ export const sessionCreditsTable = pgTable("session_credits", {
   patientPackageId: integer("patient_package_id"),
   clinicId: integer("clinic_id"),
   notes: text("notes"),
+  // ── Sprint "créditos com validade" ──────────────────────────────────────
+  validUntil: date("valid_until"),
+  monthRef: date("month_ref"),
+  origin: text("origin").notNull().default("legacy"),
+  status: text("status").notNull().default("disponivel"),
+  consumedByAppointmentId: integer("consumed_by_appointment_id"),
+  expiredAt: timestamp("expired_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_session_credits_patient_id").on(table.patientId),
   index("idx_session_credits_clinic_id").on(table.clinicId),
+  index("idx_session_credits_fifo")
+    .on(table.patientId, table.procedureId, table.status, table.validUntil),
 ]);
 
 export const insertSessionCreditSchema = createInsertSchema(sessionCreditsTable).omit({ id: true, createdAt: true });
