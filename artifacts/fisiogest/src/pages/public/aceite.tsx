@@ -1,27 +1,39 @@
 /**
- * Sprint 2 — Página pública de aceite de plano de tratamento.
+ * Página pública `/aceite/:token` — exibe o **contrato completo** do plano de
+ * tratamento que o paciente está prestes a assinar (ou que já assinou).
  *
- * Acessada por link único: `/aceite/:token`. Sem autenticação. O paciente:
- *   1. visualiza o termo (objetivos, técnicas, frequência) e os valores;
- *   2. digita o nome completo como assinatura;
- *   3. marca "li e concordo";
- *   4. confirma o aceite — o backend congela preços, gera fatura inicial
- *      e/ou créditos e marca o token como consumido.
+ * Princípio (unificado): o termo de aceite e o contrato são o **mesmo**
+ * documento. Antes do aceite, a linha de assinatura do paciente fica em
+ * branco e os campos de assinatura digital ficam visíveis abaixo do contrato.
+ * Após o aceite, o mesmo contrato passa a renderizar a trilha LGPD imutável
+ * (nome digitado, data, IP, dispositivo, via) no lugar da linha de assinatura,
+ * e os campos de assinatura desaparecem.
  *
- * Mobile-first: layout de cartão único com tipografia legível, suficiente
- * para uso em celular sem necessidade de instalar app.
+ * Sem auth — a posse do token é a credencial.
  */
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { API_BASE } from "@/lib/api";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, Printer } from "lucide-react";
+import {
+  generateContractHTML,
+  CONTRACT_PRINT_CSS,
+  printDocument,
+} from "@/pages/clinical/patients/patient-detail/utils/print-html";
+import type {
+  PatientBasic,
+  ClinicInfo,
+  PlanProcedureItem,
+} from "@/pages/clinical/patients/patient-detail/types";
 
 interface PublicPlanItem {
   id: number;
   kind: "recorrenteMensal" | "pacoteSessoes" | "avulso";
   procedureName: string;
   packageName: string | null;
+  packageType: string | null;
   totalSessions: number | null;
+  sessionsPerWeek: number;
   unitPrice: string | null;
   unitMonthlyPrice: string | null;
   discount: string | null;
@@ -29,19 +41,55 @@ interface PublicPlanItem {
   estimatedTotal: string;
 }
 
+interface PublicPlanPatient {
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  birthDate: string | null;
+}
+
+interface PublicPlanClinic {
+  name: string;
+  type: string | null;
+  cnpj: string | null;
+  cpf: string | null;
+  crefito: string | null;
+  responsibleTechnical: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  website: string | null;
+  logoUrl: string | null;
+  cancellationPolicyHours: number | null;
+  noShowFeeEnabled: boolean;
+  noShowFeeAmount: string | null;
+}
+
+interface PublicPlanAcceptance {
+  acceptedAt: string;
+  acceptedBySignature: string | null;
+  acceptedIp: string | null;
+  acceptedDevice: string | null;
+  acceptedVia: string;
+}
+
 interface PublicPlanSnapshot {
   planId: number;
+  patient: PublicPlanPatient;
   patientName: string;
   status: string;
   acceptedAt: string | null;
+  acceptance: PublicPlanAcceptance | null;
   objectives: string | null;
   techniques: string | null;
   frequency: string | null;
   estimatedSessions: number | null;
   startDate: string | null;
+  responsibleProfessional: string | null;
   items: PublicPlanItem[];
   totalEstimatedRevenue: string;
   expiresAt: string;
+  clinic: PublicPlanClinic | null;
 }
 
 type LoadState =
@@ -49,81 +97,126 @@ type LoadState =
   | { kind: "ok"; snapshot: PublicPlanSnapshot }
   | { kind: "error"; status: number; message: string };
 
-function formatBRL(value: string | number | null | undefined): string {
-  const n = typeof value === "string" ? Number(value) : (value ?? 0);
-  if (!Number.isFinite(n)) return "R$ 0,00";
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function kindLabel(kind: PublicPlanItem["kind"]): string {
-  if (kind === "recorrenteMensal") return "Mensal recorrente";
-  if (kind === "pacoteSessoes") return "Pacote de sessões";
-  return "Por sessão";
+/**
+ * Adapta o snapshot público para os tipos que `generateContractHTML` espera.
+ * `PlanProcedureItem` foi pensado para o contexto interno (com `packageId`,
+ * `procedureId`, etc.), mas só `packageType`, `totalSessions`,
+ * `sessionsPerWeek`, `price`, `monthlyPrice` e `discount` são lidos pelo
+ * gerador. Os demais campos viram `null`/`undefined`.
+ */
+function snapshotToContractInputs(snap: PublicPlanSnapshot): {
+  patient: PatientBasic;
+  plan: {
+    objectives?: string;
+    techniques?: string;
+    frequency?: string;
+    estimatedSessions?: string | number;
+    status?: string;
+    startDate?: string;
+    responsibleProfessional?: string;
+  };
+  items: PlanProcedureItem[];
+  clinic: ClinicInfo | null;
+} {
+  return {
+    patient: {
+      name: snap.patient.name,
+      cpf: snap.patient.cpf,
+      phone: snap.patient.phone,
+      birthDate: snap.patient.birthDate,
+    },
+    plan: {
+      objectives: snap.objectives ?? undefined,
+      techniques: snap.techniques ?? undefined,
+      frequency: snap.frequency ?? undefined,
+      estimatedSessions: snap.estimatedSessions ?? undefined,
+      status: snap.status,
+      startDate: snap.startDate ?? undefined,
+      responsibleProfessional: snap.responsibleProfessional ?? undefined,
+    },
+    items: snap.items.map<PlanProcedureItem>((it) => ({
+      id: it.id,
+      planId: snap.planId,
+      packageId: it.kind === "avulso" ? null : 1, // sentinel — gerador só checa truthy
+      procedureId: null,
+      sessionsPerWeek: it.sessionsPerWeek,
+      totalSessions: it.totalSessions,
+      packageName: it.packageName,
+      procedureName: it.procedureName,
+      packageType: it.packageType,
+      monthlyPrice: it.unitMonthlyPrice,
+      unitMonthlyPrice: it.unitMonthlyPrice,
+      price: it.unitPrice,
+      unitPrice: it.unitPrice,
+      discount: it.discount,
+    })),
+    clinic: snap.clinic
+      ? {
+          name: snap.clinic.name,
+          type: snap.clinic.type,
+          cnpj: snap.clinic.cnpj,
+          cpf: snap.clinic.cpf,
+          crefito: snap.clinic.crefito,
+          responsibleTechnical: snap.clinic.responsibleTechnical,
+          phone: snap.clinic.phone,
+          email: snap.clinic.email,
+          address: snap.clinic.address,
+          website: snap.clinic.website,
+          logoUrl: snap.clinic.logoUrl,
+          cancellationPolicyHours: snap.clinic.cancellationPolicyHours,
+          noShowFeeEnabled: snap.clinic.noShowFeeEnabled,
+          noShowFeeAmount: snap.clinic.noShowFeeAmount,
+        }
+      : null,
+  };
 }
 
 export default function AceitePage() {
   const params = useParams<{ token: string }>();
-  const [, setLocation] = useLocation();
   const token = params?.token ?? "";
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [signature, setSignature] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    async function load() {
-      try {
-        const res = await fetch(`${API_BASE}/api/public/treatment-plans/by-token/${token}`, {
-          credentials: "omit",
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!alive) return;
-        if (!res.ok) {
-          setState({
-            kind: "error",
-            status: res.status,
-            message: body?.message ?? "Não foi possível carregar o plano.",
-          });
-          return;
-        }
-        setState({ kind: "ok", snapshot: body });
-      } catch (err: any) {
-        if (!alive) return;
+  async function loadSnapshot() {
+    try {
+      const res = await fetch(`${API_BASE}/api/public/treatment-plans/by-token/${token}`, {
+        credentials: "omit",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
         setState({
           kind: "error",
-          status: 0,
-          message: "Falha de rede. Tente novamente em instantes.",
+          status: res.status,
+          message: body?.message ?? "Não foi possível carregar o plano.",
         });
+        return;
       }
+      setState({ kind: "ok", snapshot: body });
+    } catch {
+      setState({
+        kind: "error",
+        status: 0,
+        message: "Falha de rede. Tente novamente em instantes.",
+      });
     }
-    if (token) void load();
-    return () => {
-      alive = false;
-    };
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    void loadSnapshot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const snapshot = state.kind === "ok" ? state.snapshot : null;
-  const totalMensal = useMemo(
-    () =>
-      snapshot
-        ? snapshot.items
-            .filter((i) => i.kind === "recorrenteMensal")
-            .reduce((acc, i) => acc + Number(i.estimatedTotal), 0)
-        : 0,
-    [snapshot],
-  );
-  const totalAVista = useMemo(
-    () =>
-      snapshot
-        ? snapshot.items
-            .filter((i) => i.kind === "pacoteSessoes")
-            .reduce((acc, i) => acc + Number(i.estimatedTotal), 0)
-        : 0,
-    [snapshot],
-  );
+
+  const contractHtml = useMemo(() => {
+    if (!snapshot) return "";
+    const { patient, plan, items, clinic } = snapshotToContractInputs(snapshot);
+    return generateContractHTML(patient, plan, items, clinic, snapshot.acceptance);
+  }, [snapshot]);
 
   async function handleSubmit() {
     if (!signature.trim() || !agreed || submitting) return;
@@ -144,8 +237,10 @@ export default function AceitePage() {
         setSubmitError(body?.message ?? "Não foi possível registrar o aceite.");
         return;
       }
-      setDone(true);
-    } catch (err) {
+      // Recarrega o snapshot — agora com a trilha de aceite preenchida —
+      // para que o contrato seja re-renderizado com a assinatura digital.
+      await loadSnapshot();
+    } catch {
       setSubmitError("Falha de rede. Tente novamente.");
     } finally {
       setSubmitting(false);
@@ -167,7 +262,9 @@ export default function AceitePage() {
       <PublicShell>
         <div className="text-center space-y-4 py-10">
           <AlertCircle className="w-12 h-12 text-amber-500 mx-auto" />
-          <h1 className="text-xl font-semibold text-slate-800">Não foi possível abrir este link</h1>
+          <h1 className="text-xl font-semibold text-slate-800">
+            Não foi possível abrir este link
+          </h1>
           <p className="text-sm text-slate-600">{state.message}</p>
           <p className="text-xs text-slate-400">
             Entre em contato com a clínica para solicitar um novo link.
@@ -177,147 +274,75 @@ export default function AceitePage() {
     );
   }
 
-  if (done) {
-    return (
-      <PublicShell>
-        <div className="text-center space-y-4 py-10">
-          <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
-          <h1 className="text-2xl font-semibold text-slate-800">Aceite registrado!</h1>
-          <p className="text-sm text-slate-600 max-w-md mx-auto">
-            Recebemos sua confirmação. A clínica entrará em contato para combinar os
-            próximos passos. Pode fechar esta página.
-          </p>
-        </div>
-      </PublicShell>
-    );
-  }
-
-  if (snapshot!.acceptedAt) {
-    return (
-      <PublicShell>
-        <div className="text-center space-y-4 py-10">
-          <CheckCircle2 className="w-14 h-14 text-emerald-500 mx-auto" />
-          <h1 className="text-2xl font-semibold text-slate-800">Plano já aceito</h1>
-          <p className="text-sm text-slate-600">
-            Este plano foi aceito em{" "}
-            {new Date(snapshot!.acceptedAt!).toLocaleString("pt-BR")}.
-          </p>
-        </div>
-      </PublicShell>
-    );
-  }
-
   const snap = snapshot!;
+  const isAccepted = !!snap.acceptance;
+
   return (
-    <PublicShell>
-      <div className="space-y-6">
-        <header className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-primary font-semibold">
-            Plano de tratamento
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">{snap.patientName}</h1>
-          <p className="text-xs text-slate-400">
-            Link válido até {new Date(snap.expiresAt).toLocaleDateString("pt-BR")}
-          </p>
-        </header>
+    <PublicShell wide>
+      {/* Estilos do contrato escopados em .doc-root para isolar do app */}
+      <style dangerouslySetInnerHTML={{ __html: CONTRACT_PRINT_CSS }} />
 
-        {snap.objectives && (
-          <section className="space-y-1">
-            <h2 className="text-sm font-semibold text-slate-700">Objetivos</h2>
-            <p className="text-sm text-slate-600 whitespace-pre-line">{snap.objectives}</p>
-          </section>
-        )}
-
-        {(snap.frequency || snap.estimatedSessions || snap.startDate) && (
-          <section className="grid grid-cols-2 gap-3 text-xs">
-            {snap.frequency && (
-              <Stat label="Frequência" value={snap.frequency} />
-            )}
-            {snap.estimatedSessions && (
-              <Stat label="Sessões estimadas" value={String(snap.estimatedSessions)} />
-            )}
-            {snap.startDate && (
-              <Stat
-                label="Início previsto"
-                value={new Date(snap.startDate + "T00:00:00").toLocaleDateString("pt-BR")}
-              />
-            )}
-          </section>
-        )}
-
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-slate-700">Itens do plano</h2>
-          <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            {snap.items.length === 0 && (
-              <p className="text-xs text-slate-400 text-center py-6">Nenhum item.</p>
-            )}
-            {snap.items.map((item) => (
-              <div key={item.id} className="p-3 space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-800 truncate">
-                      {item.procedureName}
-                    </p>
-                    {item.packageName && (
-                      <p className="text-xs text-slate-500 truncate">{item.packageName}</p>
-                    )}
-                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mt-0.5">
-                      {kindLabel(item.kind)}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    {item.kind === "pacoteSessoes" && (
-                      <>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {formatBRL(item.estimatedTotal)}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          {item.totalSessions}× {formatBRL(item.effectivePrice)}
-                        </p>
-                      </>
-                    )}
-                    {item.kind === "recorrenteMensal" && (
-                      <>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {formatBRL(item.estimatedTotal)}
-                          <span className="text-xs text-slate-400">/mês</span>
-                        </p>
-                      </>
-                    )}
-                    {item.kind === "avulso" && (
-                      <p className="text-xs text-slate-500">Cobrança por sessão</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* Cabeçalho de status */}
+      {isAccepted ? (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-emerald-800">Contrato assinado</p>
+            <p className="text-emerald-700 mt-0.5">
+              Assinado em{" "}
+              {new Date(snap.acceptance!.acceptedAt).toLocaleString("pt-BR")} —{" "}
+              {labelVia(snap.acceptance!.acceptedVia)}. A trilha de aceite (nome,
+              data, IP e dispositivo) está registrada no rodapé do contrato
+              abaixo.
+            </p>
           </div>
-          <div className="pt-2 space-y-1 text-sm">
-            {totalAVista > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">Total à vista (pacotes):</span>
-                <span className="font-semibold text-slate-800">{formatBRL(totalAVista)}</span>
-              </div>
-            )}
-            {totalMensal > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">Mensalidade recorrente:</span>
-                <span className="font-semibold text-slate-800">
-                  {formatBRL(totalMensal)}
-                  <span className="text-xs text-slate-400">/mês</span>
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="space-y-3 pt-2 border-t border-slate-100">
-          <div className="flex items-start gap-2 text-xs text-slate-500">
-            <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-            <p>
-              Ao aceitar, você confirma a leitura do plano e autoriza a clínica a
-              gerar as faturas iniciais correspondentes. Capturamos data, IP e
+        </div>
+      ) : (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-800">Aguardando sua assinatura</p>
+            <p className="text-amber-700 mt-0.5">
+              Leia o contrato abaixo. Para aceitar, digite seu nome completo no
+              campo de assinatura ao final e confirme. Capturamos data, IP e
               dispositivo para a trilha de auditoria (LGPD).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Botão de impressão (sempre disponível) */}
+      <div className="mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            const { patient, plan, items, clinic } = snapshotToContractInputs(snap);
+            const html = generateContractHTML(patient, plan, items, clinic, snap.acceptance);
+            printDocument(html, `Contrato — ${snap.patient.name}`);
+          }}
+          className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-lg px-3 py-1.5 transition-colors"
+        >
+          <Printer className="w-3.5 h-3.5" /> Imprimir / Salvar PDF
+        </button>
+      </div>
+
+      {/* Contrato (mesmo HTML usado na impressão) */}
+      <div
+        className="doc-root rounded-lg border border-slate-200 p-5 sm:p-8 overflow-x-auto"
+        dangerouslySetInnerHTML={{ __html: contractHtml }}
+      />
+
+      {/* Painel de assinatura — só aparece se ainda não assinado */}
+      {!isAccepted && (
+        <section className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5">
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-slate-800">
+              Assinatura digital
+            </h2>
+            <p className="text-xs text-slate-600">
+              Ao confirmar, você declara ter lido o contrato acima e concordar
+              com todas as cláusulas, valores e procedimentos. A clínica emitirá
+              as faturas iniciais correspondentes.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -326,7 +351,7 @@ export default function AceitePage() {
             </label>
             <input
               id="sig"
-              className="w-full h-12 px-3 rounded-lg border border-slate-200 focus:border-primary outline-none text-base"
+              className="w-full h-12 px-3 rounded-lg border border-slate-300 focus:border-primary outline-none text-base bg-white"
               placeholder="Ex.: Maria da Silva Souza"
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
@@ -341,8 +366,8 @@ export default function AceitePage() {
               onChange={(e) => setAgreed(e.target.checked)}
             />
             <span>
-              Li e concordo com os procedimentos, valores e condições deste plano de
-              tratamento.
+              Li e concordo com os procedimentos, valores e condições deste
+              contrato de prestação de serviços.
             </span>
           </label>
           {submitError && (
@@ -357,29 +382,41 @@ export default function AceitePage() {
             className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            Aceitar plano
+            Assinar e aceitar contrato
           </button>
+          {snap.expiresAt && (
+            <p className="text-[11px] text-slate-400 text-center">
+              Link válido até{" "}
+              {new Date(snap.expiresAt).toLocaleDateString("pt-BR")}
+            </p>
+          )}
         </section>
-      </div>
+      )}
     </PublicShell>
   );
 }
 
-function PublicShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-slate-50 py-6 px-4 sm:py-12">
-      <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-8">
-        {children}
-      </div>
-    </div>
-  );
+function labelVia(via: string): string {
+  if (via === "link") return "assinatura digital (link público)";
+  if (via === "presencial") return "assinatura presencial";
+  if (via === "legado") return "registro legado";
+  return via;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function PublicShell({
+  children,
+  wide = false,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
-      <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-sm font-semibold text-slate-800 mt-0.5">{value}</p>
+    <div className="min-h-screen bg-slate-50 py-6 px-4 sm:py-12">
+      <div
+        className={`${wide ? "max-w-4xl" : "max-w-xl"} mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-8`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

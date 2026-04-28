@@ -4,11 +4,39 @@ import type { PatientBasic, ClinicInfo, PlanProcedureItem } from "../../types";
 import { todayBRTDate } from "../format";
 import { buildClinicHeaderHTML, extractCityState, fmtCurrency } from "./_shared";
 
+/**
+ * Trilha de aceite renderizada no rodapé do contrato. Quando informada, a
+ * linha de assinatura do paciente é substituída por uma caixa "assinado
+ * digitalmente / presencialmente" exibindo nome digitado, data, IP e
+ * dispositivo (LGPD). O termo de aceite e o contrato são o **mesmo
+ * documento** — antes assinado mostra a linha em branco; depois assinado
+ * mostra a trilha imutável.
+ */
+export interface ContractAcceptance {
+  acceptedAt: string;
+  acceptedBySignature: string | null;
+  acceptedIp: string | null;
+  acceptedDevice: string | null;
+  acceptedVia: string;
+}
+
+function viaLabel(via: string): string {
+  if (via === "link") return "digitalmente (link público)";
+  if (via === "presencial") return "presencialmente";
+  if (via === "legado") return "(registro legado)";
+  return via;
+}
+
+function escapeAttr(s: string): string {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export function generateContractHTML(
   patient: PatientBasic,
   plan: { objectives?: string; techniques?: string; frequency?: string; estimatedSessions?: string | number; status?: string; startDate?: string; responsibleProfessional?: string },
   planItems: PlanProcedureItem[],
   clinic?: ClinicInfo | null,
+  acceptance?: ContractAcceptance | null,
 ) {
   const today = format(todayBRTDate(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const cpfFmt = patient.cpf ? patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "—";
@@ -158,10 +186,7 @@ export function generateContractHTML(
 
     <div style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr;gap:40px">
       <div>
-        <div class="sig-line"></div>
-        <div class="sig-label"><strong>${patient.name}</strong></div>
-        <div class="sig-label">CPF: ${cpfFmt}</div>
-        <div class="sig-label">Contratante</div>
+        ${renderPatientSignatureBlock(patient.name, cpfFmt, acceptance)}
       </div>
       <div>
         <div class="sig-line"></div>
@@ -170,6 +195,44 @@ export function generateContractHTML(
       </div>
     </div>
 
-    <div class="footer">Contrato gerado em ${today} &bull; ${clinicName} &bull; Valores acordados na contratação do plano</div>
+    <div class="footer">${
+      acceptance
+        ? `Contrato assinado em ${format(new Date(acceptance.acceptedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} ${viaLabel(acceptance.acceptedVia)} &bull; ${clinicName}`
+        : `Contrato gerado em ${today} &bull; ${clinicName} &bull; Valores acordados na contratação do plano`
+    }</div>
   `;
+}
+
+function renderPatientSignatureBlock(
+  patientName: string,
+  cpfFmt: string,
+  acceptance?: ContractAcceptance | null,
+): string {
+  if (!acceptance) {
+    return `
+        <div class="sig-line"></div>
+        <div class="sig-label"><strong>${escapeAttr(patientName)}</strong></div>
+        <div class="sig-label">CPF: ${cpfFmt}</div>
+        <div class="sig-label">Contratante</div>
+    `;
+  }
+  const signed = acceptance.acceptedBySignature?.trim() || patientName;
+  const dateFmt = format(new Date(acceptance.acceptedAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+  const via = viaLabel(acceptance.acceptedVia);
+  const ip = acceptance.acceptedIp ? `<div>IP: <strong>${escapeAttr(acceptance.acceptedIp)}</strong></div>` : "";
+  const device = acceptance.acceptedDevice
+    ? `<div style="word-break:break-all">Dispositivo: <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:8pt">${escapeAttr(acceptance.acceptedDevice).slice(0, 240)}</span></div>`
+    : "";
+  return `
+        <div class="sig-signed">
+          <div class="sig-signed-name">${escapeAttr(signed)}</div>
+          <div class="sig-signed-meta">
+            <div><strong>${escapeAttr(patientName)}</strong> &bull; CPF: ${cpfFmt} &bull; Contratante</div>
+            <div>Assinado ${via} em <strong>${dateFmt}</strong></div>
+            ${ip}
+            ${device}
+            <div style="margin-top:4px;font-size:8pt;color:#047857">Trilha LGPD imutável (data, IP e dispositivo registrados no momento do aceite).</div>
+          </div>
+        </div>
+    `;
 }

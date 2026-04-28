@@ -140,9 +140,9 @@ router.get(
     if (lookup.status === "expired") {
       throw new PublicError(410, "expired", "Este link expirou. Solicite um novo à clínica.");
     }
-    if (lookup.status === "used") {
-      throw new PublicError(409, "used", "Este link já foi usado.");
-    }
+    // status === "used" continua acessível para que o paciente possa rever
+    // o contrato já assinado (com a trilha de aceite renderizada). O re-aceite
+    // é bloqueado no POST `/accept` via verificação `acceptedAt` no service.
     const snapshot = await loadPublicPlanSnapshot(lookup.tokenRow!.planId);
     if (!snapshot) {
       throw new PublicError(404, "not_found", "Plano não encontrado.");

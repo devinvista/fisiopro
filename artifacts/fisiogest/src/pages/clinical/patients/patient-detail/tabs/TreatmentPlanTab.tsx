@@ -252,7 +252,16 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   const handlePrintContract = () => {
     if (!selectedPlan || !patient) return;
-    const html = generateContractHTML(patient, form, planItems, clinic);
+    const acceptance = selectedPlan?.acceptedAt
+      ? {
+          acceptedAt: selectedPlan.acceptedAt,
+          acceptedBySignature: selectedPlan.acceptedBySignature ?? null,
+          acceptedIp: selectedPlan.acceptedIp ?? null,
+          acceptedDevice: selectedPlan.acceptedDevice ?? null,
+          acceptedVia: selectedPlan.acceptedVia ?? "presencial",
+        }
+      : null;
+    const html = generateContractHTML(patient, form, planItems, clinic, acceptance);
     printDocument(html, `Contrato — ${patient.name}`);
   };
 

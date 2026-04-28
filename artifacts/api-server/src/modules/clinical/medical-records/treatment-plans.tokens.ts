@@ -21,6 +21,7 @@ import {
   proceduresTable,
   packagesTable,
   treatmentPlanProceduresTable,
+  clinicsTable,
 } from "@workspace/db";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { resolveItemKind } from "./treatment-plans.acceptance.js";
@@ -138,7 +139,9 @@ export interface PublicPlanSnapshotItem {
   kind: "recorrenteMensal" | "pacoteSessoes" | "avulso";
   procedureName: string;
   packageName: string | null;
+  packageType: string | null;
   totalSessions: number | null;
+  sessionsPerWeek: number;
   unitPrice: string | null;
   unitMonthlyPrice: string | null;
   discount: string | null;
@@ -146,25 +149,69 @@ export interface PublicPlanSnapshotItem {
   estimatedTotal: string;
 }
 
+export interface PublicPlanSnapshotPatient {
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  birthDate: string | null;
+}
+
+export interface PublicPlanSnapshotClinic {
+  name: string;
+  type: string | null;
+  cnpj: string | null;
+  cpf: string | null;
+  crefito: string | null;
+  responsibleTechnical: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  website: string | null;
+  logoUrl: string | null;
+  cancellationPolicyHours: number | null;
+  noShowFeeEnabled: boolean;
+  noShowFeeAmount: string | null;
+}
+
+export interface PublicPlanSnapshotAcceptance {
+  acceptedAt: string;
+  acceptedBySignature: string | null;
+  acceptedIp: string | null;
+  acceptedDevice: string | null;
+  acceptedVia: string;
+}
+
 export interface PublicPlanSnapshot {
   planId: number;
+  patient: PublicPlanSnapshotPatient;
   patientName: string;
   status: string;
   acceptedAt: string | null;
+  acceptance: PublicPlanSnapshotAcceptance | null;
   objectives: string | null;
   techniques: string | null;
   frequency: string | null;
   estimatedSessions: number | null;
   startDate: string | null;
+  responsibleProfessional: string | null;
   items: PublicPlanSnapshotItem[];
   totalEstimatedRevenue: string;
   expiresAt: string;
+  clinic: PublicPlanSnapshotClinic | null;
 }
 
 /**
- * Snapshot público enviado para a página `/aceite/:token`. NÃO inclui dados
- * sensíveis do paciente (CPF, telefone, endereço) — apenas o nome e os termos
- * comerciais necessários para a leitura/aceitação.
+ * Snapshot público enviado para a página `/aceite/:token`.
+ *
+ * Inclui o conjunto mínimo de dados necessários para renderizar o **contrato
+ * completo** que o paciente está prestes a assinar (ou que já assinou): dados
+ * de identificação do paciente (CPF/telefone/data de nascimento), dados da
+ * clínica (CNPJ/CREFITO/políticas de cancelamento e no-show) e a trilha de
+ * aceite (`acceptance`) quando o plano já foi assinado.
+ *
+ * O token é a credencial — entregue apenas ao próprio paciente — então a
+ * exposição do CPF do paciente neste endpoint é equivalente a entregar o
+ * contrato impresso a ele em mão.
  */
 export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlanSnapshot | null> {
   const [plan] = await db
@@ -175,9 +222,35 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
   if (!plan) return null;
 
   const [patient] = await db
-    .select({ name: patientsTable.name })
+    .select({
+      name: patientsTable.name,
+      cpf: patientsTable.cpf,
+      phone: patientsTable.phone,
+      birthDate: patientsTable.birthDate,
+    })
     .from(patientsTable)
     .where(eq(patientsTable.id, plan.patientId))
+    .limit(1);
+
+  const [clinicRow] = await db
+    .select({
+      name: clinicsTable.name,
+      type: clinicsTable.type,
+      cnpj: clinicsTable.cnpj,
+      cpf: clinicsTable.cpf,
+      crefito: clinicsTable.crefito,
+      responsibleTechnical: clinicsTable.responsibleTechnical,
+      phone: clinicsTable.phone,
+      email: clinicsTable.email,
+      address: clinicsTable.address,
+      website: clinicsTable.website,
+      logoUrl: clinicsTable.logoUrl,
+      cancellationPolicyHours: clinicsTable.cancellationPolicyHours,
+      noShowFeeEnabled: clinicsTable.noShowFeeEnabled,
+      noShowFeeAmount: clinicsTable.noShowFeeAmount,
+    })
+    .from(clinicsTable)
+    .where(eq(clinicsTable.isActive, true))
     .limit(1);
 
   const rows = await db
@@ -187,6 +260,7 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       procedureId: treatmentPlanProceduresTable.procedureId,
       packageId: treatmentPlanProceduresTable.packageId,
       totalSessions: treatmentPlanProceduresTable.totalSessions,
+      sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
       unitPrice: treatmentPlanProceduresTable.unitPrice,
       unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
       discount: treatmentPlanProceduresTable.discount,
@@ -225,7 +299,9 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       kind,
       procedureName: r.procedureName ?? "Procedimento",
       packageName: r.packageName ?? null,
+      packageType: r.packageType ?? null,
       totalSessions: r.totalSessions,
+      sessionsPerWeek: r.sessionsPerWeek ?? 1,
       unitPrice: r.unitPrice,
       unitMonthlyPrice: r.unitMonthlyPrice,
       discount: r.discount,
@@ -234,19 +310,55 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     };
   });
 
+  const acceptance: PublicPlanSnapshotAcceptance | null = plan.acceptedAt
+    ? {
+        acceptedAt: plan.acceptedAt.toISOString(),
+        acceptedBySignature: plan.acceptedBySignature ?? null,
+        acceptedIp: plan.acceptedIp ?? null,
+        acceptedDevice: plan.acceptedDevice ?? null,
+        acceptedVia: plan.acceptedVia ?? "presencial",
+      }
+    : null;
+
   return {
     planId: plan.id,
+    patient: {
+      name: patient?.name ?? "Paciente",
+      cpf: patient?.cpf ?? null,
+      phone: patient?.phone ?? null,
+      birthDate: patient?.birthDate ?? null,
+    },
     patientName: patient?.name ?? "Paciente",
     status: plan.status,
     acceptedAt: plan.acceptedAt ? plan.acceptedAt.toISOString() : null,
+    acceptance,
     objectives: plan.objectives,
     techniques: plan.techniques,
     frequency: plan.frequency,
     estimatedSessions: plan.estimatedSessions,
     startDate: plan.startDate,
+    responsibleProfessional: plan.responsibleProfessional ?? null,
     items,
     totalEstimatedRevenue: totalRevenue.toFixed(2),
     expiresAt: "",
+    clinic: clinicRow
+      ? {
+          name: clinicRow.name,
+          type: clinicRow.type ?? null,
+          cnpj: clinicRow.cnpj ?? null,
+          cpf: clinicRow.cpf ?? null,
+          crefito: clinicRow.crefito ?? null,
+          responsibleTechnical: clinicRow.responsibleTechnical ?? null,
+          phone: clinicRow.phone ?? null,
+          email: clinicRow.email ?? null,
+          address: clinicRow.address ?? null,
+          website: clinicRow.website ?? null,
+          logoUrl: clinicRow.logoUrl ?? null,
+          cancellationPolicyHours: clinicRow.cancellationPolicyHours ?? null,
+          noShowFeeEnabled: !!clinicRow.noShowFeeEnabled,
+          noShowFeeAmount: clinicRow.noShowFeeAmount ?? null,
+        }
+      : null,
   };
 }
 
