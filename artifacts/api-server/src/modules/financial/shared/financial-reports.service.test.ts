@@ -15,6 +15,7 @@ describe("financialReportsService — pure helpers", () => {
         "cobrancaSessao",
         "cobrancaMensal",
         "faturaConsolidada",
+        "faturaPlano",
       ]);
     });
   });

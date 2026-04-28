@@ -39,6 +39,8 @@ A unificação acontece em camadas, mantendo retrocompatibilidade durante toda a
 - UI: `SubscriptionsSection` substituída por `RecurringPackageSection` (lê `/api/patients/:patientId/packages` e filtra por `recurrenceType`). Aba renomeada de "Assinaturas" → "Pacotes Recorrentes". `SubscriptionsSection.tsx` virou re-export para preservar imports antigos.
 - Coluna `financial_records.patient_package_id` aplicada via `ALTER TABLE … ADD COLUMN IF NOT EXISTS` (push interativo do drizzle-kit estava bloqueado por prompt de outra tabela). Índice parcial `idx_financial_records_patient_package_id` criado.
 - Test do `runBilling` atualizado para a shape do novo caminho (`pkg` em vez de `subscription`).
+- Suíte de testes estabilizada (296/296 passando, 28/28 suites): mocks de `appointments.pricing.test.ts` ganharam `packagesTable` + `sql` (necessários após o JOIN com pacotes na resolução de preço); `RECEIVABLE_TYPES` no `financial-reports.service.test.ts` agora inclui `faturaPlano`; alias `@/` adicionado ao `vitest.config.ts` para resolver imports da UI nos schemas testados.
+- Script `scripts/migrate-subscriptions-to-packages.ts` validado em dry-run (0 subscriptions ativas no banco — script fica disponível para clientes legados).
 
 **Pendente (Sprint 6):**
 - Drop definitivo de `patient_subscriptions` e remoção do bloco legado em `appointments.billing.ts`, `billing.service.ts`, `consolidated-billing.service.ts`.

@@ -48,7 +48,17 @@ vi.mock("@workspace/db", () => ({
     treatmentPlanId: "treatmentPlanId",
     procedureId: "procedureId",
     unitPrice: "unitPrice",
+    unitMonthlyPrice: "unitMonthlyPrice",
     discount: "discount",
+    packageId: "packageId",
+  },
+  // `packagesTable` é referenciada no JOIN do plano (procedure direto OU
+  // procedure herdado do package). Mock só precisa expor as colunas usadas.
+  packagesTable: {
+    id: "id",
+    procedureId: "procedureId",
+    packageType: "packageType",
+    billingDay: "billingDay",
   },
 }));
 
@@ -56,6 +66,15 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args: any[]) => args),
   eq: vi.fn((a: any, b: any) => ["eq", a, b]),
   desc: vi.fn((x: any) => ["desc", x]),
+  // `sql` é usado pelo helper para escrever um OR no WHERE do plano
+  // (treatment_plan_procedures.procedureId OU patient_packages.procedureId).
+  // Para o teste basta retornar um marker — o select é mockado de qualquer jeito.
+  sql: Object.assign(
+    (strings: TemplateStringsArray, ...values: any[]) => ({ __sql: true, strings, values }),
+    {
+      raw: (s: string) => ({ __sql: true, raw: s }),
+    },
+  ),
 }));
 
 const { resolveEffectivePrice } = await import("./appointments.pricing.js");
