@@ -147,6 +147,16 @@ Substituiu a materialização antecipada de 12 meses pela geração mês a mês 
 - **Limpeza de legado:** `artifacts/api-server/src/scripts/cleanup-future-faturaplano.ts` (`--dry-run` por padrão; `--apply`, `--plan=<id>`, `--clinic=<id>`, `--month=YYYY-MM`). Remove `faturaPlano` `pendente` com `recognized_entry_id IS NULL` e `plan_month_ref > <mês de corte>` (default mês corrente em BRT) e zera `appointments.monthlyInvoiceId` antes da exclusão.
 - **Testes:** 12 casos unitários em `monthly-plan-billing.service.test.ts` cobrem `iterMonths` (virada de ano, intervalo invertido, range longo) e `isMonthDue` (gap-fill, mês corrente com tolerância, billingDay no início do mês, clamp em fevereiro, `tolerance=0`).
 
+#### Cascade de pagamento de fatura agrupadora (Sprint 4 Refactor — abr/2026)
+Antes do Sprint 4, pagar uma `faturaMensalAvulso` causava (a) reconhecimento dobrado de receita (filhos já tinham reconhecido na confirmação da sessão) e (b) filhos órfãos em `pendente`. Detalhes em `sprints/sprint-4-cascade-pagamento.md`.
+
+- **Helper:** `cascadeFaturaMensalAvulsoPayment` em `artifacts/api-server/src/modules/financial/payments/payment-cascade.ts`. Idempotente (filtra por `status='pendente'`); aloca o `paymentEntry` do parent contra `recognizedEntryId` de cada filho e cascateia status `pago`.
+- **Branch dedicada no payment loop:** `financial-payments.routes.ts` agora identifica `transactionType='faturaMensalAvulso'`, posta apenas o `postReceivableSettlement` do parent (sem `postReceivableRevenue`), chama o cascade e mantém um `Set<number>` de IDs cascateados para pular esses filhos nas iterações subsequentes do loop (snapshot `pendingRecords` foi carregado antes da transação).
+- **Pagamento parcial não cascateia** (`allocationAmount < parent.amount` → parent fica `pendente`/parcial, filhos seguem `pendente`).
+- **Por que `faturaPlano` NÃO cascateia automaticamente:** `parent.amount` cobre apenas a mensalidade fixa; os filhos `creditoAReceber` (avulsos do mês via Sprint 3) têm valor próprio e cada um é um recebível independente. O loop natural processa parent + filhos em sequência ordenada por `dueDate`. O `parent_record_id` aqui é puramente de agrupamento visual.
+- **Invariante crítica:** `closeAvulsoMonth` cria `faturaMensalAvulso` com `parent.amount = SUM(filhos.amount)`. Se essa invariante for violada, o cascade marcaria filhos extras como `pago` sem cobertura — Sprint posterior pode adicionar re-agregação no `closeAvulsoMonth` quando filhos novos aparecem após o fechamento.
+- **Testes:** 4 casos em `payment-cascade.test.ts` (cascade feliz com 2 filhos + alocação por filho, idempotência sem filhos pendentes, filho sem `recognizedEntryId` marcado pago sem alocar, defesa contra `patientId=null`).
+
 ### Fluxo de Caixa Projetado (Sprint 3 — T7)
 
 - **Endpoint:** `GET /api/financial/cash-flow-projection?days=N` (1..180), gated por `requireFeature("financial.view.cash_flow")` + `requirePermission("financial.read")`.

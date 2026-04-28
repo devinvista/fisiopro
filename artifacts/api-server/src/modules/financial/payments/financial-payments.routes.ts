@@ -21,6 +21,10 @@ import {
 import { RECEIVABLE_TYPES } from "../shared/financial-reports.service.js";
 import { createPaymentSchema } from "../financial.schemas.js";
 import { assertPatientInClinic } from "../financial.repository.js";
+import {
+  cascadeFaturaMensalAvulsoPayment,
+  countPendingChildren,
+} from "./payment-cascade.js";
 
 const router = Router();
 
@@ -147,9 +151,15 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
 
       let remaining = numAmount;
       let primaryEntryId: number | null = null;
+      // Sprint 4 — IDs de filhos cascateados nesta transação. Quando uma
+      // `faturaMensalAvulso` é paga, marcamos seus filhos como `pago` em
+      // bloco; eles ainda aparecem em `pendingRecords` (snapshot anterior),
+      // então pulamos para não dupli-settlear.
+      const cascadedChildIds = new Set<number>();
 
       for (const pending of pendingRecords) {
         if (remaining <= 0) break;
+        if (cascadedChildIds.has(pending.id)) continue;
         const allocationAmount = Math.min(remaining, Number(pending.amount));
         let receivableEntryId = pending.accountingEntryId ?? pending.recognizedEntryId;
 
@@ -187,6 +197,57 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
             const { promotePrepaidCreditsForFinancialRecord } =
               await import("../../clinical/medical-records/treatment-plans.materialization.js");
             await promotePrepaidCreditsForFinancialRecord(pending.id);
+          }
+          remaining = Math.round((remaining - allocationAmount) * 100) / 100;
+          continue;
+        }
+
+        // ── faturaMensalAvulso (consolidador, Sprint 4) ──────────────────
+        // Os filhos JÁ reconheceram receita ao serem materializados (sessão
+        // confirmada). O parent NÃO tem receita própria — apenas posta o
+        // settlement (D Caixa / C Recebíveis) e aloca contra o
+        // `recognizedEntryId` de cada filho. Em seguida cascateia o status
+        // `pago` para os filhos. Pagamento parcial não cascateia.
+        if (pending.transactionType === "faturaMensalAvulso") {
+          const settlementEntry = await postReceivableSettlement({
+            clinicId: pending.clinicId ?? req.clinicId ?? null,
+            entryDate: today,
+            amount: allocationAmount,
+            description: `Baixa de fatura mensal de avulsos — ${pending.description}`,
+            sourceType: "financial_record",
+            sourceId: paymentRecord.id,
+            patientId,
+            appointmentId: pending.appointmentId,
+            procedureId: pending.procedureId,
+            subscriptionId: pending.subscriptionId,
+            financialRecordId: paymentRecord.id,
+          }, tx as any);
+          primaryEntryId ??= settlementEntry.id;
+
+          if (allocationAmount >= Number(pending.amount)) {
+            const cascade = await cascadeFaturaMensalAvulsoPayment({
+              tx,
+              parent: {
+                id: pending.id,
+                clinicId: pending.clinicId ?? req.clinicId ?? null,
+                patientId,
+                amount: pending.amount,
+              },
+              paymentDate: today,
+              paymentMethod: paymentMethod || null,
+              settlementEntryId: settlementEntry.id,
+            });
+            for (const cid of cascade.cascadedChildIds) cascadedChildIds.add(cid);
+
+            await tx
+              .update(financialRecordsTable)
+              .set({
+                status: "pago",
+                paymentDate: today,
+                paymentMethod: paymentMethod || null,
+                settlementEntryId: settlementEntry.id,
+              })
+              .where(eq(financialRecordsTable.id, pending.id));
           }
           remaining = Math.round((remaining - allocationAmount) * 100) / 100;
           continue;
