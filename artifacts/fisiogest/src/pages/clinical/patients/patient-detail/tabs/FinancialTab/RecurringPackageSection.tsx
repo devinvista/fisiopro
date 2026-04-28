@@ -16,8 +16,9 @@ import { formatCurrency } from "../../utils/format";
  * `GET /api/patients/:patientId/packages` e filtrando por `recurrenceStatus`.
  *
  * Não permite criação direta nesta tela: o fluxo correto é criar um pacote
- * (template `mensal` ou `faturaConsolidada`) na tela de Pacotes do paciente,
- * que popula automaticamente os campos de recorrência.
+ * mensal na tela de Pacotes do paciente, que popula automaticamente os
+ * campos de recorrência. Templates do tipo `faturaConsolidada` (legado) ainda
+ * são exibidos quando existem em bases pré-Sprint 5, com badge "Mensal (legado)".
  */
 type PatientPackage = {
   id: number;
@@ -44,7 +45,8 @@ type PatientPackage = {
 
 function recurrenceLabel(type: string | null): { label: string; color: string } {
   if (type === "faturaConsolidada") {
-    return { label: "Fatura Consolidada", color: "bg-violet-50 text-violet-700 border-violet-200" };
+    // Sprint 5: descontinuado — exibido apenas para dados legados.
+    return { label: "Mensal (legado)", color: "bg-amber-50 text-amber-700 border-amber-200" };
   }
   return { label: "Mensalidade", color: "bg-blue-50 text-blue-700 border-blue-200" };
 }
@@ -93,7 +95,7 @@ export function RecurringPackageSection({ patientId }: { patientId: number }) {
         <CardContent className="p-3 text-xs text-blue-800">
           A recorrência mensal agora é gerenciada diretamente nos pacotes do paciente.
           Para criar um novo pacote recorrente, use a aba <strong>Pacotes</strong> e selecione
-          um template do tipo <strong>mensalidade</strong> ou <strong>fatura consolidada</strong>.
+          um template do tipo <strong>mensalidade</strong>.
         </CardContent>
       </Card>
 

@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
-  appointmentsTable, financialRecordsTable, proceduresTable, patientSubscriptionsTable,
+  appointmentsTable, financialRecordsTable, proceduresTable,
   procedureCostsTable, schedulesTable, recurringExpensesTable,
+  treatmentPlansTable, treatmentPlanProceduresTable, packagesTable,
 } from "@workspace/db";
-import { eq, and, sql, gte, lte, inArray, isNull, or, count } from "drizzle-orm";
+import { eq, and, sql, gte, lte, inArray, isNull, isNotNull, or, count } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireFeature } from "../../../middleware/plan-features.js";
@@ -268,14 +269,30 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
       getMonthlyFinancials(ps, pe),
     ]);
 
-    const subCond = clinicId
-      ? and(eq(patientSubscriptionsTable.clinicId, clinicId), eq(patientSubscriptionsTable.status, "ativa"))
-      : eq(patientSubscriptionsTable.status, "ativa");
+    // MRR — Sprint 5+: lê de treatment_plan_procedures (kind='recorrenteMensal'
+    // ou kind IS NULL com package_type mensal/faturaConsolidada para legado),
+    // em planos vigente/ativo já aceitos.
+    const isRecurringItem = or(
+      eq(treatmentPlanProceduresTable.kind, "recorrenteMensal"),
+      and(
+        sql`${treatmentPlanProceduresTable.kind} IS NULL`,
+        inArray(packagesTable.packageType, ["mensal", "faturaConsolidada"]),
+      ),
+    );
+    const planActiveCond = and(
+      isNotNull(treatmentPlansTable.acceptedAt),
+      inArray(treatmentPlansTable.status, ["vigente", "ativo"]),
+    );
+    const planClinicCond = clinicId
+      ? and(planActiveCond, eq(treatmentPlansTable.clinicId, clinicId))
+      : planActiveCond;
 
     const [mrrRow] = await db
-      .select({ mrr: sql<number>`COALESCE(SUM(${patientSubscriptionsTable.monthlyAmount}::numeric), 0)` })
-      .from(patientSubscriptionsTable)
-      .where(subCond);
+      .select({ mrr: sql<number>`COALESCE(SUM(COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric), 0)` })
+      .from(treatmentPlanProceduresTable)
+      .innerJoin(treatmentPlansTable, eq(treatmentPlansTable.id, treatmentPlanProceduresTable.treatmentPlanId))
+      .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
+      .where(and(planClinicCond, isRecurringItem));
 
     const mrr = Number(mrrRow?.mrr ?? 0);
 

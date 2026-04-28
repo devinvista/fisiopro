@@ -30,13 +30,14 @@ describe("packageFormSchema", () => {
     expect(packageFormSchema.safeParse(validMensal).success).toBe(true);
   });
 
-  it("aceita pacote de fatura consolidada válido", () => {
+  it("rejeita o tipo legado faturaConsolidada (descontinuado em Sprint 5)", () => {
     expect(
       packageFormSchema.safeParse({
         ...validMensal,
+        // @ts-expect-error — valor legado removido do union
         packageType: "faturaConsolidada",
       }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("exige price em pacote por sessões", () => {

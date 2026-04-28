@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
-  appointmentsTable, financialRecordsTable, proceduresTable, patientSubscriptionsTable,
+  appointmentsTable, financialRecordsTable, proceduresTable,
+  treatmentPlansTable, treatmentPlanProceduresTable, packagesTable,
 } from "@workspace/db";
-import { eq, and, sql, gte, lte, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, or, sql, gte, lte, inArray, isNotNull } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { nowBRT } from "../../../utils/dateUtils.js";
@@ -105,47 +106,52 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
       .orderBy(sql`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0) DESC`)
       .limit(1);
 
-    // MRR — soma das mensalidades de assinaturas ativas para esta clínica
-    const subClinicCond = req.isSuperAdmin || !req.clinicId
-      ? eq(patientSubscriptionsTable.status, "ativa")
-      : and(eq(patientSubscriptionsTable.status, "ativa"), eq(patientSubscriptionsTable.clinicId, req.clinicId!));
+    // MRR — soma das mensalidades dos itens recorrentes em planos vigente+aceito
+    // (Sprint 5+): fonte oficial é treatment_plan_procedures.kind='recorrenteMensal'.
+    // Para itens legados sem `kind` preenchido, derivamos via packages.package_type
+    // ('mensal' ou 'faturaConsolidada' — descontinuado, ainda existe em dados antigos).
+    const isRecurringItem = or(
+      eq(treatmentPlanProceduresTable.kind, "recorrenteMensal"),
+      and(
+        sql`${treatmentPlanProceduresTable.kind} IS NULL`,
+        inArray(packagesTable.packageType, ["mensal", "faturaConsolidada"]),
+      ),
+    );
+    const planActiveCond = and(
+      isNotNull(treatmentPlansTable.acceptedAt),
+      inArray(treatmentPlansTable.status, ["vigente", "ativo"]),
+    );
+    const planClinicCond = req.isSuperAdmin || !req.clinicId
+      ? planActiveCond
+      : and(planActiveCond, eq(treatmentPlansTable.clinicId, req.clinicId!));
 
-    const mrrResult = await db
-      .select({ mrr: sql<number>`COALESCE(SUM(${patientSubscriptionsTable.monthlyAmount}::numeric), 0)` })
-      .from(patientSubscriptionsTable)
-      .where(subClinicCond);
+    const recurringItems = await db
+      .select({
+        count: sql<number>`count(*)`,
+        mrr: sql<number>`COALESCE(SUM(COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric), 0)`,
+      })
+      .from(treatmentPlanProceduresTable)
+      .innerJoin(treatmentPlansTable, eq(treatmentPlansTable.id, treatmentPlanProceduresTable.treatmentPlanId))
+      .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
+      .where(and(planClinicCond, isRecurringItem));
 
-    const mrr = Number(mrrResult[0]?.mrr ?? 0);
+    const mrr = Number(recurringItems[0]?.mrr ?? 0);
+    const activeRecurringCount = Number(recurringItems[0]?.count ?? 0);
 
-    const activeSubsCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(patientSubscriptionsTable)
-      .where(subClinicCond);
+    // Cobranças mensais pendentes do plano (faturaPlano) — substitui o antigo
+    // filtro por subscriptionId (pré-Sprint 1, agora vazio na maioria das clínicas).
+    const RECURRING_BILLING_TYPES = ["faturaPlano", "faturaConsolidada"] as const;
+    const pendingRecurringWhere = cc
+      ? and(cc, eq(financialRecordsTable.status, "pendente"), inArray(financialRecordsTable.transactionType, RECURRING_BILLING_TYPES as unknown as string[]))
+      : and(eq(financialRecordsTable.status, "pendente"), inArray(financialRecordsTable.transactionType, RECURRING_BILLING_TYPES as unknown as string[]));
 
-    // Cobranças de assinaturas pendentes (geradas pelo billing, ainda não pagas)
-    const pendingSubsWhere = cc
-      ? and(cc, eq(financialRecordsTable.status, "pendente"), isNotNull(financialRecordsTable.subscriptionId), inArray(financialRecordsTable.transactionType, RECEIVABLE_TYPES))
-      : and(eq(financialRecordsTable.status, "pendente"), isNotNull(financialRecordsTable.subscriptionId), inArray(financialRecordsTable.transactionType, RECEIVABLE_TYPES));
-
-    const pendingSubRecords = await db
+    const pendingRecurringRecords = await db
       .select({
         count: sql<number>`count(*)`,
         total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
       })
       .from(financialRecordsTable)
-      .where(pendingSubsWhere);
-
-    const pendingConsolidatedInvoices = await db
-      .select({
-        count: sql<number>`count(*)`,
-        total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
-      })
-      .from(financialRecordsTable)
-      .where(
-        cc
-          ? and(cc, eq(financialRecordsTable.status, "pendente"), eq(financialRecordsTable.transactionType, "faturaConsolidada"))
-          : and(eq(financialRecordsTable.status, "pendente"), eq(financialRecordsTable.transactionType, "faturaConsolidada"))
-      );
+      .where(pendingRecurringWhere);
 
     res.json({
       monthlyRevenue,
@@ -164,14 +170,13 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
         revenue: Number(c.revenue),
       })),
       mrr,
-      activeSubscriptions: Number(activeSubsCount[0]?.count ?? 0),
+      // Sprint 5: "activeSubscriptions" é mantido no payload para compat com a
+      // UI atual (chips em LancamentosTab), mas representa itens recorrentes do
+      // plano de tratamento (kind='recorrenteMensal') em vez de patient_subscriptions.
+      activeSubscriptions: activeRecurringCount,
       pendingSubscriptionCharges: {
-        count: Number(pendingSubRecords[0]?.count ?? 0),
-        total: Number(pendingSubRecords[0]?.total ?? 0),
-      },
-      pendingConsolidatedInvoices: {
-        count: Number(pendingConsolidatedInvoices[0]?.count ?? 0),
-        total: Number(pendingConsolidatedInvoices[0]?.total ?? 0),
+        count: Number(pendingRecurringRecords[0]?.count ?? 0),
+        total: Number(pendingRecurringRecords[0]?.total ?? 0),
       },
     });
 }));

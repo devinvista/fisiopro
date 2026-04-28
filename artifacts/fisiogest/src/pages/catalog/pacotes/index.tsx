@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Search, Package, Layers, RefreshCw, FileText,
+  Plus, Search, Package, Layers, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,7 @@ export default function Pacotes() {
   const isAdmin = hasRole("admin");
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "sessoes" | "mensal" | "faturaConsolidada">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "sessoes" | "mensal">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<PackageItem | null>(null);
   const [deletingPackage, setDeletingPackage] = useState<PackageItem | null>(null);
@@ -131,7 +131,6 @@ export default function Pacotes() {
 
   const sessoesPkg = packages.filter(p => p.packageType === "sessoes").length;
   const mensaisPkg = packages.filter(p => p.packageType === "mensal").length;
-  const faturasPkg = packages.filter(p => p.packageType === "faturaConsolidada").length;
 
   return (
     <AppLayout title="Pacotes">
@@ -153,11 +152,10 @@ export default function Pacotes() {
         </div>
 
         {/* Métricas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard icon={<Package className="h-5 w-5 text-primary" />} bg="bg-primary/10" value={packages.length} label="Total de pacotes" />
           <MetricCard icon={<Layers className="h-5 w-5 text-blue-600" />} bg="bg-blue-100" value={sessoesPkg} label="Por sessões" />
           <MetricCard icon={<RefreshCw className="h-5 w-5 text-emerald-600" />} bg="bg-emerald-100" value={mensaisPkg} label="Mensalidades" />
-          <MetricCard icon={<FileText className="h-5 w-5 text-violet-600" />} bg="bg-violet-100" value={faturasPkg} label="Faturas" />
         </div>
 
         {/* Filtros */}
@@ -176,7 +174,6 @@ export default function Pacotes() {
               { v: "all", label: "Todos" },
               { v: "sessoes", label: "Por Sessões" },
               { v: "mensal", label: "Mensalidade" },
-              { v: "faturaConsolidada", label: `Fatura (${faturasPkg})` },
             ] as const).map(opt => (
               <button
                 key={opt.v}

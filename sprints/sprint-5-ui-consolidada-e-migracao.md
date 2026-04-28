@@ -88,6 +88,8 @@ pnpm --filter @workspace/api-server exec tsx \
 | `LancamentosTab` dialog cobrança  | "todas as assinaturas ativas…"              | "Pacotes Legados — assinaturas pré-Sprint 2…"           |
 | `RecordsTable` faturaConsolidada  | badge silencioso                             | badge "legado" amber + tooltip                          |
 | `SubscriptionBillingPanel.tsx`    | componente vivo                             | **deletado**                                            |
+| Catálogo de Pacotes (`pages/catalog/pacotes/*`) | tipo `faturaConsolidada` selecionável | tipo removido do form/filtros/contadores; templates legados aparecem como "Mensal (legado)" (read-only) |
+| `RecurringPackageSection.tsx`     | label "Fatura Consolidada"                  | label "Mensal (legado)" (badge âmbar) para dados pré-Sprint 5 |
 
 **Mantidos intencionalmente** (escopo SaaS, fora da UI clínica):
 
@@ -97,15 +99,50 @@ pnpm --filter @workspace/api-server exec tsx \
 - `pages/saas/superadmin/**` — toda a UI SaaS interna.
 - `schemas/__tests__/subscription.schema.test.ts` — cobertura do schema legado.
 
-### 5. Pendências para Sprint 6 (não bloqueantes)
+### 5. Migração executada (`--apply`)
 
-- `packageType: "faturaConsolidada"` ainda existe como template no catálogo
-  de Pacotes (`pages/catalog/pacotes/*`) e em `RecurringPackageSection`.
-  Precisa de migração de schema + remoção do template — escopo de Sprint 6.
-- Backend `dashboard.mrr` e `dashboard.activeSubscriptions` ainda lêem de
-  `patient_subscriptions`. Após `migrate-legacy-plans --apply` em todas as
-  clínicas, a fonte deve mudar para `treatment_plan_procedures` com
-  `kind='recorrenteMensal'` (Sprint 6).
+`migrate-legacy-plans.ts --apply` rodado em produção:
+
+- **18** planos materializados sem aceite → `acceptedAt = materializedAt`,
+  `acceptedVia = 'legado'`, `frozenPricesJson` preenchido.
+- **198** faturas futuras (geradas pelo materializador antigo, ainda não
+  pagas/vencidas) removidas para não duplicar com a geração lazy.
+- **0** `patient_subscriptions` ativas restantes (Parte B sem trabalho
+  efetivo nesta base).
+- **0** templates `faturaConsolidada` restantes no catálogo após cleanup
+  da UI.
+- **9** planos `vigente` sem `acceptedAt` mantidos como rascunhos
+  intencionais (não tocados).
+
+### 6. Bug pós-migração corrigido — dashboard MRR
+
+Após o `--apply`, o card **Receita Recorrente** do dashboard zerou
+(`mrr = R$ 0`, `activeSubscriptions = 0`) porque
+`financial-dashboard.routes.ts` e `financial-analytics.routes.ts` ainda
+liam de `patient_subscriptions`, agora vazia.
+
+**Fix:** ambos os endpoints agora calculam o MRR sobre
+`treatment_plan_procedures`:
+
+- `kind = 'recorrenteMensal'`, **OU**
+- `kind IS NULL` com `packages.package_type IN ('mensal', 'faturaConsolidada')`
+  (cobre os 18 itens migrados como legado),
+
+restritos a planos com `accepted_at IS NOT NULL` e
+`status IN ('vigente', 'ativo')`. O valor unitário usa
+`COALESCE(unit_monthly_price, packages.monthly_price, unit_price)`.
+
+`pendingConsolidatedInvoices` foi removido do payload (sempre 0 após a
+descontinuação). `pendingSubscriptionCharges` agora filtra
+`financial_records.transaction_type IN ('faturaPlano', 'faturaConsolidada')`.
+
+**Validação SQL** (produção, 2026-04-28):
+
+```text
+mrr = R$ 3.610,00     (SUM dos 18 itens recorrentes ativos)
+activeSubscriptions = 18
+pendingSubscriptionCharges = R$ 830,00 (4 faturas pendentes)
+```
 
 ## Critérios de aceite
 
@@ -116,4 +153,11 @@ pnpm --filter @workspace/api-server exec tsx \
 - [x] Zero referências a "Assinatura" na UI clínica/financeira fora de
       `/saas/superadmin` e dos banners SaaS do `app-layout`.
 - [x] `acceptedVia` aceita o valor `'legado'`.
-- [x] Typecheck verde, suíte de testes verde.
+- [x] `migrate-legacy-plans.ts --apply` executado em produção (18 planos
+      legacy, 198 faturas futuras removidas).
+- [x] `faturaConsolidada` removido do formulário/filtros/contadores do
+      catálogo; templates legados ainda lidos read-only com badge âmbar.
+- [x] Dashboard MRR lê de `treatment_plan_procedures`
+      (`mrr = R$ 3.610,00`, `activeSubscriptions = 18` confirmados via SQL).
+- [x] Typecheck verde nos 2 pacotes (`@workspace/api-server`,
+      `@workspace/fisiogest`); 98/98 testes Vitest verdes.

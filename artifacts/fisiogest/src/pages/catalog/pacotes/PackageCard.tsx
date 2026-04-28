@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Pencil, Trash2, User, CalendarDays, Clock, Layers, AlertCircle, FileText,
+  Pencil, Trash2, User, CalendarDays, Clock, Layers, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CategoryBadge } from "./CategoryBadge";
@@ -20,10 +20,13 @@ export function PackageCard({
   onDelete: (pkg: PackageItem) => void;
 }) {
   const isMensal = pkg.packageType === "mensal";
-  const isFatura = pkg.packageType === "faturaConsolidada";
+  // Sprint 5: templates "faturaConsolidada" foram descontinuados; quando o
+  // backend ainda devolver algum legado, renderizamos como mensalidade
+  // legada (badge âmbar) para deixar claro que não pode mais ser editado.
+  const isLegacyFatura = (pkg.packageType as string) === "faturaConsolidada";
   const ModalIcon = MODALIDADE_CONFIG[pkg.procedureModalidade]?.icon ?? User;
   const modalidadeLabel = MODALIDADE_CONFIG[pkg.procedureModalidade]?.label ?? pkg.procedureModalidade;
-  const pps = isMensal
+  const pps = isMensal || isLegacyFatura
     ? (pkg.monthlyPrice ? Number(pkg.monthlyPrice) / (pkg.sessionsPerWeek * 4) : null)
     : (pkg.totalSessions ? Number(pkg.price) / pkg.totalSessions : null);
 
@@ -37,9 +40,9 @@ export function PackageCard({
           <div className="flex items-center gap-2 mb-0.5">
             <span className={cn(
               "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
-              isFatura ? "bg-violet-100 text-violet-700" : isMensal ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+              isLegacyFatura ? "bg-amber-100 text-amber-700" : isMensal ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
             )}>
-              {isFatura ? "Fatura" : isMensal ? "Mensal" : "Sessões"}
+              {isLegacyFatura ? "Mensal (legado)" : isMensal ? "Mensal" : "Sessões"}
             </span>
             {!pkg.isActive && <Badge variant="secondary" className="text-[10px]">Inativo</Badge>}
           </div>
@@ -73,17 +76,17 @@ export function PackageCard({
         <span className="text-muted-foreground"> ({pkg.procedureDurationMinutes} min)</span>
       </p>
 
-      {isMensal || isFatura ? (
+      {isMensal || isLegacyFatura ? (
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="bg-muted/50 rounded-lg p-2">
-            {isFatura ? <FileText className="h-3 w-3 mx-auto mb-0.5 text-muted-foreground" /> : <CalendarDays className="h-3 w-3 mx-auto mb-0.5 text-muted-foreground" />}
-            <p className="text-base font-bold">{isFatura ? "uso" : `${pkg.sessionsPerWeek}x`}</p>
-            <p className="text-[10px] text-muted-foreground">{isFatura ? "por sessão" : "por semana"}</p>
+            <CalendarDays className="h-3 w-3 mx-auto mb-0.5 text-muted-foreground" />
+            <p className="text-base font-bold">{pkg.sessionsPerWeek}x</p>
+            <p className="text-[10px] text-muted-foreground">por semana</p>
           </div>
           <div className="bg-muted/50 rounded-lg p-2">
             <AlertCircle className="h-3 w-3 mx-auto mb-0.5 text-muted-foreground" />
-            <p className="text-base font-bold">{isFatura ? "fim" : pkg.absenceCreditLimit}</p>
-            <p className="text-[10px] text-muted-foreground">{isFatura ? "do ciclo" : "faltas/mês"}</p>
+            <p className="text-base font-bold">{pkg.absenceCreditLimit}</p>
+            <p className="text-[10px] text-muted-foreground">faltas/mês</p>
           </div>
           <div className="bg-muted/50 rounded-lg p-2">
             <Clock className="h-3 w-3 mx-auto mb-0.5 text-muted-foreground" />
@@ -114,9 +117,9 @@ export function PackageCard({
       <div className="flex items-end justify-between pt-1 border-t">
         <div>
           <p className="text-xl font-bold">
-            {isMensal ? formatCurrency(pkg.monthlyPrice) : formatCurrency(pkg.price)}
+            {isMensal || isLegacyFatura ? formatCurrency(pkg.monthlyPrice) : formatCurrency(pkg.price)}
             <span className="text-xs font-normal text-muted-foreground ml-1">
-              {isFatura ? "/sessão" : isMensal ? "/mês" : "total"}
+              {isMensal || isLegacyFatura ? "/mês" : "total"}
             </span>
           </p>
           {pps !== null && (

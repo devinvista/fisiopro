@@ -18,7 +18,7 @@ export interface PackageItem {
   procedureModalidade: string;
   procedureDurationMinutes: number;
   procedurePricePerSession: string | number;
-  packageType: "sessoes" | "mensal" | "faturaConsolidada";
+  packageType: "sessoes" | "mensal";
   totalSessions?: number | null;
   sessionsPerWeek: number;
   validityDays?: number | null;

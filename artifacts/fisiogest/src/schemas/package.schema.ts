@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const packageTypes = ["sessoes", "mensal", "faturaConsolidada"] as const;
+// Sprint 5: "faturaConsolidada" foi descontinuado da UI clínica (a fatura
+// mensal agora é gerada via plano de tratamento, kind='recorrenteMensal').
+// Templates legados ainda existem em algumas bases — o backend continua
+// aceitando o valor para leitura, mas a criação/edição via formulário só
+// permite os dois tipos vivos abaixo.
+const packageTypes = ["sessoes", "mensal"] as const;
 
 const positiveAmountString = z
   .string()

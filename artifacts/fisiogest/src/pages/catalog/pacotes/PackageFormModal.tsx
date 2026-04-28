@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Layers, RefreshCw, FileText, User, Info,
+  Layers, RefreshCw, User, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MODALIDADE_CONFIG, formatCurrency } from "./helpers";
@@ -108,11 +108,10 @@ export function PackageFormModal({
 
           <div className="space-y-2">
             <Label>Tipo de pacote *</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([
                 { v: "sessoes", label: "Por Sessões", desc: "Quantidade fixa de sessões com validade em dias", icon: Layers, color: "border-blue-300 bg-blue-50 text-blue-700" },
                 { v: "mensal", label: "Mensalidade", desc: "Cobrança fixa; gera créditos após pagamento", icon: RefreshCw, color: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-                { v: "faturaConsolidada", label: "Fatura consolidada", desc: "Sessões acumulam e viram uma fatura mensal", icon: FileText, color: "border-violet-300 bg-violet-50 text-violet-700" },
               ] as const).map((opt) => {
                 const Icon = opt.icon;
                 return (
@@ -188,14 +187,14 @@ export function PackageFormModal({
               </div>
             </div>
           ) : (
-            <div className={cn("space-y-4 p-4 rounded-xl border", form.packageType === "mensal" ? "bg-emerald-50/50 border-emerald-100" : "bg-violet-50/50 border-violet-100")}>
-              <p className={cn("text-xs font-semibold flex items-center gap-1.5", form.packageType === "mensal" ? "text-emerald-700" : "text-violet-700")}>
-                {form.packageType === "mensal" ? <RefreshCw className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-                {form.packageType === "mensal" ? "Configurações da Mensalidade" : "Configurações da Fatura Consolidada"}
+            <div className="space-y-4 p-4 rounded-xl border bg-emerald-50/50 border-emerald-100">
+              <p className="text-xs font-semibold flex items-center gap-1.5 text-emerald-700">
+                <RefreshCw className="h-3.5 w-3.5" />
+                Configurações da Mensalidade
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>{form.packageType === "mensal" ? "Valor mensal (R$) *" : "Valor por sessão (R$) *"}</Label>
+                  <Label>Valor mensal (R$) *</Label>
                   <Input type="number" min={0} step={0.01} placeholder="0,00"
                     value={form.monthlyPrice}
                     onChange={(e) => setForm((f) => ({ ...f, monthlyPrice: e.target.value }))}
@@ -209,7 +208,7 @@ export function PackageFormModal({
                   />
                 </div>
               </div>
-              {form.packageType === "mensal" && <div className="space-y-1.5">
+              <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
                   Limite de faltas creditadas por mês
                   <span className="text-[10px] text-muted-foreground font-normal">(faltas acima deste limite não são creditadas)</span>
@@ -235,13 +234,7 @@ export function PackageFormModal({
                     Até {form.absenceCreditLimit} falta(s) por mês geram crédito de sessão para o próximo mês. Faltas adicionais não geram crédito.
                   </p>
                 )}
-              </div>}
-              {form.packageType === "faturaConsolidada" && (
-                <p className="text-[10px] text-violet-700 bg-violet-50 rounded-lg p-2 flex gap-1.5">
-                  <Info className="h-3 w-3 shrink-0 mt-0.5" />
-                  As sessões concluídas não geram cobrança imediata; elas ficam pendentes e são somadas em uma fatura no dia de cobrança.
-                </p>
-              )}
+              </div>
             </div>
           )}
 
