@@ -111,7 +111,7 @@ router.get("/current", requirePermission("settings.manage"), async (req: AuthReq
   }
 });
 
-router.put("/current", requirePermission("settings.manage"), async (req: AuthRequest, res) => {
+const updateCurrentClinic = async (req: AuthRequest, res: import("express").Response) => {
   try {
     const clinicId = req.clinicId;
     if (!clinicId) {
@@ -150,7 +150,10 @@ router.put("/current", requirePermission("settings.manage"), async (req: AuthReq
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });
   }
-});
+};
+
+router.put("/current", requirePermission("settings.manage"), updateCurrentClinic);
+router.patch("/current", requirePermission("settings.manage"), updateCurrentClinic);
 
 router.get("/:id", requireSuperAdmin(), async (req, res) => {
   try {
