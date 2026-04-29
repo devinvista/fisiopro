@@ -580,6 +580,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                 <MaterializeBlock
                   planId={selectedPlanId!}
                   materializedAt={selectedPlan?.materializedAt ?? null}
+                  planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+                  planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
                   planItems={planItems}
                   onChanged={() => {
                     queryClient.invalidateQueries({ queryKey: plansKey });
@@ -683,17 +685,45 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 // ─── Evolution Templates ──────────────────────────────────────────────────────
 
 // ─── Materialização do plano ────────────────────────────────────────────────
+function nextMondayISO(): string {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun, 1=Mon, ...
+  const daysUntilMonday = day === 1 ? 7 : (8 - day) % 7 || 7;
+  d.setDate(d.getDate() + daysUntilMonday);
+  return d.toISOString().slice(0, 10);
+}
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function fmtBR(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+}
+
 function MaterializeBlock({
-  planId, materializedAt, planItems, onChanged,
+  planId, materializedAt, planStartDate, planDurationMonths, planItems, onChanged,
 }: {
   planId: number;
   materializedAt: string | null;
+  planStartDate: string | null;
+  planDurationMonths: number;
   planItems: any[];
   onChanged: () => void;
 }) {
   const { toast } = useToast();
   const [busy, setBusy] = useState<"materialize" | "dematerialize" | null>(null);
   const [confirmDematerialize, setConfirmDematerialize] = useState(false);
+
+  const defaultStart = planStartDate ?? nextMondayISO();
+  const [startDate, setStartDate] = useState<string>(defaultStart);
+  const [durationMonths, setDurationMonths] = useState<number>(planDurationMonths || 12);
+
+  // Re-sincroniza se as props mudarem (ex: após salvar o plano)
+  useEffect(() => {
+    setStartDate(planStartDate ?? nextMondayISO());
+    setDurationMonths(planDurationMonths || 12);
+  }, [planStartDate, planDurationMonths]);
 
   const monthlyItems = planItems.filter(i => i.packageType === "mensal");
   const hasMonthly = monthlyItems.length > 0;
@@ -705,16 +735,26 @@ function MaterializeBlock({
       const wd = i.weekDays ? (typeof i.weekDays === "string" ? JSON.parse(i.weekDays) : i.weekDays) : [];
       weekDaysCount = Array.isArray(wd) ? wd.length : 0;
     } catch { weekDaysCount = 0; }
-    return sum + weekDaysCount * 4 * 12; // ~4 sem/mês × 12 meses
+    return sum + weekDaysCount * 4 * durationMonths;
   }, 0);
+
+  const startPreset: "today" | "nextMonday" | "custom" = (() => {
+    if (startDate === todayISO()) return "today";
+    if (startDate === nextMondayISO()) return "nextMonday";
+    return "custom";
+  })();
 
   async function doMaterialize() {
     setBusy("materialize");
     try {
-      const res = await apiSendJson<any>(`/api/treatment-plans/${planId}/materialize`, "POST", {});
+      const res = await apiSendJson<any>(
+        `/api/treatment-plans/${planId}/materialize`,
+        "POST",
+        { startDate, durationMonths },
+      );
       toast({
         title: "Plano materializado!",
-        description: `Geradas ${res.appointmentsCreated ?? "?"} consultas e ${res.invoicesCreated ?? "?"} faturas mensais.`,
+        description: `Geradas ${res.appointmentsCreated ?? "?"} consultas e ${res.invoicesCreated ?? "?"} faturas mensais a partir de ${fmtBR(startDate)}.`,
       });
       onChanged();
     } catch (err: any) {
@@ -766,11 +806,79 @@ function MaterializeBlock({
           </Button>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase font-semibold tracking-wide text-slate-500">
+                Iniciar agenda em
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setStartDate(todayISO())}
+                  className={`h-8 px-3 rounded-md border text-xs font-medium transition ${
+                    startPreset === "today"
+                      ? "bg-primary text-white border-primary"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-primary/40"
+                  }`}
+                >
+                  Hoje
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStartDate(nextMondayISO())}
+                  className={`h-8 px-3 rounded-md border text-xs font-medium transition ${
+                    startPreset === "nextMonday"
+                      ? "bg-primary text-white border-primary"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-primary/40"
+                  }`}
+                >
+                  Próxima segunda ({fmtBR(nextMondayISO())})
+                </button>
+                <div className={`flex items-center gap-1.5 rounded-md border px-2 ${
+                  startPreset === "custom"
+                    ? "border-primary bg-primary/5"
+                    : "border-slate-200 bg-white"
+                }`}>
+                  <span className="text-[11px] text-slate-500">Data:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    min={todayISO()}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-7 text-xs bg-transparent border-0 focus:outline-none focus:ring-0 px-0 text-slate-700"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase font-semibold tracking-wide text-slate-500">
+                Duração da agenda
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {[3, 6, 12, 18, 24].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setDurationMonths(m)}
+                    className={`h-8 px-3 rounded-md border text-xs font-medium transition ${
+                      durationMonths === m
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-primary/40"
+                    }`}
+                  >
+                    {m} {m === 1 ? "mês" : "meses"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <p className="text-xs text-slate-600">
-            Será gerada uma agenda completa do plano: aproximadamente
+            Será gerada uma agenda iniciando em <strong>{fmtBR(startDate)}</strong> com aproximadamente
             {" "}<strong>{totalApptsEstimate} consultas</strong> e
-            {" "}<strong>{monthlyItems.length * 12} faturas mensais</strong>{" "}
+            {" "}<strong>{monthlyItems.length * durationMonths} faturas mensais</strong>{" "}
             (uma por mês de cada item de pacote mensal).
           </p>
           <p className="text-[11px] text-slate-400">
