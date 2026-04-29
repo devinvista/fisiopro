@@ -295,9 +295,13 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const isStarted = !!selectedPlan?.materializedAt;
 
   // Contagem de itens com agenda completa (agenda + dia(s) + horário)
-  const aceiteStats = useMemo(() => {
-    if (planItems.length === 0) return { configured: 0, total: 0 };
+  // e contagem de itens MENSAIS pendentes (bloqueiam a materialização do plano).
+  const { aceiteStats, monthlyMissingCount } = useMemo(() => {
+    if (planItems.length === 0) {
+      return { aceiteStats: { configured: 0, total: 0 }, monthlyMissingCount: 0 };
+    }
     let configured = 0;
+    let monthlyMissing = 0;
     for (const item of planItems as Array<PlanProcedureItem & {
       weekDays?: string | string[] | null;
       defaultStartTime?: string | null;
@@ -315,11 +319,16 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           weekDaysCount = wdRaw.split(",").filter(Boolean).length;
         }
       }
-      if (item.scheduleId && weekDaysCount > 0 && item.defaultStartTime) {
-        configured++;
+      const isComplete = !!item.scheduleId && weekDaysCount > 0 && !!item.defaultStartTime;
+      if (isComplete) configured++;
+      if (item.packageType === "mensal" && (weekDaysCount === 0 || !item.defaultStartTime)) {
+        monthlyMissing++;
       }
     }
-    return { configured, total: planItems.length };
+    return {
+      aceiteStats: { configured, total: planItems.length },
+      monthlyMissingCount: monthlyMissing,
+    };
   }, [planItems]);
 
   // Auto-avança visualmente se etapa atual ficou inválida
@@ -417,6 +426,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         isAccepted={isAccepted}
         isStarted={isStarted}
         aceiteStats={aceiteStats}
+        monthlyMissingCount={monthlyMissingCount}
         onSelect={setActiveStep}
       />
 

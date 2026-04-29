@@ -1,4 +1,5 @@
-import { Check, ClipboardList, PenLine, Wallet, Lock } from "lucide-react";
+import { Check, ClipboardList, PenLine, Wallet, Lock, AlertTriangle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type PlanStepKey = "itens" | "aceite" | "cobranca";
 
@@ -23,6 +24,7 @@ interface Props {
   isAccepted: boolean;
   isStarted: boolean;
   aceiteStats?: { configured: number; total: number };
+  monthlyMissingCount?: number;
   onSelect: (step: PlanStepKey) => void;
 }
 
@@ -32,6 +34,7 @@ function statusFor(
   hasItems: boolean,
   isAccepted: boolean,
   isStarted: boolean,
+  monthlyMissingCount: number,
 ): PlanStepStatus {
   if (step === "itens") {
     if (current === "itens") return "active";
@@ -46,6 +49,8 @@ function statusFor(
   }
   // cobranca
   if (!isAccepted) return "locked";
+  // Bloqueia o avanço enquanto houver itens recorrentes (mensais) sem agenda.
+  if (!isStarted && monthlyMissingCount > 0) return "locked";
   if (current === "cobranca") return "active";
   if (isStarted) return "done";
   return "available";
@@ -74,7 +79,15 @@ const styleByStatus: Record<PlanStepStatus, { circle: string; label: string; lin
   },
 };
 
-export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteStats, onSelect }: Props) {
+export function PlanStepper({
+  current,
+  hasItems,
+  isAccepted,
+  isStarted,
+  aceiteStats,
+  monthlyMissingCount = 0,
+  onSelect,
+}: Props) {
   const showAceiteCounter =
     !!aceiteStats && aceiteStats.total > 0 && hasItems && !isStarted;
   const aceiteAllSet =
@@ -82,7 +95,11 @@ export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteSt
   const aceitePending = showAceiteCounter
     ? aceiteStats!.total - aceiteStats!.configured
     : 0;
+  // Cobrança fica bloqueada por agenda quando: aceito, ainda não iniciado e há mensais pendentes.
+  const cobrancaBlockedBySchedule =
+    isAccepted && !isStarted && monthlyMissingCount > 0;
   return (
+    <TooltipProvider delayDuration={200}>
     <div
       className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
       role="tablist"
@@ -90,74 +107,61 @@ export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteSt
     >
       <ol className="flex items-stretch gap-1 sm:gap-2">
         {STEPS.map((step, idx) => {
-          const status = statusFor(step.key, current, hasItems, isAccepted, isStarted);
+          const status = statusFor(
+            step.key,
+            current,
+            hasItems,
+            isAccepted,
+            isStarted,
+            monthlyMissingCount,
+          );
           const styles = styleByStatus[status];
           const isLast = idx === STEPS.length - 1;
           const Icon = step.Icon;
           const showCheck = status === "done";
-          const showLock = status === "locked";
+          // Mostra ícone de alerta (em vez de cadeado) quando o bloqueio é por agenda pendente.
+          const blockedByScheduleHere =
+            step.key === "cobranca" && status === "locked" && cobrancaBlockedBySchedule;
+          const showLock = status === "locked" && !blockedByScheduleHere;
+          const showWarning = blockedByScheduleHere;
 
-          return (
-            <li key={step.key} className="flex-1 flex items-stretch gap-1 sm:gap-2 min-w-0">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={status === "active"}
-                disabled={status === "locked"}
-                onClick={() => status !== "locked" && onSelect(step.key)}
-                className={`flex-1 min-w-0 flex items-center gap-2 sm:gap-3 rounded-xl px-2 py-2 sm:px-3 sm:py-2.5 text-left transition-colors ${
-                  status === "active"
-                    ? "bg-primary/5"
-                    : status === "locked"
-                    ? "opacity-70"
-                    : "hover:bg-slate-50"
-                }`}
-              >
+          const buttonEl = (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={status === "active"}
+              disabled={status === "locked"}
+              onClick={() => status !== "locked" && onSelect(step.key)}
+              className={`flex-1 min-w-0 flex items-center gap-2 sm:gap-3 rounded-xl px-2 py-2 sm:px-3 sm:py-2.5 text-left transition-colors ${
+                status === "active"
+                  ? "bg-primary/5"
+                  : status === "locked"
+                  ? blockedByScheduleHere
+                    ? "opacity-90 bg-amber-50/40"
+                    : "opacity-70"
+                  : "hover:bg-slate-50"
+              }`}
+            >
                 <span
                   className={`relative h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all ${styles.circle}`}
                 >
-                  {showCheck ? (
-                    <Check className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={3} />
-                  ) : showLock ? (
-                    <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  ) : (
-                    <>
-                      <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-                      <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 text-[9px] font-bold text-slate-600 flex items-center justify-center">
-                        {idx + 1}
-                      </span>
-                    </>
-                  )}
-                </span>
-                <span className="min-w-0 hidden sm:flex flex-col leading-tight">
-                  <span className={`text-xs ${styles.label} flex items-center gap-1.5`}>
-                    {step.label}
-                    {step.key === "aceite" && showAceiteCounter && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                          aceiteAllSet
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-amber-50 text-amber-700 border border-amber-200"
-                        }`}
-                        aria-label={
-                          aceiteAllSet
-                            ? `Todas as ${aceiteStats!.total} agendas definidas`
-                            : `${aceiteStats!.configured} de ${aceiteStats!.total} agendas definidas`
-                        }
-                      >
-                        {aceiteStats!.configured}/{aceiteStats!.total}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-[10px] text-slate-400 truncate">
-                    {step.key === "aceite" && showAceiteCounter
-                      ? aceiteAllSet
-                        ? "Todas as agendas definidas"
-                        : `${aceitePending} pendente${aceitePending > 1 ? "s" : ""}`
-                      : step.hint}
-                  </span>
-                </span>
-                <span className={`sm:hidden text-xs truncate ${styles.label} flex items-center gap-1.5`}>
+                {showCheck ? (
+                  <Check className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={3} />
+                ) : showWarning ? (
+                  <AlertTriangle className="h-4 w-4 sm:h-4.5 sm:w-4.5" strokeWidth={2.5} />
+                ) : showLock ? (
+                  <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                ) : (
+                  <>
+                    <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+                    <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 text-[9px] font-bold text-slate-600 flex items-center justify-center">
+                      {idx + 1}
+                    </span>
+                  </>
+                )}
+              </span>
+              <span className="min-w-0 hidden sm:flex flex-col leading-tight">
+                <span className={`text-xs ${styles.label} flex items-center gap-1.5`}>
                   {step.label}
                   {step.key === "aceite" && showAceiteCounter && (
                     <span
@@ -166,12 +170,74 @@ export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteSt
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                           : "bg-amber-50 text-amber-700 border border-amber-200"
                       }`}
+                      aria-label={
+                        aceiteAllSet
+                          ? `Todas as ${aceiteStats!.total} agendas definidas`
+                          : `${aceiteStats!.configured} de ${aceiteStats!.total} agendas definidas`
+                      }
                     >
                       {aceiteStats!.configured}/{aceiteStats!.total}
                     </span>
                   )}
+                  {blockedByScheduleHere && (
+                    <span
+                      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-amber-100 text-amber-800 border border-amber-300"
+                      aria-label={`${monthlyMissingCount} item(ns) recorrente(s) sem agenda`}
+                    >
+                      {monthlyMissingCount}
+                    </span>
+                  )}
                 </span>
-              </button>
+                <span className={`text-[10px] truncate ${blockedByScheduleHere ? "text-amber-700" : "text-slate-400"}`}>
+                  {step.key === "aceite" && showAceiteCounter
+                    ? aceiteAllSet
+                      ? "Todas as agendas definidas"
+                      : `${aceitePending} pendente${aceitePending > 1 ? "s" : ""}`
+                    : blockedByScheduleHere
+                    ? "Defina as agendas dos itens"
+                    : step.hint}
+                </span>
+              </span>
+              <span className={`sm:hidden text-xs truncate ${styles.label} flex items-center gap-1.5`}>
+                {step.label}
+                {step.key === "aceite" && showAceiteCounter && (
+                  <span
+                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                      aceiteAllSet
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-amber-50 text-amber-700 border border-amber-200"
+                    }`}
+                  >
+                    {aceiteStats!.configured}/{aceiteStats!.total}
+                  </span>
+                )}
+                {blockedByScheduleHere && (
+                  <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-amber-100 text-amber-800 border border-amber-300">
+                    {monthlyMissingCount}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+
+          return (
+            <li key={step.key} className="flex-1 flex items-stretch gap-1 sm:gap-2 min-w-0">
+              {blockedByScheduleHere ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0} className="flex-1 min-w-0 flex outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded-xl">
+                      {buttonEl}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-amber-600 text-white max-w-xs">
+                    {monthlyMissingCount === 1
+                      ? "1 item recorrente está sem agenda definida. Volte para a etapa Aceite & Agenda e configure o dia e o horário antes de avançar."
+                      : `${monthlyMissingCount} itens recorrentes estão sem agenda definida. Volte para a etapa Aceite & Agenda e configure os dias e horários antes de avançar.`}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                buttonEl
+              )}
               {!isLast && (
                 <span
                   aria-hidden
@@ -183,5 +249,6 @@ export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteSt
         })}
       </ol>
     </div>
+    </TooltipProvider>
   );
 }
