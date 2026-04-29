@@ -1,14 +1,3 @@
 uploads = []
 generated = []
-
-[[outputs]]
-id = "I51v9jRaVPL4tDUyopdug"
-uri = "file://artifacts/fisiogest-pro-producao.zip"
-type = "unspecified"
-title = "FisioGest Pro - Pacote de Produção (Hostinger)"
-
-[[outputs]]
-id = "KEXh0ZvXuNayjwrukkWHX"
-uri = "file://fisiogest-pro-producao-hostinger.zip"
-type = "unspecified"
-title = "FisioGest Pro — Pacote Pronto para Hostinger"
+outputs = []
