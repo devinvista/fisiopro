@@ -827,6 +827,7 @@ function StepItens({
         planId={selectedPlanId}
         planItems={planItems}
         planItemsKey={planItemsKey}
+        planDurationMonths={form.durationMonths ?? 12}
       />
 
       {/* Bloco 3: detalhes clínicos (collapsible) */}

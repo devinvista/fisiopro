@@ -746,3 +746,12 @@ da fatura mensal**.
   somar a coluna "mensalidade" no `TOTAL ESTIMADO` — esse total já
   vem de `getPlanItemsTotal`, que multiplica corretamente
   mensal × meses e avulso × sessões.
+* **Total de sessões para itens `mensal`:** sempre o total contratado
+  do plano = `sessionsPerWeek × 4 × planDurationMonths` (não apenas
+  mensal). Aplicado em (29/04/2026):
+  - `TreatmentPlanItemsSection.tsx` — recebe `planDurationMonths` como
+    prop, usa em `planned` e em `totalSessions` agregado.
+  - `utils/print/plan.ts` — `generatePlanHTML` aceita
+    `plan.durationMonths`, usa em `sumPlannedFromItems` e no `planned`
+    da barra de progresso de cada item; rótulo do print agora mostra
+    "Nx/sem · M sessões em K meses".

@@ -25,11 +25,14 @@ export function TreatmentPlanItemsSection({
   planId,
   planItems,
   planItemsKey,
+  planDurationMonths,
 }: {
   planId: number | undefined;
   planItems: PlanProcedureItem[];
   planItemsKey: string[] | null;
+  planDurationMonths?: number | null;
 }) {
+  const planMonths = Math.max(1, Number(planDurationMonths ?? 12));
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -178,7 +181,12 @@ export function TreatmentPlanItemsSection({
   const totalMensal = financialRows.filter(r => r.item.packageType === "mensal").reduce((s, r) => s + r.net, 0);
   const totalSessoes = financialRows.filter(r => r.item.packageType !== "mensal").reduce((s, r) => s + r.net, 0);
   const totalDesconto = financialRows.reduce((s, r) => s + r.discount, 0);
-  const totalSessions = planItems.reduce((s, i) => i.packageType === "mensal" ? s : s + (i.totalSessions ?? 0), 0);
+  const totalSessions = planItems.reduce((s, i) => {
+    if (i.packageType === "mensal") {
+      return s + ((i.sessionsPerWeek ?? 0) * 4 * planMonths);
+    }
+    return s + (i.totalSessions ?? 0);
+  }, 0);
   const estimatedWeeks = planItems
     .filter(i => i.packageType !== "mensal" && i.totalSessions && i.sessionsPerWeek > 0)
     .reduce((max, i) => Math.max(max, Math.ceil((i.totalSessions ?? 0) / i.sessionsPerWeek)), 0);
@@ -400,7 +408,8 @@ export function TreatmentPlanItemsSection({
             const isMensal = item.packageType === "mensal";
             const isAvulso = !item.packageId;
             const used = item.usedSessions ?? 0;
-            const planned = item.totalSessions ?? (isAvulso ? 1 : 0);
+            const planned = item.totalSessions
+              ?? (isMensal ? (item.sessionsPerWeek ?? 0) * 4 * planMonths : isAvulso ? 1 : 0);
             const pct = planned > 0 ? Math.min(100, (used / planned) * 100) : 0;
             const remaining = Math.max(0, planned - used);
             const { gross, discount: disc, net } = calcItemTotal(item);
@@ -450,6 +459,7 @@ export function TreatmentPlanItemsSection({
                               <span className="flex items-center gap-1">
                                 <CheckCircle className="h-3 w-3 text-green-500" />
                                 <strong className="text-green-700">{used}</strong> realizadas · <strong>{remaining}</strong> restantes de {planned}
+                                {isMensal && <span className="text-slate-400"> (em {planMonths} {planMonths === 1 ? "mês" : "meses"})</span>}
                               </span>
                               <span className={pct >= 100 ? "text-green-600 font-semibold" : "text-slate-500"}>
                                 {pct >= 100 ? "✓ Concluído" : `${pct.toFixed(0)}%`}
