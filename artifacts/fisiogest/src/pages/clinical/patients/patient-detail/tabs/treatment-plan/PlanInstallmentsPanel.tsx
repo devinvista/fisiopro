@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 import {
   Receipt, CheckCircle, Clock, AlertTriangle, XCircle,
-  Loader2, Wallet, ChevronRight, FileText,
+  Loader2, Wallet, ChevronRight, FileText, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -109,6 +109,7 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
   const [payDate, setPayDate] = useState(todayISO());
   const [payMethod, setPayMethod] = useState<string>("pix");
   const [busy, setBusy] = useState(false);
+  const [recalcBusy, setRecalcBusy] = useState(false);
 
   const installmentsKey = [`/api/treatment-plans/${planId}/installments`];
 
@@ -153,6 +154,50 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
     }
     return Array.from(map.entries());
   }, [items]);
+
+  async function recalcDueDates() {
+    if (recalcBusy) return;
+    setRecalcBusy(true);
+    try {
+      const result = await apiSendJson<{
+        updated: number;
+        alreadyCorrect: number;
+        skippedPaid: number;
+        skippedNoRef: number;
+        total: number;
+      }>(`/api/treatment-plans/${planId}/installments/recalc-due-dates`, "POST", {});
+
+      if (result.updated > 0) {
+        toast({
+          title: "Vencimentos recalculados!",
+          description: `${result.updated} parcela${result.updated === 1 ? "" : "s"} corrigida${result.updated === 1 ? "" : "s"}` +
+            (result.skippedPaid > 0 ? ` (${result.skippedPaid} já paga${result.skippedPaid === 1 ? "" : "s"} preservada${result.skippedPaid === 1 ? "" : "s"})` : "") +
+            ".",
+        });
+      } else {
+        toast({
+          title: "Nada para corrigir",
+          description: `Todas as ${result.alreadyCorrect} parcela${result.alreadyCorrect === 1 ? "" : "s"} já estão com vencimento correto.`,
+        });
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: installmentsKey }),
+        queryClient.invalidateQueries({
+          queryKey: [`/api/patients/${patientId}/financial-records`],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["/api/financial/records"] }),
+      ]);
+    } catch (err: any) {
+      toast({
+        title: "Erro ao recalcular vencimentos",
+        description: err?.message ?? "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setRecalcBusy(false);
+    }
+  }
 
   async function confirmPayment() {
     if (!payOpen) return;
@@ -250,6 +295,21 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
           <span className="text-[11px] text-slate-400">
             ({summary?.countTotal ?? items.length} no total)
           </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7 gap-1.5 rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50 text-xs"
+            onClick={recalcDueDates}
+            disabled={recalcBusy}
+            title="Recalcula a data de vencimento das parcelas pendentes respeitando a vigência do plano e o dia de cobrança. Parcelas já pagas não são alteradas."
+          >
+            {recalcBusy ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            Recalcular vencimentos
+          </Button>
         </div>
 
         {summary && (
