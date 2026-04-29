@@ -78,6 +78,9 @@ import {
 } from "../utils/print-html";
 
 import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSection";
+import { ObjectivesField } from "./treatment-plan/ObjectivesField";
+import { WeeklyAgendaPreview } from "./treatment-plan/WeeklyAgendaPreview";
+import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
 
 // ─── Treatment Plan Tab ─────────────────────────────────────────────────────────
 
@@ -417,22 +420,17 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               {/* ── Aba Itens ────────────────────────────────────────────── */}
               <TabsContent value="itens" className="p-6 space-y-6 mt-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                      <Target className="w-4 h-4 text-primary" /> Objetivos do Tratamento
-                    </Label>
-                    <Textarea
-                      className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                      placeholder="Quais os principais objetivos desta etapa? (ex: redução de dor, ganho de amplitude...)"
-                      value={form.objectives} onChange={e => setForm({ ...form, objectives: e.target.value })}
-                    />
-                  </div>
+                  <ObjectivesField
+                    patientId={patientId}
+                    value={form.objectives}
+                    onChange={(v) => setForm({ ...form, objectives: v })}
+                  />
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                       <Stethoscope className="w-4 h-4 text-primary" /> Condutas e Técnicas
                     </Label>
                     <Textarea
-                      className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+                      className="min-h-[140px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
                       placeholder="Quais técnicas serão aplicadas? (ex: liberação miofascial, exercícios cinesioterapêuticos...)"
                       value={form.techniques} onChange={e => setForm({ ...form, techniques: e.target.value })}
                     />
@@ -564,6 +562,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                   }}
                 />
 
+                <WeeklyAgendaPreview
+                  planItems={planItems as any}
+                  startDate={selectedPlan?.startDate ?? form.startDate ?? null}
+                  durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+                />
+
                 <MaterializeBlock
                   planId={selectedPlanId!}
                   materializedAt={selectedPlan?.materializedAt ?? null}
@@ -572,12 +576,20 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                     queryClient.invalidateQueries({ queryKey: plansKey });
                     queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
                     queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                    queryClient.invalidateQueries({ queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`] });
                   }}
                 />
               </TabsContent>
 
               {/* ── Aba Cobrança ─────────────────────────────────────────── */}
               <TabsContent value="cobranca" className="p-6 space-y-6 mt-0">
+                <PlanInstallmentsPanel
+                  patientId={patientId}
+                  planId={selectedPlanId!}
+                  isAccepted={!!selectedPlan?.acceptedAt}
+                  isMaterialized={!!selectedPlan?.materializedAt}
+                />
+
                 <BillingSettingsBlock
                   form={form}
                   setForm={setForm}

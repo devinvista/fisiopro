@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { treatmentPlanProceduresTable, treatmentPlansTable, proceduresTable, packagesTable, patientsTable, appointmentsTable } from "@workspace/db";
+import { treatmentPlanProceduresTable, treatmentPlansTable, proceduresTable, packagesTable, patientsTable, appointmentsTable, usersTable } from "@workspace/db";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
@@ -67,9 +67,15 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
           discount: treatmentPlanProceduresTable.discount,
           priority: treatmentPlanProceduresTable.priority,
           notes: treatmentPlanProceduresTable.notes,
+          weekDays: treatmentPlanProceduresTable.weekDays,
+          defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
+          defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
+          sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
+          defaultProfessionalName: usersTable.name,
           createdAt: treatmentPlanProceduresTable.createdAt,
         })
         .from(treatmentPlanProceduresTable)
+        .leftJoin(usersTable, eq(treatmentPlanProceduresTable.defaultProfessionalId, usersTable.id))
         .where(eq(treatmentPlanProceduresTable.treatmentPlanId, planId))
         .orderBy(treatmentPlanProceduresTable.priority),
       db
