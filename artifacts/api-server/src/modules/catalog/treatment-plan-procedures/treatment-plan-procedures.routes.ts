@@ -150,6 +150,10 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
             packageName: pkg.name,
             procedureName: pkg.procedureName,
             packageType: pkg.packageType,
+            // Procedimento "real" associado ao pacote — usado pelo editor de
+            // aceite para consultar disponibilidade de horários (a coluna
+            // `procedure_id` do item é NULL quando ele aponta para um pacote).
+            packageProcedureId: pkg.procedureId,
             totalSessions: item.totalSessions ?? pkg.totalSessions ?? null,
             sessionsPerWeek: item.sessionsPerWeek ?? pkg.sessionsPerWeek,
             price: item.unitPrice ?? pkg.price,
