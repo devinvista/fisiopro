@@ -205,9 +205,7 @@ export function generateContractHTML(
         ${renderPatientSignatureBlock(patient.name, cpfFmt, acceptance)}
       </div>
       <div>
-        <div class="sig-line"></div>
-        <div class="sig-label">${plan.responsibleProfessional || "Fisioterapeuta / Prestador de Serviço"}</div>
-        <div class="sig-label">Contratada</div>
+        ${renderClinicSignatureBlock(clinicName, plan.responsibleProfessional ?? null, clinicRT, contratadaCouncil, today)}
       </div>
     </div>
 
@@ -217,6 +215,37 @@ export function generateContractHTML(
         : `Contrato gerado em ${today} &bull; ${clinicName} &bull; Valores acordados na contratação do plano`
     }</div>
   `;
+}
+
+/**
+ * Bloco de assinatura da CONTRATADA (clínica) — sempre renderizado como
+ * "assinado eletronicamente". O contrato é emitido pela própria clínica via
+ * sistema, então a assinatura digital da contratada já está pré-aplicada.
+ * O paciente vê o documento já assinado pela clínica antes de assinar.
+ */
+function renderClinicSignatureBlock(
+  clinicName: string,
+  responsibleProfessional: string | null,
+  responsibleTechnical: string,
+  council: string,
+  issueDateLabel: string,
+): string {
+  const signedName = (responsibleProfessional || responsibleTechnical || clinicName).trim();
+  const councilLine = council ? ` &bull; CREFITO/CREF: ${escapeAttr(council)}` : "";
+  const rtLine = responsibleTechnical && responsibleTechnical !== signedName
+    ? `<div>Responsável Técnico: <strong>${escapeAttr(responsibleTechnical)}</strong></div>`
+    : "";
+  return `
+        <div class="sig-signed">
+          <div class="sig-signed-name">${escapeAttr(signedName)}</div>
+          <div class="sig-signed-meta">
+            <div><strong>${escapeAttr(clinicName)}</strong>${councilLine} &bull; Contratada</div>
+            ${rtLine}
+            <div>Assinado eletronicamente em <strong>${escapeAttr(issueDateLabel)}</strong></div>
+            <div style="margin-top:4px;font-size:8pt;color:#047857">Assinatura eletrônica aplicada pela contratada via plataforma FisioGest Pro no momento da emissão do contrato.</div>
+          </div>
+        </div>
+    `;
 }
 
 function renderPatientSignatureBlock(
