@@ -239,7 +239,7 @@ describe("PR-FIN6-1 (B1): DELETE /records/:id receita contabilizada", () => {
     expect(res.status).toBe(204);
     expect(postReversalMock).toHaveBeenCalledTimes(1);
     // Ordem de prioridade no código: accountingEntryId → recognizedEntryId → settlementEntryId
-    expect(postReversalMock.mock.calls[0][0]).toBe(800);
+    expect((postReversalMock.mock.calls as any)[0][0]).toBe(800);
   });
 
   it("é idempotente: receita já estornada retorna 204 sem reversal", async () => {
@@ -308,7 +308,7 @@ describe("PR-FIN6-2 (B3): PATCH /records/:id/status pago dispara cascade/promote
     expect(postReceivableSettlementMock).toHaveBeenCalledTimes(1);
     expect(allocateReceivableMock).toHaveBeenCalledTimes(1);
     expect(cascadeMock).toHaveBeenCalledTimes(1);
-    const cascadeArg = cascadeMock.mock.calls[0][0];
+    const cascadeArg = (cascadeMock.mock.calls as any)[0][0];
     expect(cascadeArg.parent.id).toBe(100);
     expect(cascadeArg.settlementEntryId).toBe(555);
     expect(promotePrepaidMock).not.toHaveBeenCalled();
@@ -337,7 +337,7 @@ describe("PR-FIN6-2 (B3): PATCH /records/:id/status pago dispara cascade/promote
     });
     expect(res.status).toBe(200);
     expect(promotePrepaidMock).toHaveBeenCalledTimes(1);
-    expect(promotePrepaidMock.mock.calls[0][0]).toBe(200);
+    expect((promotePrepaidMock.mock.calls as any)[0][0]).toBe(200);
     expect(cascadeMock).not.toHaveBeenCalled();
   });
 });

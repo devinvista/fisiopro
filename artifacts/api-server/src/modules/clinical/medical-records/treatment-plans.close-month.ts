@@ -167,8 +167,8 @@ export async function closeAvulsoMonth(
         .from(clinicsTable)
         .where(eq(clinicsTable.id, plan.clinicId))
         .limit(1);
-      // fallback: dia 10 do mês seguinte
-      dueDay = 10;
+      // PR-FIN8-4 (B11): usar o defaultDueDays real da clínica (era hardcoded 10)
+      dueDay = clinic?.defaultDueDays ?? 10;
     }
     if (dueDay == null) dueDay = 10;
     const dueDayClamped = Math.min(Math.max(1, dueDay), lastDay);

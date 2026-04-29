@@ -116,7 +116,7 @@ describe("POST /api/treatment-plans/:planId/procedures (bloqueio pós-aceite)", 
     });
 
     expect(res.status).toBe(409);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.error).toBe("plan_already_accepted");
     expect(body.message).toMatch(/2026-04-20/);
     expect(body.message).toMatch(/renegoc/i);
@@ -135,7 +135,7 @@ describe("POST /api/treatment-plans/:planId/procedures (bloqueio pós-aceite)", 
     });
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.id).toBe(99);
     expect(dbMock.calls()).toEqual(["select", "insert"]);
   });
@@ -171,7 +171,7 @@ describe("PUT /api/treatment-plans/:planId/procedures/:id (bloqueio pós-aceite)
     });
 
     expect(res.status).toBe(409);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.error).toBe("plan_already_accepted");
     expect(body.message).toMatch(/valor unitário/i);
     // Nenhum UPDATE deve ter sido feito.
@@ -188,7 +188,7 @@ describe("PUT /api/treatment-plans/:planId/procedures/:id (bloqueio pós-aceite)
     });
 
     expect(res.status).toBe(409);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.error).toBe("plan_already_accepted");
     expect(body.message).toMatch(/total de sessões/i);
     expect(dbMock.calls()).toEqual(["select"]);
@@ -223,7 +223,7 @@ describe("PUT /api/treatment-plans/:planId/procedures/:id (bloqueio pós-aceite)
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.scheduleId).toBe(7);
     expect(dbMock.calls()).toEqual(["select", "update"]);
   });
@@ -238,7 +238,7 @@ describe("PUT /api/treatment-plans/:planId/procedures/:id (bloqueio pós-aceite)
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.id).toBe(50);
     expect(dbMock.calls()).toEqual(["select"]);
   });
@@ -254,7 +254,7 @@ describe("PUT /api/treatment-plans/:planId/procedures/:id (bloqueio pós-aceite)
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.unitPrice).toBe("150.00");
     expect(dbMock.calls()).toEqual(["select", "update"]);
   });
@@ -288,7 +288,7 @@ describe("DELETE /api/treatment-plans/:planId/procedures/:id (bloqueio pós-acei
     });
 
     expect(res.status).toBe(409);
-    const body = await res.json();
+    const body = await res.json() as any;
     expect(body.error).toBe("plan_already_accepted");
     expect(body.message).toMatch(/renegoc/i);
     // Nenhum DELETE deve ter sido feito.

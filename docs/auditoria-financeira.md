@@ -27,7 +27,7 @@ Objetivo: mapear o fluxo, identificar bugs, riscos contábeis e oportunidades de
    - `faturaPlano` sem `accountingEntryId` → `postCashAdvance` (D 1.1.1 / C 2.1.1).
    - `faturaMensalAvulso` → `postReceivableSettlement` + cascata para filhos.
    - Outros recebíveis → `postReceivableRevenue` (se ainda não houver) + `postReceivableSettlement` + `allocateReceivable`.
-4. Sobra (`remaining > 0`) → `postCashReceipt` (D 1.1.1 / C 4.1.x “direto”).
+4. Sobra (`remaining > 0`) → **`postCashAdvance`** (D 1.1.1 / C 2.1.1) + crédito na carteira do paciente (`patientWalletTransactions`) — *B8 + B15 resolvidos em Sprint 7*.
 
 ### 1.3 Cancelamento / estorno
 - `PATCH /records/:id/status` com `status ∈ {cancelado,estornado}` → `postReversal` (estorno espelhado).
@@ -82,23 +82,23 @@ Objetivo: mapear o fluxo, identificar bugs, riscos contábeis e oportunidades de
 **Severidade:** Crítica — quebra a equação contábil semântica.
 **Correção sugerida:** quando `pending.transactionType === "vendaPacote"`, usar `postCashAdvance` (D Caixa / C Adiantamentos) e, na sequência, marcar o registro pago + creditar a carteira do paciente (criar transação `patient_wallet_transactions` `credito`). Essencialmente espelhar o fluxo do `recordPackagePayment` que existe em `wallet/packages.service`.
 
-### 🟠 B6 — Idempotência mensal de `runBilling` por `createdAt`
+### ✅ B6 — Idempotência mensal de `runBilling` por `createdAt` — **RESOLVIDO em PR-FIN7-2 (Sprint 7)**
 **Arquivo:** `financial/billing/billing.service.ts:124-135` e re-check `:167-183`
 **Sintoma:** a verificação “já cobrei este pacote no mês” usa `created_at >= monthStart AND < monthEnd+1d`. Em rodadas no fim do dia 30/31 com fuso BRT vs servidor UTC, registros gerados perto da virada podem cair fora da janela do mês de competência → duplicação na rodada do mês seguinte. O modelo já tem `planMonthRef` em `faturaPlano`; falta usar coluna equivalente para `creditoAReceber` mensal.
 **Severidade:** Média.
-**Correção sugerida:** persistir `planMonthRef` (ou `billingMonthRef`) também em `creditoAReceber` originado por `runBilling` e usá-lo como chave de idempotência. Manter `createdAt` apenas como dado informativo.
+**Resolução:** `planMonthRef` agora é a chave de idempotência em `billing.service.ts` — substituindo a janela por `created_at`. A busca de duplicatas filtra por `planMonthRef = :ref` antes de qualquer insert.
 
-### 🟠 B7 — Log de `runBilling` fora da transação dos inserts
+### ✅ B7 — Log de `runBilling` fora da transação dos inserts — **RESOLVIDO em PR-FIN7-3 (Sprint 7)**
 **Arquivo:** `billing.service.ts:259-273`
 **Sintoma:** `billingRunLogsTable` é inserido após o `for` em conexão separada e dentro de `try/catch` que apenas loga. Se o serviço cair entre a última cobrança e o insert do log, perdemos rastreabilidade de execução.
 **Severidade:** Baixa.
-**Correção sugerida:** mover o log para o início (`status='running'`) e atualizar no fim (`status='ok|failed'`). Usar `ON CONFLICT (id)`/`uuid` para idempotência.
+**Resolução:** log em duas fases (insert `running` → update `ok|failed`) com `runId` UUID como chave. Usa pino logger estruturado. Migração `0012_sprint7_billing_log_status.sql` aplicada.
 
 ### 🟠 B8 — `postCashReceipt` para `remaining > 0` cria receita “fantasma”
 **Arquivo:** `financial-payments.routes.ts:329-342`
 **Sintoma:** se o pagamento excede o total de pendências, o resíduo entra como receita direta (D 1.1.1 / C 4.1.x?) sem origem documental, sem `financial_record` próprio (apenas `paymentRecord`) e sem aviso ao operador. Fica indistinguível de uma “venda à vista” no DRE.
 **Severidade:** Média — degrada a auditabilidade.
-**Correção sugerida:** em vez de receita direta, creditar a carteira do paciente (D 1.1.1 / C 2.1.1) e devolver no response um aviso `walletCredited: <valor>`. Receita só deve nascer com origem clara (sessão, plano, venda).
+**Resolução:** `remaining > 0` agora chama `postCashAdvance` (D 1.1.1 / C 2.1.1), faz upsert em `patientWallet` e insere em `patientWalletTransactions`. Response inclui `walletCredited` com o valor creditado.
 
 ### 🟠 B9 — `accountingEntryId` do `paymentRecord` mistura semântica
 **Arquivo:** `financial-payments.routes.ts:344-347`
@@ -111,11 +111,11 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 **Severidade:** Média.
 **Correção sugerida:** criar tabela `payment_allocations(payment_record_id, accounting_entry_id, amount)` (estilo Sub-Ledger). O `paymentRecord` referencia o conjunto, não um único entry. Estorno itera as alocações.
 
-### 🟠 B10 — `recognizeMonthlyInvoiceRevenue` idempotência por sentinel apenas no app
+### ✅ B10 — `recognizeMonthlyInvoiceRevenue` idempotência por sentinel apenas no app — **RESOLVIDO em PR-FIN7-2 (Sprint 7)**
 **Arquivo:** `treatment-plans.revenue-recognition.ts:62-64`
 **Sintoma:** a checagem `if (invoice.recognizedEntryId)` evita reentrância só dentro de um único processo. Sob duas confirmações simultâneas da mesma fatura (race entre dois usuários), nada na DB impede dupla postagem (não há advisory lock nem unique constraint em `recognizedEntryId`).
 **Severidade:** Baixa-Média (depende de carga concorrente).
-**Correção sugerida:** envolver em `withPackageBillingLock(invoice.id, year, month, …)` ou criar índice `UNIQUE(financial_records.id) WHERE recognizedEntryId IS NOT NULL` via constraint de integridade ao reconhecer (UPDATE…SET recognizedEntryId = … WHERE recognizedEntryId IS NULL RETURNING; abortar se RETURNING vazio).
+**Resolução:** `pg_advisory_xact_lock(invoiceId)` adicionado dentro da transação de `recognizeMonthlyInvoiceRevenue`, eliminando a race condition de dupla postagem em confirms simultâneos.
 
 ### 🟡 B11 — `closeAvulsoMonth` não posta receita do mãe nem valida procedure mismatch
 **Arquivo:** `treatment-plans.close-month.ts:182-208`
@@ -129,11 +129,11 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 2. Manter o pagamento da mãe ligado aos filhos via `payment_allocations` (ver B9) — DRE-by-procedure soma já corretamente do filho.
 3. Honrar `clinic.defaultDueDays` quando `avulsoBillingDay` for nulo (a leitura está lá, mas o valor é descartado pelo `dueDay = 10`).
 
-### 🟡 B12 — `applyBillingRules` plano materializado: rollback ausente
+### ✅ B12 — `applyBillingRules` plano materializado: rollback ausente — **RESOLVIDO em PR-FIN7-4 (Sprint 7)**
 **Arquivo:** `appointments.billing.ts:160-297`
 **Sintoma:** quando `treatmentPlanProcedureId` está preenchido e o status volta de `compareceu/concluido` para `agendado`, **não** há reversão do `recognizeMonthlyInvoiceRevenue`. A receita do mês fica reconhecida mesmo após desfazer todas as confirmações do mês.
 **Severidade:** Baixa-Média (caso operacional raro mas factível: erro de marcação).
-**Correção sugerida:** ao detectar `oldStatus ∈ confirmed` & `newStatus ∉ confirmed`, verificar se há outro appointment do mesmo `monthlyInvoiceId` ainda confirmado no mês; se não, postar `postReversal(invoice.recognizedEntryId)` e zerar a sentinel.
+**Resolução:** ao detectar `oldStatus ∈ confirmed` & `newStatus ∉ confirmed`, o handler verifica se há outro appointment do mesmo `monthlyInvoiceId` ainda confirmado; se não houver, posta `postReversal(invoice.recognizedEntryId)` e zera `recognizedEntryId`.
 
 ### 🟡 B13 — `applyBillingRules` por sessão: `tx` quebrado em `closeAvulso parent`
 **Arquivo:** `appointments.billing.ts:658-712`
@@ -146,10 +146,10 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 **Severidade:** Média (em produção com carteira ativa).
 **Correção sugerida:** `SELECT … FOR UPDATE` na carteira ou advisory lock por `wallet.id`.
 
-### 🟢 B15 — `revenueSummarySql` exclui `vendaPacote` do DRE — correto, mas ausente em `paymentRecord`
+### ✅ B15 — `revenueSummarySql` exclui `vendaPacote` do DRE — **RESOLVIDO em PR-FIN7-1 (Sprint 7)**
 **Análise:** o helper já exclui `vendaPacote`, `depositoCarteira`, etc. Porém o `paymentRecord` (`transactionType='pagamento'`) ESTÁ no filtro de exclusão — bom. Mas se `postCashReceipt` for chamado (B8) o crédito vai direto para Receita Serviço (4.1.1) **com** `transactionType='pagamento'` no `financial_record` mas o lançamento contábil credita receita real. Resultado: DRE-by-procedure puxa esse crédito, sumarizador por `financial_records` não. **Inconsistência entre as duas fontes**.
 **Severidade:** Média.
-**Correção sugerida:** quando o postCashReceipt acontecer (cenário B8), usar conta `2.1.1` (Adiantamentos) em vez de `4.1.1`.
+**Resolução:** com B8 eliminado, `postCashReceipt` não é mais chamado em `remaining > 0`. O crédito vai para Adiantamentos (2.1.1) via `postCashAdvance`, mantendo DRE e balancete consistentes.
 
 ---
 
@@ -217,11 +217,12 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 - ✅ **PR-FIN6-4 (B4)** — `pendingRecords` em `/payment` agora aplica `eq(clinicId, req.clinicId)` quando o usuário tem clínica explícita. Super-admin sem `clinicId` mantém visão consolidada (uso restrito de operação).
 - 📊 **Cobertura adicionada:** 11 testes novos em `financial-records.guards.test.ts` e `financial-payments.tenant-and-vendapacote.test.ts` (suíte total: **347/347 ✓**, antes 336).
 
-### Sprint financeiro 7 — Auditabilidade & idempotência (1 semana)
-- **PR-FIN7-1**: B8 + B15 — direcionar `remaining > 0` para Adiantamentos (carteira), nunca receita direta.
-- **PR-FIN7-2**: B6 + B10 — `planMonthRef`/`billingMonthRef` como chave de idempotência mensal + advisory lock em `recognizeMonthlyInvoiceRevenue`.
-- **PR-FIN7-3**: B7 — log de `runBilling` em duas fases (running/ok-failed).
-- **PR-FIN7-4**: B12 — rollback de receita reconhecida quando todas as sessões do mês saem do estado confirmado.
+### ✅ Sprint financeiro 7 — Auditabilidade & idempotência — **CONCLUÍDA (29/04/2026)**
+- ✅ **PR-FIN7-1 (B8 + B15)**: `remaining > 0` → `postCashAdvance` (D 1.1.1 / C 2.1.1) + upsert `patientWallet` + insert `patientWalletTransactions` + `walletCredited` no response. `postCashReceipt` removido do caminho de pagamento.
+- ✅ **PR-FIN7-2 (B6 + B10)**: `planMonthRef` como chave de idempotência em `billing.service.ts`; `pg_advisory_xact_lock(invoiceId)` em `recognizeMonthlyInvoiceRevenue` contra race condition.
+- ✅ **PR-FIN7-3 (B7)**: log de `runBilling` em duas fases — insert `running` no início, update `ok|failed` no fim com `runId` UUID; pino logger estruturado. Migração `0012_sprint7_billing_log_status.sql` aplicada.
+- ✅ **PR-FIN7-4 (B12)**: rollback de `recognizedEntryId` via `postReversal` quando todos os appointments do mês saem do estado confirmado; `recognizedEntryId` zerado para permitir novo reconhecimento.
+- 📊 **Cobertura:** testes passando sem erros de TypeScript; correção de B11 (`dueDay = clinic.defaultDueDays ?? 10`) incluída como PR-FIN8-4 antecipado.
 
 ### Sprint financeiro 8 — Sub-ledger & conciliação (2 semanas)
 - **PR-FIN8-1**: tabela `payment_allocations` + refator de `/payment` para alocação explícita (B9).
@@ -249,10 +250,9 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 
 ## 8. Conclusão executiva
 
-O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. **Após a Sprint Financeiro 6 (29/04/2026)**, os cinco bugs críticos do caminho de exceção (B1, B2, B3, B4, B5) estão corrigidos com cobertura de testes — o sistema agora **bloqueia edições contabilmente perigosas**, **dispara estorno auditado** em DELETE, **mantém paridade** entre `/payment` e `/status` para promoção de créditos e cascade de avulsos, **isola tenants** no caminho de pagamento e **direciona vendaPacote legado** para Adiantamentos.
+O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. **Após as Sprints Financeiros 6 e 7 (29/04/2026)**, onze bugs foram corrigidos (B1–B8, B10, B12, B15) com cobertura de testes — o sistema agora **bloqueia edições contabilmente perigosas**, **dispara estorno auditado** em DELETE, **mantém paridade** entre `/payment` e `/status` para promoção de créditos, **isola tenants**, **direciona saldo residual para a carteira do paciente** (não receita fantasma), **garante idempotência de billing** via `planMonthRef`, **usa advisory lock** contra race condition de reconhecimento de receita e **reverte receita** quando sessões saem do estado confirmado.
 
 Próximos passos:
-- **Sprint 7** (B6, B7, B8, B10, B12, B15): fortalecer auditabilidade e idempotência (`planMonthRef`/`billingMonthRef` como chave universal, advisory locks, rollback de receita reconhecida, eliminar receita-fantasma do `postCashReceipt`).
-- **Sprint 8** (B9, B11, B14): sub-ledger via `payment_allocations`, cascata de estorno mãe→filhos, job noturno de conciliação operacional × contábil, e correções menores de `closeAvulsoMonth` + `SELECT FOR UPDATE` na carteira.
+- **Sprint 8** (B9, B14): sub-ledger via `payment_allocations`, cascata de estorno mãe→filhos, job noturno de conciliação operacional × contábil, e `SELECT FOR UPDATE` na carteira. B11 (`closeAvulsoMonth dueDay`) já corrigido como PR-FIN8-4 antecipado.
 
 O caminho feliz já estava consistente; o caminho de **edição/estorno/exceção** agora também — o sistema atingiu o nível mínimo "auditável" exigido para onboarding de clientes com auditoria contábil formal (CFC/CRC, escritório contador externo).

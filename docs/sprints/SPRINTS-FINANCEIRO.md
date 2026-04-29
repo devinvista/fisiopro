@@ -166,3 +166,60 @@ controle sobre orçamento e metas.
       `accounting_journal_lines` agrupados por `procedure_id` + sub-conta),
       não só em `financial_records.category`.
 - [x] Todo estorno registra motivo, autor e valor original.
+
+---
+
+## Sprint 6 — Integridade contábil — bugs B1–B5 (1 semana) ✅ ENTREGUE 2026-04-29
+
+**Objetivo:** corrigir cinco bugs críticos no caminho de exceção do fluxo financeiro (estorno, edição indevida, cascata, multi-tenant, vendaPacote legado).
+
+### PR-FIN6-1 (B1 + B2) ✅
+- [x] `DELETE /records/:id` (receita) exige `reversalReason` quando há `accountingEntryId` e posta `postReversal` espelhado em transação + `logAudit('reverse')`. Idempotente para registros já `estornado/cancelado`.
+- [x] `PATCH /records/:id` retorna **409 `RECORD_ALREADY_POSTED`** com lista `lockedFields` ao tentar alterar `amount`/`type`/`status`/`paymentDate` em registro com entrada contábil.
+
+### PR-FIN6-2 (B3) ✅
+- [x] `PATCH /records/:id/status` com `status='pago'` agora chama `promotePrepaidCreditsForFinancialRecord` (faturaPlano) e `cascadeFaturaMensalAvulsoPayment` (faturaMensalAvulso) — paridade com `/payment`.
+
+### PR-FIN6-3 (B5) ✅
+- [x] `vendaPacote` sem `accountingEntryId` em `/payment` usa `postCashAdvance` (D Caixa / C Adiantamentos), eliminando recebível negativo em 1.1.2.
+
+### PR-FIN6-4 (B4) ✅
+- [x] `pendingRecords` em `/payment` filtra por `eq(clinicId, req.clinicId)` para usuário com clínica explícita.
+
+### Critérios de aceite
+- [x] 11 testes novos (`financial-records.guards.test.ts` + `financial-payments.tenant-and-vendapacote.test.ts`) passando.
+- [x] DELETE de receita contabilizada exige motivo e gera estorno contábil.
+- [x] PATCH bloqueado em campos financeiros com `accountingEntryId`.
+
+---
+
+## Sprint 7 — Auditabilidade & idempotência — bugs B6–B8, B10, B12, B15 (1 semana) ✅ ENTREGUE 2026-04-29
+
+**Objetivo:** eliminar receita "fantasma", fortalecer idempotência do billing e garantir rollback de receita reconhecida.
+
+### PR-FIN7-1 (B8 + B15) ✅
+- [x] `remaining > 0` em `POST /payment` → `postCashAdvance` (D 1.1.1 / C 2.1.1) + upsert `patient_wallet` + insert `patient_wallet_transactions(tipo='credito')`.
+- [x] Response inclui `walletCredited: <valor>`. `postCashReceipt` removido do caminho de pagamento.
+- [x] `revenueSummarySql` e DRE coerentes: saldo residual vai para Adiantamentos, não para Receita Serviço.
+
+### PR-FIN7-2 (B6 + B10) ✅
+- [x] `billing.service.ts`: `planMonthRef` como chave de idempotência em vez de janela `createdAt`.
+- [x] `treatment-plans.revenue-recognition.ts`: `pg_advisory_xact_lock(invoiceId)` dentro da transação para eliminar race condition de dupla postagem.
+
+### PR-FIN7-3 (B7) ✅
+- [x] Log de `runBilling` em duas fases: insert `status='running'` no início, update `status='ok'|'failed'` no fim.
+- [x] `runId` UUID como chave; pino logger estruturado.
+- [x] Migração `0012_sprint7_billing_log_status.sql` aplicada ao Neon.
+
+### PR-FIN7-4 (B12) ✅
+- [x] `applyBillingRules`: ao detectar `oldStatus ∈ confirmed` & `newStatus ∉ confirmed`, verifica se há outro appointment do mesmo `monthlyInvoiceId` ainda confirmado; se não houver, posta `postReversal(recognizedEntryId)` e zera a sentinel.
+
+### PR-FIN8-4 antecipado (B11 — partial) ✅
+- [x] `treatment-plans.close-month.ts`: `dueDay = clinic?.defaultDueDays ?? 10` (era hardcoded 10 descartando o `defaultDueDays` consultado).
+
+### Critérios de aceite
+- [x] Pagamento com sobra credita carteira do paciente, não cria receita direta.
+- [x] `runBilling` idempotente em fuso BRT × UTC via `planMonthRef`.
+- [x] Confirmações simultâneas da 1ª sessão do mês não duplicam receita.
+- [x] Desfazer todas as sessões confirmadas do mês reverte o reconhecimento de receita da fatura.
+- [x] Todos os erros TypeScript corrigidos; testes passando.

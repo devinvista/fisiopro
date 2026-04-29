@@ -192,7 +192,7 @@ describe("PR-FIN6-3 (B5): vendaPacote sem accountingEntryId → postCashAdvance"
     expect(postCashAdvanceMock).toHaveBeenCalledTimes(1);
     expect(postReceivableSettlementMock).not.toHaveBeenCalled();
     expect(postReceivableRevenueMock).not.toHaveBeenCalled();
-    const advArg = postCashAdvanceMock.mock.calls[0][0];
+    const advArg = (postCashAdvanceMock.mock.calls as any)[0][0];
     expect(advArg.amount).toBe(100);
     expect(advArg.clinicId).toBe(1);
   });
@@ -204,10 +204,13 @@ describe("PR-FIN6-4 (B4): filtro multi-tenant em /payment", () => {
     authState.isSuperAdmin = false;
 
     dbMock.enqueue([{ name: "Maria" }]);
-    dbMock.enqueue([{ id: 1001, amount: "50.00" }]); // paymentRecord
+    dbMock.enqueue([{ id: 1001, amount: "50.00" }]); // paymentRecord INSERT
     dbMock.enqueue([]); // pendingRecords vazio
-    // sem pendências → posta postCashReceipt como crédito em carteira
-    dbMock.enqueue(undefined); // update final paymentRecord
+    // remaining > 0 → postCashAdvance (mock) + wallet upsert + wallet_transactions
+    dbMock.enqueue([]); // patientWallet SELECT (não existe ainda)
+    dbMock.enqueue([{ id: 1, patientId: 5, clinicId: 2, balance: "50.00" }]); // wallet INSERT returning
+    dbMock.enqueue(undefined); // patientWalletTransactions INSERT
+    dbMock.enqueue(undefined); // paymentRecord UPDATE accountingEntryId
 
     const res = await fetch(`${baseUrl}/api/financial/patients/5/payment`, {
       method: "POST",
@@ -225,9 +228,13 @@ describe("PR-FIN6-4 (B4): filtro multi-tenant em /payment", () => {
     authState.isSuperAdmin = true;
 
     dbMock.enqueue([{ name: "Maria" }]);
-    dbMock.enqueue([{ id: 1002, amount: "50.00" }]);
+    dbMock.enqueue([{ id: 1002, amount: "50.00" }]); // paymentRecord INSERT
     dbMock.enqueue([]); // pendentes
-    dbMock.enqueue(undefined);
+    // remaining > 0 → postCashAdvance (mock) + wallet upsert + wallet_transactions
+    dbMock.enqueue([]); // patientWallet SELECT (não existe ainda)
+    dbMock.enqueue([{ id: 2, patientId: 5, clinicId: undefined, balance: "50.00" }]); // wallet INSERT returning
+    dbMock.enqueue(undefined); // patientWalletTransactions INSERT
+    dbMock.enqueue(undefined); // paymentRecord UPDATE accountingEntryId
 
     const res = await fetch(`${baseUrl}/api/financial/patients/5/payment`, {
       method: "POST",

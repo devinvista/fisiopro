@@ -87,12 +87,14 @@ describe("billingService.runBilling", () => {
   beforeEach(() => dbMock.reset());
 
   it("gera cobrança quando dia está na janela e não há registro do mês", async () => {
-    dbMock.enqueue([activeSub()]);                 // 1. select assinaturas
-    dbMock.enqueue([]);                            // 2. select existing → vazio
-    dbMock.enqueue([]);                            // 3. tx.select recheck dentro do lock → vazio
-    dbMock.enqueue([{ id: 555 }]);                 // 4. tx.insert.returning → registro criado
-    dbMock.enqueue(undefined);                     // 5. tx.update nextBillingDate
-    dbMock.enqueue(undefined);                     // 6. db.insert billing_run_logs
+    // PR-FIN7-3 (B7): Fase 1 — insert billing_run_log status='running' vem PRIMEIRO
+    dbMock.enqueue([{ id: 1 }]);                   // 1. db.insert billing_run_logs (running)
+    dbMock.enqueue([activeSub()]);                 // 2. select assinaturas
+    dbMock.enqueue([]);                            // 3. select existing → vazio
+    dbMock.enqueue([]);                            // 4. tx.select recheck dentro do lock → vazio
+    dbMock.enqueue([{ id: 555 }]);                 // 5. tx.insert.returning → registro criado
+    dbMock.enqueue(undefined);                     // 6. tx.update nextBillingDate
+    dbMock.enqueue(undefined);                     // 7. db.update billing_run_logs (ok) — Fase 2
 
     const result = await runBilling({ triggeredBy: "manual" });
 
@@ -119,9 +121,10 @@ describe("billingService.runBilling", () => {
   });
 
   it("pula cobrança quando já existe registro do mês (idempotência)", async () => {
+    dbMock.enqueue([{ id: 1 }]);                   // Fase 1: billing_run_logs insert (running)
     dbMock.enqueue([activeSub()]);                 // select assinaturas
-    dbMock.enqueue([{ id: 999 }]);                 // existing já encontrado
-    dbMock.enqueue(undefined);                     // log
+    dbMock.enqueue([{ id: 999 }]);                 // existing já encontrado → pula
+    dbMock.enqueue(undefined);                     // Fase 2: billing_run_logs update (ok)
 
     const result = await runBilling();
 
@@ -134,8 +137,9 @@ describe("billingService.runBilling", () => {
   it("pula cobrança fora da janela de tolerância", async () => {
     // billingDay propositadamente longe do dia atual + além da tolerância
     const farDay = todayDay > 15 ? 1 : 28;
-    dbMock.enqueue([activeSub({ billingDay: farDay })]);
-    dbMock.enqueue(undefined); // log
+    dbMock.enqueue([{ id: 1 }]);                             // Fase 1: billing_run_logs insert
+    dbMock.enqueue([activeSub({ billingDay: farDay })]);     // select assinaturas → pula
+    dbMock.enqueue(undefined);                               // Fase 2: billing_run_logs update
 
     const result = await runBilling({ toleranceDays: 1 });
 
@@ -149,18 +153,20 @@ describe("billingService.runBilling", () => {
       // Em dia 1 não dá pra testar "dia anterior" sem cair em mês curto. Skip seguro.
       return;
     }
+    dbMock.enqueue([{ id: 1 }]);                               // Fase 1: billing_run_logs insert
     dbMock.enqueue([activeSub({ billingDay: todayDay - 1 })]);
     dbMock.enqueue([]);              // existing vazio
     dbMock.enqueue([]);              // tx.recheck vazio
     dbMock.enqueue([{ id: 777 }]);   // insert
     dbMock.enqueue(undefined);       // update next billing
-    dbMock.enqueue(undefined);       // log
+    dbMock.enqueue(undefined);       // Fase 2: billing_run_logs update (ok)
 
     const result = await runBilling({ toleranceDays: 3 });
     expect(result.generated).toBe(1);
   });
 
   it("contabiliza erro sem abortar batch quando insert falha", async () => {
+    dbMock.enqueue([{ id: 1 }]);                                    // Fase 1: billing_run_logs insert
     dbMock.enqueue([activeSub({ id: 1 }), activeSub({ id: 2 })]); // 2 assinaturas
     // Sub #1: existing vazio, recheck vazio, insert FALHA
     dbMock.enqueue([]);
@@ -171,7 +177,7 @@ describe("billingService.runBilling", () => {
     dbMock.enqueue([]);
     dbMock.enqueue([{ id: 222 }]);
     dbMock.enqueue(undefined); // update next billing
-    dbMock.enqueue(undefined); // log
+    dbMock.enqueue(undefined); // Fase 2: billing_run_logs update (failed — errors=1)
 
     const result = await runBilling();
     expect(result.errors).toBe(1);
@@ -180,8 +186,11 @@ describe("billingService.runBilling", () => {
   });
 
   it("pula registro de log se a inserção do log falhar (não propaga)", async () => {
-    dbMock.enqueue([]); // sem assinaturas
-    dbMock.enqueue(() => { throw new Error("log table indisponível"); });
+    // PR-FIN7-3 (B7): com Fase 1 ANTES do loop, o insert do log ocorre primeiro.
+    // Se falhar, logId fica null, a Fase 2 é pulada, e o billing continua.
+    dbMock.enqueue(() => { throw new Error("log table indisponível"); }); // Fase 1 falha
+    dbMock.enqueue([]); // sem assinaturas (loop roda mas não processa nada)
+    // Fase 2 NÃO chamada (logId === null)
 
     const result = await runBilling();
     expect(result.processed).toBe(0);
