@@ -68,12 +68,11 @@ export async function recalcPlanAppointmentDurations(
   }
 
   // ── Mapa { itemId → durationMinutes correta } ──────────────────────────────
-  // duration = override do item (sessionDurationMinutes) > durationMinutes do
-  // procedimento (preferindo o do pacote, se houver) > 60.
+  // duration = SEMPRE a duração cadastrada do procedimento (preferindo o do
+  // pacote, se houver) > 60. Não existe mais override por item do plano.
   const items = await db
     .select({
       itemId: treatmentPlanProceduresTable.id,
-      sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
       procedureId: treatmentPlanProceduresTable.procedureId,
       packageProcedureId: sql<number | null>`(
         SELECT pkg_proc.procedure_id
@@ -121,7 +120,7 @@ export async function recalcPlanAppointmentDurations(
     const procDur =
       (it.packageProcedureId != null ? durationByProc.get(it.packageProcedureId) : undefined) ??
       (it.procedureId != null ? durationByProc.get(it.procedureId) : undefined);
-    const dur = it.sessionDurationMinutes ?? procDur ?? 60;
+    const dur = procDur ?? 60;
     correctDurationByItem.set(it.itemId, dur);
   }
 

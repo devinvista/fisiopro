@@ -383,8 +383,12 @@ export async function materializeTreatmentPlan(
       );
       const billingDay = item.packageBillingDay ?? 10;
       const weekDays = parseWeekDays(item.weekDays);
-      // Duração: override do item > duração cadastrada do procedimento > 60 min.
-      const duration = item.sessionDurationMinutes ?? procedure.durationMinutes ?? 60;
+      // Duração: SEMPRE a duração cadastrada do procedimento. Não existe
+      // mais override por item do plano — a duração da consulta é igual à
+      // duração configurada no procedimento vinculado (procedimento de 45min
+      // → consulta de 45min, mesmo dentro de um plano ativo). Fallback de
+      // 60 min apenas se o procedimento estiver sem duração cadastrada.
+      const duration = procedure.durationMinutes ?? 60;
 
       // Política específica deste item (override do plano > pacote > default).
       const itemPaymentMode = resolvePaymentMode(plan.paymentMode, item.packagePaymentMode);
@@ -620,8 +624,9 @@ export async function materializeTreatmentPlan(
           : Math.max(1, item.totalSessions ?? 1);
       if (cap === 0) continue;
 
-      // Duração: override do item > duração cadastrada do procedimento > 60 min.
-      const duration = item.sessionDurationMinutes ?? procedure.durationMinutes ?? 60;
+      // Duração: SEMPRE a duração cadastrada do procedimento (sem override
+      // do plano). Procedimento de 45min → consulta de 45min.
+      const duration = procedure.durationMinutes ?? 60;
       const winEndExclusive = (() => {
         const [y, mo, d] = endDate.split("-").map(Number);
         const dt = new Date(Date.UTC(y, mo - 1, d));
