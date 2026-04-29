@@ -398,10 +398,12 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         ];
         if (walletClinicId) walletConditions.push(eq(patientWalletTable.clinicId, walletClinicId));
 
+        // PR-FIN8-4 (B14): SELECT … FOR UPDATE serializa upserts concorrentes.
         const [existingWallet] = await tx
           .select()
           .from(patientWalletTable)
           .where(and(...walletConditions))
+          .for("update")
           .limit(1);
 
         let walletId: number;

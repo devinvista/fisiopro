@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { financialRecordsTable, appointmentsTable, proceduresTable } from "@workspace/db";
-import { and, eq, sql, gte, lte } from "drizzle-orm";
+import { and, eq, sql, gte, lte, isNull, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { nowBRT } from "../../../utils/dateUtils.js";
-import { recordDateFilter, revenueSummarySql } from "../shared/financial-reports.service.js";
+import { recordDateFilter, revenueSummarySql, RECEIVABLE_TYPES } from "../shared/financial-reports.service.js";
+import { getAccountingBalances } from "../../shared/accounting/accounting.service.js";
 
 /**
  * Data efetiva do registro financeiro para fins de relatório:
@@ -202,6 +203,144 @@ router.get("/schedule-occupation", requirePermission("reports.read"), async (req
       noShowRate,
       activePatients,
       byDayOfWeek: dayNames.map((d) => ({ dayOfWeek: d, count: byDayOfWeek[d] })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+/**
+ * PR-FIN8-3 — Conciliação Operacional × Contábil
+ *
+ * Compara, em uma janela `[from, to]`:
+ *  • Receita operacional (revenueSummarySql)   ↔ Créditos das contas 4.x
+ *  • Recebíveis pendentes (financial_records)  ↔ Saldo da conta 1.1.2 (Recebíveis)
+ *  • Caixa recebido (settlements)              ↔ Débitos da conta 1.1.1 (Caixa)
+ *
+ * Identifica também:
+ *  • registros financeiros sem `recognizedEntryId/accountingEntryId` (deveriam ter)
+ *  • settlements pendentes sem `settlementEntryId`
+ *
+ * Retorna sempre 200 com `{ ok: boolean, ...diffs }`. `ok=false` quando alguma
+ * diferença excede a tolerância (R$ 0,01). Usado pelo SuperAdmin / job noturno
+ * para garantir que operacional e contábil contam a mesma história.
+ */
+router.get("/reconciliation", requirePermission("financial.read"), async (req: AuthRequest, res) => {
+  try {
+    const brt = nowBRT();
+    const fromStr = (req.query.from as string) || `${brt.year}-${String(brt.month).padStart(2, "0")}-01`;
+    const toStr = (req.query.to as string) || `${brt.year}-${String(brt.month).padStart(2, "0")}-${String(new Date(brt.year, brt.month, 0).getDate()).padStart(2, "0")}`;
+    const tolerance = 0.01;
+
+    const clinicId = req.isSuperAdmin ? (req.query.clinicId ? Number(req.query.clinicId) : null) : (req.clinicId ?? null);
+    const clinicFilter = clinicId == null ? null : eq(financialRecordsTable.clinicId, clinicId);
+
+    // ─── 1. Receita operacional na janela ──────────────────────────────────
+    const [opRevenue] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
+      })
+      .from(financialRecordsTable)
+      .where(and(...[
+        clinicFilter,
+        revenueSummarySql(),
+        recordDateFilter(fromStr, toStr),
+      ].filter(Boolean) as any[]));
+
+    // ─── 2. Recebíveis pendentes (snapshot atual) ──────────────────────────
+    const [opPendingReceivables] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
+      })
+      .from(financialRecordsTable)
+      .where(and(...[
+        clinicFilter,
+        eq(financialRecordsTable.type, "receita"),
+        eq(financialRecordsTable.status, "pendente"),
+        sql`(${financialRecordsTable.transactionType} IS NULL OR ${financialRecordsTable.transactionType} = ANY(${RECEIVABLE_TYPES}))`,
+      ].filter(Boolean) as any[]));
+
+    // ─── 3. Caixa recebido (settlements pagos na janela) ───────────────────
+    const [opCashIn] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
+      })
+      .from(financialRecordsTable)
+      .where(and(...[
+        clinicFilter,
+        eq(financialRecordsTable.type, "receita"),
+        eq(financialRecordsTable.status, "pago"),
+        gte(financialRecordsTable.paymentDate, fromStr),
+        lte(financialRecordsTable.paymentDate, toStr),
+      ].filter(Boolean) as any[]));
+
+    // ─── 4. Saldos contábeis (snapshot, todas as datas postadas) ───────────
+    const balances = await getAccountingBalances({ clinicId });
+    const balanceFor = (codePrefix: string, kind: "credit" | "debit" = "credit") =>
+      balances
+        .filter((b) => b.code.startsWith(codePrefix))
+        .reduce((acc, b) => {
+          const debit = Number(b.debit);
+          const credit = Number(b.credit);
+          // Receita (4.x) → saldo credor; Caixa/Recebíveis (1.x) → saldo devedor
+          return acc + (kind === "credit" ? credit - debit : debit - credit);
+        }, 0);
+
+    const accRevenueAllTime = balanceFor("4", "credit");
+    const accReceivables = balanceFor("1.1.2", "debit");
+    const accCash = balanceFor("1.1.1", "debit");
+
+    // ─── 5. Registros sem lançamento contábil (deveriam ter) ───────────────
+    const orphanRecords = await db
+      .select({
+        id: financialRecordsTable.id,
+        description: financialRecordsTable.description,
+        amount: financialRecordsTable.amount,
+        status: financialRecordsTable.status,
+        transactionType: financialRecordsTable.transactionType,
+      })
+      .from(financialRecordsTable)
+      .where(and(...[
+        clinicFilter,
+        eq(financialRecordsTable.type, "receita"),
+        sql`${financialRecordsTable.status} NOT IN ('estornado','cancelado')`,
+        isNull(financialRecordsTable.recognizedEntryId),
+        isNull(financialRecordsTable.accountingEntryId),
+        sql`(${financialRecordsTable.transactionType} IS NULL OR ${financialRecordsTable.transactionType} = ANY(${RECEIVABLE_TYPES}))`,
+      ].filter(Boolean) as any[]))
+      .limit(50);
+
+    // ─── 6. Diffs ─────────────────────────────────────────────────────────
+    const diffPendingReceivables = Number(opPendingReceivables.total) - accReceivables;
+    const ok = orphanRecords.length === 0 && Math.abs(diffPendingReceivables) < tolerance;
+
+    res.json({
+      ok,
+      window: { from: fromStr, to: toStr },
+      clinicId,
+      operational: {
+        revenueInWindow: Number(opRevenue.total),
+        pendingReceivables: Number(opPendingReceivables.total),
+        cashInWindow: Number(opCashIn.total),
+      },
+      accounting: {
+        revenueAllTime: accRevenueAllTime,
+        receivablesBalance: accReceivables,
+        cashBalance: accCash,
+      },
+      diffs: {
+        pendingReceivables: Number(diffPendingReceivables.toFixed(2)),
+      },
+      orphans: {
+        count: orphanRecords.length,
+        sample: orphanRecords.slice(0, 10),
+      },
+      tolerance,
+      note:
+        "Receita operacional usa data efetiva da janela; receita contábil (revenueAllTime) é " +
+        "snapshot acumulado e não deve ser comparada diretamente. Use o relatório /monthly-revenue " +
+        "para a comparação por competência.",
     });
   } catch (err) {
     console.error(err);

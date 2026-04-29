@@ -29,7 +29,8 @@
  */
 import { financialRecordsTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
-import { allocateReceivable } from "../../shared/accounting/accounting.service.js";
+import { allocateReceivable, postReversal } from "../../shared/accounting/accounting.service.js";
+import { todayBRT } from "../../../utils/dateUtils.js";
 
 export interface CascadeAvulsoPaymentInput {
   /** Transação aberta (Drizzle Tx). */
@@ -126,6 +127,128 @@ export async function cascadeFaturaMensalAvulsoPayment(
   return {
     cascadedChildIds: children.map((c: { id: number }) => c.id),
     totalCascaded: total.toFixed(2),
+  };
+}
+
+// ─── PR-FIN8-2 — Cascata de ESTORNO mãe → filhos ──────────────────────────
+
+export interface CascadeReversalInput {
+  /** Transação aberta (Drizzle Tx). */
+  tx: any;
+  /** ID do parent (`faturaMensalAvulso`) sendo estornado. */
+  parentId: number;
+  /** Data do estorno (string `YYYY-MM-DD`); default: hoje BRT. */
+  reversalDate?: string;
+  /** Motivo (auditoria contábil) — propagado para descrição do journal. */
+  reversalReason: string;
+  /** Usuário responsável (audit trail). */
+  reversedBy?: number | null;
+  /** ClinicId pai (propagado para o journal entry de estorno). */
+  parentClinicId: number | null;
+}
+
+export interface CascadeReversalResult {
+  /** IDs dos filhos estornados. */
+  reversedChildIds: number[];
+  /** IDs dos journal entries de estorno gerados. */
+  reversalEntryIds: number[];
+  /** Soma dos `amount` estornados (string com 2 casas). */
+  totalReversed: string;
+}
+
+/**
+ * Estorna em cascata todos os filhos de uma `faturaMensalAvulso` mãe.
+ *
+ * - Para cada filho `pago/pendente` que NÃO está `estornado/cancelado`:
+ *     • posta `postReversal(child.recognizedEntryId)` (espelha o reconhecimento);
+ *     • marca o filho como `estornado` com trilha (`reversalReason`,
+ *       `reversedBy`, `reversedAt`, `originalAmount`).
+ * - Filhos sem `recognizedEntryId` são ignorados (caso raro, legado).
+ * - Idempotente: filhos já estornados são pulados pelo filtro.
+ *
+ * NÃO estorna a mãe — quem chama (handler de DELETE/estorno/status) já cuida
+ * disso. Esta função cobre apenas o "efeito dominó" para baixo.
+ */
+export async function cascadeReversalForFaturaMensalAvulso(
+  input: CascadeReversalInput,
+): Promise<CascadeReversalResult> {
+  const { tx, parentId, parentClinicId, reversalReason, reversedBy } = input;
+  const reversalDate = input.reversalDate ?? todayBRT();
+
+  const children = await tx
+    .select({
+      id: financialRecordsTable.id,
+      amount: financialRecordsTable.amount,
+      originalAmount: financialRecordsTable.originalAmount,
+      status: financialRecordsTable.status,
+      description: financialRecordsTable.description,
+      recognizedEntryId: financialRecordsTable.recognizedEntryId,
+      accountingEntryId: financialRecordsTable.accountingEntryId,
+      clinicId: financialRecordsTable.clinicId,
+      patientId: financialRecordsTable.patientId,
+      appointmentId: financialRecordsTable.appointmentId,
+      procedureId: financialRecordsTable.procedureId,
+    })
+    .from(financialRecordsTable)
+    .where(
+      and(
+        eq(financialRecordsTable.parentRecordId, parentId),
+        sql`${financialRecordsTable.status} NOT IN ('estornado','cancelado')`,
+      ),
+    );
+
+  if (children.length === 0) {
+    return { reversedChildIds: [], reversalEntryIds: [], totalReversed: "0.00" };
+  }
+
+  const reversedAt = new Date();
+  const reversalEntryIds: number[] = [];
+  const reversedChildIds: number[] = [];
+  let total = 0;
+
+  for (const child of children) {
+    const entryId = child.recognizedEntryId ?? child.accountingEntryId;
+    if (entryId) {
+      const reversal = await postReversal(
+        entryId,
+        {
+          clinicId: child.clinicId ?? parentClinicId,
+          entryDate: reversalDate,
+          description:
+            `[Cascata mãe→filho] Estorno de receita filha — ${child.description} ` +
+            `(motivo: ${reversalReason})`,
+          sourceType: "financial_record",
+          sourceId: child.id,
+          patientId: child.patientId,
+          appointmentId: child.appointmentId,
+          procedureId: child.procedureId,
+          financialRecordId: child.id,
+          createdBy: reversedBy ?? null,
+        },
+        tx,
+      );
+      reversalEntryIds.push(reversal.id);
+    }
+
+    await tx
+      .update(financialRecordsTable)
+      .set({
+        status: "estornado",
+        originalAmount: child.originalAmount ?? child.amount,
+        reversalReason: `[cascata #${parentId}] ${reversalReason}`,
+        reversedBy: reversedBy ?? null,
+        reversedAt,
+      })
+      .where(eq(financialRecordsTable.id, child.id));
+
+    reversedChildIds.push(child.id);
+    total += Number(child.amount ?? 0);
+  }
+
+  return {
+    reversedChildIds,
+    reversalEntryIds,
+    totalReversed: total.toFixed(2),
   };
 }
 

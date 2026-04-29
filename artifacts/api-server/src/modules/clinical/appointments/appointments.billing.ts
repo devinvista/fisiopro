@@ -616,6 +616,9 @@ export async function applyBillingRules(
         }
 
         // 2b. Verifica carteira de crédito (R$)
+        // PR-FIN8-4 (B14): SELECT … FOR UPDATE serializa débitos concorrentes
+        // sobre a mesma carteira. Sem o lock, dois confirms simultâneos liam
+        // o mesmo saldo e debitavam em dobro (race window entre SELECT e UPDATE).
         if (resolvedClinicId) {
           const [wallet] = await tx
             .select()
@@ -626,6 +629,7 @@ export async function applyBillingRules(
                 eq(patientWalletTable.clinicId, resolvedClinicId)
               )
             )
+            .for("update")
             .limit(1);
 
           if (wallet && Number(wallet.balance) >= Number(effectivePrice)) {
@@ -803,40 +807,47 @@ export async function applyBillingRules(
 
     if (walletUsage.length > 0 && resolvedClinicId) {
       const fr = walletUsage[0];
-      const [wallet] = await db
-        .select()
-        .from(patientWalletTable)
-        .where(
-          and(
-            eq(patientWalletTable.patientId, patientId),
-            eq(patientWalletTable.clinicId, resolvedClinicId)
+      // PR-FIN8-4 (B14): estorno da carteira agora roda em transação ACID com
+      // SELECT … FOR UPDATE. Antes, SELECT + UPDATE em conexões separadas
+      // permitia perder o crédito se outro débito concorrente lesse o mesmo
+      // saldo entre as duas chamadas.
+      await db.transaction(async (tx) => {
+        const [wallet] = await tx
+          .select()
+          .from(patientWalletTable)
+          .where(
+            and(
+              eq(patientWalletTable.patientId, patientId),
+              eq(patientWalletTable.clinicId, resolvedClinicId)
+            )
           )
-        )
-        .limit(1);
+          .for("update")
+          .limit(1);
 
-      if (wallet) {
-        const restoredBalance = (Number(wallet.balance) + Number(fr.amount)).toFixed(2);
-        await db
-          .update(patientWalletTable)
-          .set({ balance: restoredBalance, updatedAt: new Date() })
-          .where(eq(patientWalletTable.id, wallet.id));
+        if (wallet) {
+          const restoredBalance = (Number(wallet.balance) + Number(fr.amount)).toFixed(2);
+          await tx
+            .update(patientWalletTable)
+            .set({ balance: restoredBalance, updatedAt: new Date() })
+            .where(eq(patientWalletTable.id, wallet.id));
 
-        await db.insert(patientWalletTransactionsTable).values({
-          walletId:          wallet.id,
-          patientId,
-          clinicId:          resolvedClinicId,
-          amount:            String(fr.amount),
-          type:              "estorno",
-          description:       `Estorno de cancelamento — consulta #${appointmentId}`,
-          appointmentId,
-          financialRecordId: fr.id,
-        });
+          await tx.insert(patientWalletTransactionsTable).values({
+            walletId:          wallet.id,
+            patientId,
+            clinicId:          resolvedClinicId,
+            amount:            String(fr.amount),
+            type:              "estorno",
+            description:       `Estorno de cancelamento — consulta #${appointmentId}`,
+            appointmentId,
+            financialRecordId: fr.id,
+          });
 
-        await db
-          .update(financialRecordsTable)
-          .set({ status: "estornado" })
-          .where(eq(financialRecordsTable.id, fr.id));
-      }
+          await tx
+            .update(financialRecordsTable)
+            .set({ status: "estornado" })
+            .where(eq(financialRecordsTable.id, fr.id));
+        }
+      });
     }
 
     const creditUsage = await db

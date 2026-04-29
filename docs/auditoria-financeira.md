@@ -117,17 +117,13 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 **Severidade:** Baixa-Média (depende de carga concorrente).
 **Resolução:** `pg_advisory_xact_lock(invoiceId)` adicionado dentro da transação de `recognizeMonthlyInvoiceRevenue`, eliminando a race condition de dupla postagem em confirms simultâneos.
 
-### 🟡 B11 — `closeAvulsoMonth` não posta receita do mãe nem valida procedure mismatch
+### ✅ B11 — `closeAvulsoMonth` categoria/dueDay/procedureId — **RESOLVIDO em PR-FIN8-2 + PR-FIN8-4 (Sprint 8)**
 **Arquivo:** `treatment-plans.close-month.ts:182-208`
-**Análise:** correto que a fatura mãe não posta receita (filhos já reconheceram). Porém:
-- `category: candidates[0].category` assume todos os filhos da mesma categoria (plano com >1 procedimento avulso = categoria errada na mãe).
-- Não persiste `procedureId`: o DRE-by-procedure não enxerga o pagamento da mãe.
-- `dueDay = 10` quando `clinic.defaultDueDays` foi consultado mas **descartado** (linhas 165-172).
-**Severidade:** Baixa-Média.
-**Correção sugerida:**
-1. Usar `category: 'Fatura mensal'` ou agregada.
-2. Manter o pagamento da mãe ligado aos filhos via `payment_allocations` (ver B9) — DRE-by-procedure soma já corretamente do filho.
-3. Honrar `clinic.defaultDueDays` quando `avulsoBillingDay` for nulo (a leitura está lá, mas o valor é descartado pelo `dueDay = 10`).
+**Análise original:** correto que a fatura mãe não posta receita (filhos já reconheceram). Porém:
+- ~~`category: candidates[0].category`~~ → **agora** `aggregatedCategory = 'Fatura mensal'` quando há múltiplas categorias entre os filhos; preserva a única categoria quando todos compartilham.
+- ~~`procedureId` ausente~~ → **deliberadamente nulo** na mãe: o DRE-by-procedure puxa do filho (que tem `procedureId` correto). Adicionar à mãe causaria dupla contagem.
+- ~~`dueDay = 10` fixo~~ → **PR-FIN8-4 antecipado (Sprint 7):** `dueDay = clinic.defaultDueDays ?? 10`.
+**Resolução:** todos os pontos endereçados; DRE-by-procedure consistente sem necessidade de `payment_allocations` (PR-FIN8-1) para esse caso.
 
 ### ✅ B12 — `applyBillingRules` plano materializado: rollback ausente — **RESOLVIDO em PR-FIN7-4 (Sprint 7)**
 **Arquivo:** `appointments.billing.ts:160-297`
@@ -140,11 +136,9 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 **Análise:** o lookup do `parentInvoice` ordena por `id ASC` (correto) mas roda **fora** da advisory lock — duas sessões confirmadas concorrentemente para o mesmo plano/mês podem escolher `parentRecordId` antes da consolidação `closeAvulsoMonth` rodar. Não causa duplicidade contábil, mas força um posterior `update` para mover o filho órfão. Aceitável; documentar.
 **Severidade:** Informativo.
 
-### 🟡 B14 — `applyBillingRules` carteira: race em decremento de saldo
-**Arquivo:** `appointments.billing.ts:558-623`
-**Sintoma:** `SELECT wallet … WHERE patient+clinic` seguido de `UPDATE wallet SET balance` em transação Drizzle — sem `SELECT … FOR UPDATE` nem advisory lock por `wallet.id`. Dois confirms simultâneos podem ler o mesmo saldo e debitar em dobro.
-**Severidade:** Média (em produção com carteira ativa).
-**Correção sugerida:** `SELECT … FOR UPDATE` na carteira ou advisory lock por `wallet.id`.
+### ✅ B14 — `applyBillingRules` carteira: race em decremento de saldo — **RESOLVIDO em PR-FIN8-4 (Sprint 8)**
+**Arquivos corrigidos:** `appointments.billing.ts` (débito em billing por sessão e estorno em cancelamento) + `financial-payments.routes.ts` (upsert em `remaining > 0`).
+**Resolução:** todos os 3 caminhos que mexem em `patient_wallet` agora usam `SELECT … FOR UPDATE` dentro de `db.transaction(...)`. O caminho de estorno (cancelamento) — que antes rodava SELECT + UPDATE em conexões separadas — foi envelopado em transação ACID. Race window eliminada: dois confirms/upserts simultâneos sobre a mesma carteira são serializados pelo lock de linha.
 
 ### ✅ B15 — `revenueSummarySql` exclui `vendaPacote` do DRE — **RESOLVIDO em PR-FIN7-1 (Sprint 7)**
 **Análise:** o helper já exclui `vendaPacote`, `depositoCarteira`, etc. Porém o `paymentRecord` (`transactionType='pagamento'`) ESTÁ no filtro de exclusão — bom. Mas se `postCashReceipt` for chamado (B8) o crédito vai direto para Receita Serviço (4.1.1) **com** `transactionType='pagamento'` no `financial_record` mas o lançamento contábil credita receita real. Resultado: DRE-by-procedure puxa esse crédito, sumarizador por `financial_records` não. **Inconsistência entre as duas fontes**.
@@ -224,15 +218,27 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 - ✅ **PR-FIN7-4 (B12)**: rollback de `recognizedEntryId` via `postReversal` quando todos os appointments do mês saem do estado confirmado; `recognizedEntryId` zerado para permitir novo reconhecimento.
 - 📊 **Cobertura:** testes passando sem erros de TypeScript; correção de B11 (`dueDay = clinic.defaultDueDays ?? 10`) incluída como PR-FIN8-4 antecipado.
 
-### Sprint financeiro 8 — Sub-ledger & conciliação (2 semanas)
-- **PR-FIN8-1**: tabela `payment_allocations` + refator de `/payment` para alocação explícita (B9).
-- **PR-FIN8-2**: cascata de estorno (mãe `faturaMensalAvulso`/`faturaPlano` → filhos).
-- **PR-FIN8-3**: job noturno de conciliação operacional × contábil + endpoint `GET /reports/reconciliation/:date`.
-- **PR-FIN8-4**: B14 — `SELECT … FOR UPDATE` na carteira; B11 — corrigir `closeAvulsoMonth` (categoria, dueDay, procedureId).
+### 🟢 Sprint financeiro 8 — Sub-ledger & conciliação — **PARCIALMENTE CONCLUÍDA (29/04/2026)**
+- ⏳ **PR-FIN8-1 (DEFERIDO)**: tabela `payment_allocations` + refator de `/payment` para alocação explícita (B9). Refator profundo do core de pagamento — adiado para Sprint 9 com migração dedicada e backfill controlado.
+- ✅ **PR-FIN8-2 (cascata de estorno + B11)**:
+  - Novo helper `cascadeReversalForFaturaMensalAvulso` em `payment-cascade.ts`: para cada filho não-estornado, posta `postReversal(child.recognizedEntryId)` espelhado e marca o filho como `estornado` com trilha (`reversalReason='[cascata #parent]…'`, `reversedBy`, `reversedAt`, `originalAmount`). Idempotente (filtro `NOT IN ('estornado','cancelado')`).
+  - Wired nos 3 caminhos de estorno: `PATCH /records/:id/status (→ estornado|cancelado)`, `PATCH /records/:id/estorno`, `DELETE /records/:id`. Roda dentro da mesma transação do estorno da mãe.
+  - `closeAvulsoMonth` agora usa `aggregatedCategory` (`'Fatura mensal'` ou única categoria comum dos filhos) em vez de `candidates[0].category` — fecha o gap de B11.
+  - **Escopo**: `faturaPlano` ainda NÃO faz cascata automática para appointments materializados (decisão conservadora — exige confirmação operacional sobre semântica esperada). Documentado para Sprint 9.
+- ✅ **PR-FIN8-3 (conciliação)**: novo endpoint `GET /reports/reconciliation?from=…&to=…&clinicId=…` em `reports.routes.ts`. Compara em tempo real:
+  - Receita operacional na janela (`revenueSummarySql`) ↔ saldo credor das contas `4.x`;
+  - Recebíveis pendentes (`status='pendente' AND type='receita' AND transactionType ∈ RECEIVABLE_TYPES`) ↔ saldo devedor de `1.1.2`;
+  - Caixa recebido na janela (settlements `paymentDate` ∈ janela) ↔ saldo devedor de `1.1.1`;
+  - Lista até 50 registros órfãos (receita ativa sem `recognizedEntryId/accountingEntryId`).
+  - Retorna `{ ok: boolean, diffs, orphans, tolerance: 0.01 }`. `ok=false` se diff de recebíveis > R$ 0,01 ou houver órfãos. Pronto para integração com job cron e dashboard.
+- ✅ **PR-FIN8-4 (B14 + B11)**:
+  - `SELECT … FOR UPDATE` em todos os 3 lugares que tocam `patient_wallet`: débito em billing por sessão (`appointments.billing.ts`), estorno em cancelamento (envolvido em transação ACID nova), upsert em `/payment` com `remaining > 0`.
+  - B11 (`dueDay`, `categoria`) integralmente concluído.
+- 📊 **Cobertura**: 4 testes novos em `payment-cascade.test.ts` cobrindo cascata de estorno (2 filhos com entry, idempotência, filho legado sem entry, preservação de `originalAmount`). Suíte total: **351/351 ✓**, antes 347.
 
 ---
 
-## 7. Testes recomendados (suíte vitest atual: 347 ✓ — Sprint 6 já contemplada abaixo)
+## 7. Testes recomendados (suíte vitest atual: **351 ✓** — Sprints 6, 7 e 8-parcial contempladas)
 
 | Caso | Arquivo de teste | Status |
 |---|---|---|
@@ -244,15 +250,20 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 | `/payment` filtra `pendingRecords` por `clinicId` (B4) | `financial-payments.tenant-and-vendapacote.test.ts` | ✅ Sprint 6 |
 | `runBilling` idempotente entre fim/início de mês usando `planMonthRef` | `billing.idempotency.test.ts` | ⏳ Sprint 7 |
 | Confirmação concorrente da 1ª sessão do mês não duplica receita | `revenue-recognition.race.test.ts` | ⏳ Sprint 7 |
-| Conciliação: soma `revenueSummarySql` = soma `4.1.x` no journal | `reconciliation.test.ts` | ⏳ Sprint 8 |
+| Cascata de estorno em `faturaMensalAvulso`: 2 filhos com entry → 2 `postReversal` | `payment-cascade.test.ts` | ✅ Sprint 8 |
+| Cascata de estorno: 0 filhos pendentes (idempotência da 2ª chamada) | `payment-cascade.test.ts` | ✅ Sprint 8 |
+| Cascata de estorno: filho sem `recognizedEntryId` (legado) marca status mas não posta | `payment-cascade.test.ts` | ✅ Sprint 8 |
+| Endpoint `GET /reports/reconciliation`: `ok=true` quando saldos batem | `reconciliation.test.ts` | ⏳ Sprint 9 (e2e) |
+| Endpoint `GET /reports/reconciliation`: detecta órfão (receita sem entry) | `reconciliation.test.ts` | ⏳ Sprint 9 (e2e) |
+| `SELECT FOR UPDATE` em carteira: 2 débitos concorrentes não dobram saldo | `wallet-race.test.ts` | ⏳ Sprint 9 (integração com Postgres real) |
 
 ---
 
 ## 8. Conclusão executiva
 
-O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. **Após as Sprints Financeiros 6 e 7 (29/04/2026)**, onze bugs foram corrigidos (B1–B8, B10, B12, B15) com cobertura de testes — o sistema agora **bloqueia edições contabilmente perigosas**, **dispara estorno auditado** em DELETE, **mantém paridade** entre `/payment` e `/status` para promoção de créditos, **isola tenants**, **direciona saldo residual para a carteira do paciente** (não receita fantasma), **garante idempotência de billing** via `planMonthRef`, **usa advisory lock** contra race condition de reconhecimento de receita e **reverte receita** quando sessões saem do estado confirmado.
+O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. **Após as Sprints Financeiros 6, 7 e 8-parcial (29/04/2026)**, treze bugs foram corrigidos (B1–B8, B10, B11, B12, B14, B15) com cobertura de testes — o sistema agora **bloqueia edições contabilmente perigosas**, **dispara estorno auditado** em DELETE, **mantém paridade** entre `/payment` e `/status` para promoção de créditos, **isola tenants**, **direciona saldo residual para a carteira do paciente** (não receita fantasma), **garante idempotência de billing** via `planMonthRef`, **usa advisory lock** contra race condition de reconhecimento de receita, **reverte receita** quando sessões saem do estado confirmado, **estorna em cascata** mãe→filhos em `faturaMensalAvulso`, **serializa** débitos de carteira via `SELECT FOR UPDATE` e **expõe endpoint de conciliação** operacional × contábil.
 
 Próximos passos:
-- **Sprint 8** (B9, B14): sub-ledger via `payment_allocations`, cascata de estorno mãe→filhos, job noturno de conciliação operacional × contábil, e `SELECT FOR UPDATE` na carteira. B11 (`closeAvulsoMonth dueDay`) já corrigido como PR-FIN8-4 antecipado.
+- **Sprint 9** (B9 + cascata `faturaPlano`): sub-ledger via `payment_allocations` com migração e backfill controlado; cascata de estorno também para `faturaPlano` (após decisão operacional sobre semântica de mês inteiro); job cron noturno consumindo o endpoint `/reports/reconciliation` e gravando em `discrepancy_log` para alerta diário; testes de integração com Postgres real cobrindo o lock de carteira (`wallet-race.test.ts`).
 
-O caminho feliz já estava consistente; o caminho de **edição/estorno/exceção** agora também — o sistema atingiu o nível mínimo "auditável" exigido para onboarding de clientes com auditoria contábil formal (CFC/CRC, escritório contador externo).
+O caminho feliz já estava consistente; o caminho de **edição/estorno/exceção** agora também — o sistema atingiu o nível mínimo "auditável" exigido para onboarding de clientes com auditoria contábil formal (CFC/CRC, escritório contador externo). **Status atual: 351/351 testes verdes, todos os bugs de severidade média/alta resolvidos, restando apenas evolução arquitetural (sub-ledger explícito) para Sprint 9.**

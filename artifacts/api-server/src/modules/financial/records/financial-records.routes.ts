@@ -29,7 +29,10 @@ import {
   RECEIVABLE_TYPES,
   monthDateRange,
 } from "../shared/financial-reports.service.js";
-import { cascadeFaturaMensalAvulsoPayment } from "../payments/payment-cascade.js";
+import {
+  cascadeFaturaMensalAvulsoPayment,
+  cascadeReversalForFaturaMensalAvulso,
+} from "../payments/payment-cascade.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
   reverseRecordSchema, listReversalsQuerySchema,
@@ -369,6 +372,21 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
             financialRecordId: existing.id,
           }, tx as any);
         }
+
+        // PR-FIN8-2: cascata mãe→filhos para faturaMensalAvulso. Se a mãe é
+        // estornada/cancelada, todos os filhos pendentes/pagos também são
+        // estornados (com postReversal espelhado). Sem isso, ao estornar a
+        // mãe via PATCH /status o saldo contábil de Receita ficava inflado
+        // pelos filhos vivos.
+        if (existing.transactionType === "faturaMensalAvulso") {
+          await cascadeReversalForFaturaMensalAvulso({
+            tx,
+            parentId: existing.id,
+            parentClinicId: existing.clinicId ?? req.clinicId ?? null,
+            reversalReason: `PATCH /status → ${status}`,
+            reversedBy: req.userId ?? null,
+          });
+        }
       }
 
       return [updated];
@@ -439,6 +457,17 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
           financialRecordId: record.id,
           createdBy: req.userId ?? null,
         }, tx as any);
+      }
+
+      // PR-FIN8-2: cascata mãe→filhos.
+      if (record.transactionType === "faturaMensalAvulso") {
+        await cascadeReversalForFaturaMensalAvulso({
+          tx,
+          parentId: record.id,
+          parentClinicId: record.clinicId ?? req.clinicId ?? null,
+          reversalReason: body.reversalReason,
+          reversedBy: req.userId ?? null,
+        });
       }
 
       return [u];
@@ -623,6 +652,17 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
             financialRecordId: record.id,
             createdBy: req.userId ?? null,
           }, tx as any);
+        }
+
+        // PR-FIN8-2: cascata mãe→filhos.
+        if (record.transactionType === "faturaMensalAvulso") {
+          await cascadeReversalForFaturaMensalAvulso({
+            tx,
+            parentId: record.id,
+            parentClinicId: record.clinicId ?? req.clinicId ?? null,
+            reversalReason,
+            reversedBy: req.userId ?? null,
+          });
         }
       });
 

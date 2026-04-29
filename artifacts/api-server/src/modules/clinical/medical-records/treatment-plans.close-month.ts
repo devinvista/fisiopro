@@ -180,13 +180,25 @@ export async function closeAvulsoMonth(
     const dueDate = `${dueY}-${String(dueM).padStart(2, "0")}-${String(realDueDay).padStart(2, "0")}`;
 
     // Cria a fatura agrupadora.
+    // PR-FIN8-2 (B11): a categoria da mãe agora é constante "Fatura mensal"
+    // (em vez de pegar a categoria do primeiro filho, que poderia divergir
+    // quando o plano tem >1 procedimento de categorias diferentes). O
+    // detalhamento por procedimento permanece nos filhos — o DRE-by-procedure
+    // continua puxando deles, não da mãe.
+    const childCategories = Array.from(
+      new Set(candidates.map((c) => c.category).filter(Boolean) as string[]),
+    );
+    const aggregatedCategory = childCategories.length === 1
+      ? childCategories[0]
+      : "Fatura mensal";
+
     const [invoice] = await tx
       .insert(financialRecordsTable)
       .values({
         type: "receita",
         amount: total.toFixed(2),
         description: `Fatura mensal de avulsos — ${patientName} — ${normalizedRef.slice(0, 7)}`,
-        category: candidates[0].category,
+        category: aggregatedCategory,
         patientId: plan.patientId,
         transactionType: "faturaMensalAvulso",
         status: "pendente",

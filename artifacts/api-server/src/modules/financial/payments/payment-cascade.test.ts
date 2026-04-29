@@ -64,11 +64,18 @@ vi.mock("@workspace/db", async () => {
 });
 
 const allocateReceivableMock = vi.hoisted(() => vi.fn(async () => undefined));
+const postReversalMock = vi.hoisted(() =>
+  vi.fn(async (entryId: number) => ({ id: entryId + 10000 }))
+);
 vi.mock("../../shared/accounting/accounting.service.js", () => ({
   allocateReceivable: allocateReceivableMock,
+  postReversal: postReversalMock,
 }));
 
-import { cascadeFaturaMensalAvulsoPayment } from "./payment-cascade.js";
+import {
+  cascadeFaturaMensalAvulsoPayment,
+  cascadeReversalForFaturaMensalAvulso,
+} from "./payment-cascade.js";
 
 describe("cascadeFaturaMensalAvulsoPayment", () => {
   beforeEach(() => {
@@ -166,5 +173,127 @@ describe("cascadeFaturaMensalAvulsoPayment", () => {
 
     expect(result.cascadedChildIds).toEqual([31]);
     expect(allocateReceivableMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cascadeReversalForFaturaMensalAvulso (PR-FIN8-2)", () => {
+  beforeEach(() => {
+    dbMock.reset();
+    postReversalMock.mockClear();
+  });
+
+  it("estorna 2 filhos com recognizedEntryId, postando postReversal para cada um e marcando-os como estornado", async () => {
+    // 1. select children não-estornados → 2 filhos
+    dbMock.enqueue([
+      {
+        id: 11, amount: "80.00", originalAmount: null,
+        status: "pago", description: "Sessão #1",
+        recognizedEntryId: 901, accountingEntryId: 901,
+        clinicId: 1, patientId: 7, appointmentId: 1001, procedureId: 5,
+      },
+      {
+        id: 12, amount: "80.00", originalAmount: null,
+        status: "pendente", description: "Sessão #2",
+        recognizedEntryId: 902, accountingEntryId: 902,
+        clinicId: 1, patientId: 7, appointmentId: 1002, procedureId: 5,
+      },
+    ]);
+    // 2. update child 11
+    dbMock.enqueue(undefined);
+    // 3. update child 12
+    dbMock.enqueue(undefined);
+
+    const result = await cascadeReversalForFaturaMensalAvulso({
+      tx: dbMock.db,
+      parentId: 100,
+      parentClinicId: 1,
+      reversalReason: "Pagamento contestado pelo paciente",
+      reversedBy: 42,
+      reversalDate: "2026-04-29",
+    });
+
+    expect(result.reversedChildIds).toEqual([11, 12]);
+    expect(result.totalReversed).toBe("160.00");
+    expect(postReversalMock).toHaveBeenCalledTimes(2);
+
+    const calls = postReversalMock.mock.calls.map((c: any[]) => ({
+      entryId: c[0],
+      input: c[1],
+    }));
+    expect(calls[0].entryId).toBe(901);
+    expect(calls[0].input).toMatchObject({
+      clinicId: 1, patientId: 7, financialRecordId: 11,
+      sourceType: "financial_record", sourceId: 11,
+      entryDate: "2026-04-29", createdBy: 42,
+    });
+    expect(calls[0].input.description).toContain("Cascata");
+    expect(calls[0].input.description).toContain("Pagamento contestado");
+    expect(calls[1].entryId).toBe(902);
+    expect(calls[1].input.financialRecordId).toBe(12);
+
+    expect(result.reversalEntryIds).toEqual([10901, 10902]);
+    expect(dbMock.pending()).toBe(0);
+  });
+
+  it("é idempotente: 0 filhos pendentes/pagos → não faz nada", async () => {
+    dbMock.enqueue([]); // select children → vazio (todos já estornados)
+
+    const result = await cascadeReversalForFaturaMensalAvulso({
+      tx: dbMock.db,
+      parentId: 100,
+      parentClinicId: 1,
+      reversalReason: "x",
+    });
+
+    expect(result.reversedChildIds).toEqual([]);
+    expect(result.reversalEntryIds).toEqual([]);
+    expect(result.totalReversed).toBe("0.00");
+    expect(postReversalMock).not.toHaveBeenCalled();
+  });
+
+  it("filho sem recognizedEntryId/accountingEntryId é marcado como estornado mas SEM postReversal (caso legado)", async () => {
+    dbMock.enqueue([
+      {
+        id: 21, amount: "120.00", originalAmount: null,
+        status: "pendente", description: "Legado sem entry",
+        recognizedEntryId: null, accountingEntryId: null,
+        clinicId: 1, patientId: 7, appointmentId: null, procedureId: null,
+      },
+    ]);
+    dbMock.enqueue(undefined); // update child
+
+    const result = await cascadeReversalForFaturaMensalAvulso({
+      tx: dbMock.db,
+      parentId: 200,
+      parentClinicId: 1,
+      reversalReason: "Limpeza de legado",
+    });
+
+    expect(result.reversedChildIds).toEqual([21]);
+    expect(result.reversalEntryIds).toEqual([]);
+    expect(result.totalReversed).toBe("120.00");
+    expect(postReversalMock).not.toHaveBeenCalled();
+  });
+
+  it("preserva originalAmount ao registrar o estorno (audit trail)", async () => {
+    dbMock.enqueue([
+      {
+        id: 31, amount: "50.00", originalAmount: "75.00",
+        status: "pago", description: "Sessão com desconto aplicado",
+        recognizedEntryId: 999, accountingEntryId: 999,
+        clinicId: 1, patientId: 7, appointmentId: 3000, procedureId: null,
+      },
+    ]);
+    dbMock.enqueue(undefined); // update
+
+    await cascadeReversalForFaturaMensalAvulso({
+      tx: dbMock.db,
+      parentId: 300,
+      parentClinicId: 1,
+      reversalReason: "Erro de cobrança",
+    });
+
+    expect(postReversalMock).toHaveBeenCalledOnce();
+    expect(dbMock.pending()).toBe(0);
   });
 });
