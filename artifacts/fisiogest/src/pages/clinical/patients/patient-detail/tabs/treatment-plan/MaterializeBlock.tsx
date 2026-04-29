@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  AlertCircle, CheckCircle, Loader2, RotateCcw, Zap,
+  AlertCircle, CheckCircle, Clock, Loader2, RotateCcw, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ function fmtBR(iso: string): string {
 
 interface Props {
   planId: number;
+  patientId: number;
   materializedAt: string | null;
   planStartDate: string | null;
   planDurationMonths: number;
@@ -35,11 +36,37 @@ interface Props {
  * (definidos na Etapa 1). Não duplica os campos.
  */
 export function MaterializeBlock({
-  planId, materializedAt, planStartDate, planDurationMonths, planItems, onChanged,
+  planId, patientId, materializedAt, planStartDate, planDurationMonths, planItems, onChanged,
 }: Props) {
   const { toast } = useToast();
-  const [busy, setBusy] = useState<"materialize" | "dematerialize" | null>(null);
+  const [busy, setBusy] = useState<"materialize" | "dematerialize" | "recalcDur" | null>(null);
   const [confirmDematerialize, setConfirmDematerialize] = useState(false);
+
+  async function doRecalcDurations() {
+    setBusy("recalcDur");
+    try {
+      const res = await apiSendJson<{
+        updated: number;
+        alreadyCorrect: number;
+        skippedFinalized: number;
+        totalAppointments: number;
+      }>(`/api/patients/${patientId}/treatment-plans/${planId}/recalc-appointment-durations`, "POST", {});
+      const parts = [
+        `${res.updated} ajustada${res.updated === 1 ? "" : "s"}`,
+        `${res.alreadyCorrect} já corretas`,
+      ];
+      if (res.skippedFinalized > 0) parts.push(`${res.skippedFinalized} preservadas`);
+      toast({
+        title: res.updated > 0 ? "Durações atualizadas" : "Tudo certo",
+        description: parts.join(" · "),
+      });
+      if (res.updated > 0) onChanged();
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   // Resolve start date — usa o do plano; se vazio, usa hoje só na chamada.
   const startDate = planStartDate ?? todayISO();
@@ -117,14 +144,26 @@ export function MaterializeBlock({
           Iniciado em {new Date(materializedAt!).toLocaleDateString("pt-BR")}.
           Consultas e parcelas mensais já estão na agenda e no financeiro.
         </p>
-        <Button
-          size="sm" variant="outline"
-          className="h-9 gap-1.5 rounded-xl border-rose-300 text-rose-600 hover:bg-rose-50"
-          onClick={() => setConfirmDematerialize(true)}
-          disabled={busy !== null}
-        >
-          <RotateCcw className="w-3.5 h-3.5" /> Reverter início do plano
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm" variant="outline"
+            className="h-9 gap-1.5 rounded-xl border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            onClick={doRecalcDurations}
+            disabled={busy !== null}
+            title="Recalcula a duração das consultas futuras com base na duração cadastrada do procedimento"
+          >
+            {busy === "recalcDur" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+            Ajustar durações
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            className="h-9 gap-1.5 rounded-xl border-rose-300 text-rose-600 hover:bg-rose-50"
+            onClick={() => setConfirmDematerialize(true)}
+            disabled={busy !== null}
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Reverter início do plano
+          </Button>
+        </div>
 
         <AlertDialog open={confirmDematerialize} onOpenChange={setConfirmDematerialize}>
           <AlertDialogContent>

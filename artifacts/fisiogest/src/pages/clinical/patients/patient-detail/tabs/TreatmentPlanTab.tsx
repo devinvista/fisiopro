@@ -1120,6 +1120,7 @@ function StepCobranca({
       {!isStarted && (
         <MaterializeBlock
           planId={selectedPlanId}
+          patientId={patientId}
           materializedAt={null}
           planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
           planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
@@ -1145,6 +1146,7 @@ function StepCobranca({
 
           <MaterializeBlock
             planId={selectedPlanId}
+            patientId={patientId}
             materializedAt={selectedPlan?.materializedAt ?? null}
             planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
             planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}

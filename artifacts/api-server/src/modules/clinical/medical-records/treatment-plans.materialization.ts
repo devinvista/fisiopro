@@ -364,6 +364,7 @@ export async function materializeTreatmentPlan(
           name: proceduresTable.name,
           category: proceduresTable.category,
           price: proceduresTable.price,
+          durationMinutes: proceduresTable.durationMinutes,
           accountingAccountId: (proceduresTable as any).accountingAccountId,
         })
         .from(proceduresTable)
@@ -382,7 +383,8 @@ export async function materializeTreatmentPlan(
       );
       const billingDay = item.packageBillingDay ?? 10;
       const weekDays = parseWeekDays(item.weekDays);
-      const duration = item.sessionDurationMinutes ?? 60;
+      // Duração: override do item > duração cadastrada do procedimento > 60 min.
+      const duration = item.sessionDurationMinutes ?? procedure.durationMinutes ?? 60;
 
       // Política específica deste item (override do plano > pacote > default).
       const itemPaymentMode = resolvePaymentMode(plan.paymentMode, item.packagePaymentMode);
@@ -604,6 +606,7 @@ export async function materializeTreatmentPlan(
           name: proceduresTable.name,
           category: proceduresTable.category,
           price: proceduresTable.price,
+          durationMinutes: proceduresTable.durationMinutes,
         })
         .from(proceduresTable)
         .where(eq(proceduresTable.id, procedureId))
@@ -617,7 +620,8 @@ export async function materializeTreatmentPlan(
           : Math.max(1, item.totalSessions ?? 1);
       if (cap === 0) continue;
 
-      const duration = item.sessionDurationMinutes ?? 60;
+      // Duração: override do item > duração cadastrada do procedimento > 60 min.
+      const duration = item.sessionDurationMinutes ?? procedure.durationMinutes ?? 60;
       const winEndExclusive = (() => {
         const [y, mo, d] = endDate.split("-").map(Number);
         const dt = new Date(Date.UTC(y, mo - 1, d));

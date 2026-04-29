@@ -246,6 +246,24 @@ router.post(
 // alinhando com o caminho usado pelo frontend e pelos demais endpoints de
 // `/treatment-plans/:planId`.
 
+// Recalcula `endTime` dos agendamentos futuros materializados pelo plano,
+// usando a duração correta (override do item > duração do procedimento > 60).
+// Pula agendamentos finalizados (concluido/presenca/faltou/cancelado/remarcado)
+// para não reescrever histórico.
+router.post(
+  "/treatment-plans/:planId/recalc-appointment-durations",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    if (!planId || isNaN(planId)) {
+      throw new HttpError(400, "planId inválido");
+    }
+    const { recalcPlanAppointmentDurations } = await import("./treatment-plans.recalc-durations.js");
+    const result = await recalcPlanAppointmentDurations(planId, req);
+    res.json(result);
+  }),
+);
+
 // Sprint 4 — Fechamento mensal de itens avulsos do plano.
 // Body opcional `{ ref: 'YYYY-MM' }`; querystring `?ref=YYYY-MM`; padrão: mês atual.
 router.post(
