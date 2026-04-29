@@ -43,6 +43,10 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nowBRT, todayBRT, lastDayOfMonth } from "../../../utils/dateUtils.js";
 import { resolveItemKind } from "../../clinical/medical-records/treatment-plans.acceptance.js";
+import {
+  planInstallmentDueDate,
+  monthOffsetFromStart,
+} from "../../clinical/medical-records/treatment-plans.billing-dates.js";
 
 export interface MonthlyPlanBillingResult {
   processed: number;
@@ -301,9 +305,27 @@ async function ensureMonthlyInvoice(
 }> {
   const monthRef = monthRefOf(monthYear, monthMonth);
   const billingDay = item.packageBillingDay ?? 10;
-  const lastDay = lastDayOfMonth(monthYear, monthMonth);
-  const dueDay = Math.min(billingDay, lastDay);
-  const dueDate = `${monthYear}-${pad(monthMonth)}-${pad(dueDay)}`;
+  // Vencimento respeita o `startDate` do plano: 1ª parcela na próxima
+  // ocorrência do `billingDay` em ou após `startDate`. Se o plano não
+  // tiver `startDate` (legado), cai no comportamento antigo (billingDay
+  // do mês de competência clamped ao último dia).
+  let dueDate: string;
+  if (item.startDate) {
+    const offset = monthOffsetFromStart(item.startDate, monthYear, monthMonth);
+    // Para meses anteriores ao startDate, mantemos o comportamento antigo
+    // (não deveria acontecer pois `firstMonthForItem` filtra, mas safety net).
+    if (offset != null) {
+      dueDate = planInstallmentDueDate(item.startDate, billingDay, offset);
+    } else {
+      const lastDay = lastDayOfMonth(monthYear, monthMonth);
+      const dueDay = Math.min(billingDay, lastDay);
+      dueDate = `${monthYear}-${pad(monthMonth)}-${pad(dueDay)}`;
+    }
+  } else {
+    const lastDay = lastDayOfMonth(monthYear, monthMonth);
+    const dueDay = Math.min(billingDay, lastDay);
+    dueDate = `${monthYear}-${pad(monthMonth)}-${pad(dueDay)}`;
+  }
   // Pacote mensalidade: valor mensal vive em `packages.monthly_price` quando
   // o item não tem `unitMonthlyPrice` próprio.
   const effectiveMonthly = Number(
@@ -361,7 +383,8 @@ async function ensureMonthlyInvoice(
     // futuras foram apagadas pelo cleanup script — os appointments
     // permanecem e voltam a ter vínculo correto após a fatura ser gerada.
     const monthStart = monthRef;
-    const monthEnd = `${monthYear}-${pad(monthMonth)}-${pad(lastDay)}`;
+    const monthEndDay = lastDayOfMonth(monthYear, monthMonth);
+    const monthEnd = `${monthYear}-${pad(monthMonth)}-${pad(monthEndDay)}`;
     const linked = await tx
       .update(appointmentsTable)
       .set({ monthlyInvoiceId: invoice.id })

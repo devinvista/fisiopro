@@ -36,6 +36,10 @@ import {
   sessionCreditsTable,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  planInstallmentDueDate,
+  planMonthRefOf,
+} from "./treatment-plans.billing-dates.js";
 
 export interface AcceptPlanFinancialsResult {
   planId: number;
@@ -86,10 +90,6 @@ export function resolveItemKind(item: {
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
-}
-
-function lastDayOfMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
 function todayBRT(): { y: number; m: number; d: number; iso: string } {
@@ -167,7 +167,6 @@ export async function acceptPlanFinancials(
   const patientName = patient?.name ?? `paciente#${plan.patientId}`;
 
   const now = opts.now ?? todayBRT();
-  const monthRef = `${now.y}-${pad(now.m)}-01`;
   const planPaymentMode = (plan.paymentMode || "postpago") as "prepago" | "postpago";
 
   let invoicesCreated = 0;
@@ -274,12 +273,16 @@ export async function acceptPlanFinancials(
         continue;
       }
 
-      // ─── Recorrente mensal: somente fatura do mês corrente ───────────────
+      // ─── Recorrente mensal: somente fatura da 1ª competência do plano ────
       // Cobre tanto o caso "mensalidade de procedimento" (sem packageId,
       // apenas `unitMonthlyPrice` no item) quanto o de "pacote mensalidade"
       // (com packageId, valor fixo em `packages.monthly_price`). Para o
       // segundo caso o item pode não ter `unitMonthlyPrice` próprio — então
       // caímos no valor do pacote.
+      //
+      // O `dueDate` da 1ª parcela é a próxima ocorrência do `billingDay`
+      // em ou após o `startDate` (vigência) do plano — nunca antes (ver
+      // `planInstallmentDueDate`).
       if (kind === "recorrenteMensal") {
         const effectiveMonthly =
           Number(item.unitMonthlyPrice ?? item.packageMonthlyPrice ?? 0);
@@ -290,11 +293,11 @@ export async function acceptPlanFinancials(
         if (monthlyAmount <= 0) continue;
 
         const billingDay = item.packageBillingDay ?? 10;
-        const lastDay = lastDayOfMonth(now.y, now.m);
-        const dueDay = Math.min(billingDay, lastDay);
-        const dueDate = `${now.y}-${pad(now.m)}-${pad(dueDay)}`;
+        const planStart = plan.startDate ?? now.iso;
+        const itemMonthRef = planMonthRefOf(planStart, 0);
+        const dueDate = planInstallmentDueDate(planStart, billingDay, 0);
 
-        // Idempotência: 1 fatura por (plano, item, mês).
+        // Idempotência: 1 fatura por (plano, item, mês de competência).
         const [exists] = await tx
           .select({ id: financialRecordsTable.id })
           .from(financialRecordsTable)
@@ -303,7 +306,7 @@ export async function acceptPlanFinancials(
               eq(financialRecordsTable.treatmentPlanId, planId),
               eq(financialRecordsTable.treatmentPlanProcedureId, item.id),
               eq(financialRecordsTable.transactionType, "faturaPlano"),
-              eq(financialRecordsTable.planMonthRef, monthRef),
+              eq(financialRecordsTable.planMonthRef, itemMonthRef),
             ),
           )
           .limit(1);
@@ -312,7 +315,7 @@ export async function acceptPlanFinancials(
           await tx.insert(financialRecordsTable).values({
             type: "receita",
             amount: monthlyAmount.toFixed(2),
-            description: `Aceite de plano #${planId} — ${procedure.name} — ${patientName} — ${monthRef.slice(0, 7)}`,
+            description: `Aceite de plano #${planId} — ${procedure.name} — ${patientName} — ${itemMonthRef.slice(0, 7)}`,
             category: procedure.category,
             patientId: plan.patientId,
             procedureId,
@@ -322,7 +325,7 @@ export async function acceptPlanFinancials(
             dueDate,
             treatmentPlanId: planId,
             treatmentPlanProcedureId: item.id,
-            planMonthRef: monthRef,
+            planMonthRef: itemMonthRef,
             priceSource: "plano_mensal_proporcional",
             originalUnitPrice: procedure.price,
           });

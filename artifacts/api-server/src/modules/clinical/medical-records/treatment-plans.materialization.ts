@@ -41,6 +41,7 @@ import {
   postReceivableRevenue,
   resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
+import { planInstallmentDueDate } from "./treatment-plans.billing-dates.js";
 
 // ─── Sprint 1/2 — Resolução de política de crédito do plano ─────────────────
 //
@@ -420,8 +421,9 @@ export async function materializeTreatmentPlan(
           plan.clinicId ?? null,
         );
 
-        const dueDay = Math.min(billingDay, lastDay);
-        const dueDate = `${my}-${String(mm).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`;
+        // 1ª parcela vence na próxima ocorrência de `billingDay` em ou após
+        // `startDate`; demais parcelas seguem mês a mês a partir daí.
+        const dueDate = planInstallmentDueDate(startDate, billingDay, m);
 
         // Cria fatura mensal.
         const [invoice] = await tx
