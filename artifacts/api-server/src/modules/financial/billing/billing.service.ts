@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import {
   patientPackagesTable,
@@ -14,6 +15,7 @@ import {
   isWithinBillingWindow,
 } from "./billing-date-utils.js";
 import { withPackageBillingLock } from "./billing-lock.js";
+import { logger } from "../../../lib/logger.js";
 
 export interface BillingResult {
   processed: number;
@@ -46,11 +48,16 @@ export async function runBilling(options: {
   const brtToday = nowBRT();
   const { year, month } = brtToday;
   const monthStr = String(month).padStart(2, "0");
+  // PR-FIN7-2 (B6): monthStart is the canonical idempotency key stored in
+  // financial_records.plan_month_ref — timezone-safe, no createdAt range.
   const monthStart = `${year}-${monthStr}-01`;
   const lastDay = lastDayOfMonth(year, month);
   const monthEnd = `${year}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
 
-  console.log(`[billing] Iniciando ${dryRun ? "(DRY RUN) " : ""}em ${todayStr} — janela: ${toleranceDays} dias${clinicId ? ` — clínica ${clinicId}` : " — todas as clínicas"} — origem: ${triggeredBy}`);
+  logger.info(
+    { dryRun, todayStr, toleranceDays, clinicId, triggeredBy },
+    `[billing] Iniciando${dryRun ? " (DRY RUN)" : ""} — janela: ${toleranceDays} dias`,
+  );
 
   const result: BillingResult = {
     processed: 0,
@@ -61,96 +68,203 @@ export async function runBilling(options: {
     details: [],
   };
 
-  const baseConditions = [
-    eq(patientPackagesTable.recurrenceStatus, "ativa"),
-    eq(patientPackagesTable.recurrenceType, "mensal"),
-  ];
-  if (clinicId) baseConditions.push(eq(patientPackagesTable.clinicId, clinicId));
-
-  const activePackages = await db
-    .select({
-      pkg: patientPackagesTable,
-      patientName: patientsTable.name,
-      procedureName: proceduresTable.name,
-      procedureCategory: proceduresTable.category,
-    })
-    .from(patientPackagesTable)
-    .leftJoin(patientsTable, eq(patientPackagesTable.patientId, patientsTable.id))
-    .leftJoin(proceduresTable, eq(patientPackagesTable.procedureId, proceduresTable.id))
-    .where(and(...baseConditions));
-
-  console.log(`[billing] ${activePackages.length} pacote(s) recorrente(s) mensal(is) ativo(s) encontrado(s)`);
-
-  for (const row of activePackages) {
-    const pkg = row.pkg;
-    result.processed++;
-
-    const patientName = row.patientName ?? `Paciente #${pkg.patientId}`;
-    const procedureName = row.procedureName ?? `Procedimento #${pkg.procedureId}`;
-    const billingDay = pkg.billingDay;
-    const monthlyAmount = pkg.monthlyAmount;
-
-    if (!billingDay || !monthlyAmount) {
-      result.skipped++;
-      result.details.push({
-        subscriptionId: pkg.id,
-        source: "patient_package",
-        patientName,
-        procedureName,
-        amount: 0,
-        action: "skipped_wrong_day",
-        reason: "Pacote recorrente sem billingDay/monthlyAmount — configuração inválida",
-      });
-      console.warn(`[billing] Pacote #${pkg.id} (${patientName}) — sem billingDay/monthlyAmount, pulando`);
-      continue;
-    }
-
+  // PR-FIN7-3 (B7): Fase 1 — insere log com status='running' antes de processar.
+  // Em caso de crash/kill, o log permanece 'running' para diagnóstico.
+  const runId = randomUUID();
+  let logId: number | null = null;
+  if (!dryRun) {
     try {
-      if (!isWithinBillingWindow(billingDay, brtToday, toleranceDays)) {
-        const effective = effectiveBillingDay(billingDay, year, month);
+      const [logRow] = await db
+        .insert(billingRunLogsTable)
+        .values({
+          runId,
+          triggeredBy,
+          clinicId: clinicId ?? null,
+          processed: 0,
+          generated: 0,
+          skipped: 0,
+          errors: 0,
+          dryRun: false,
+          status: "running",
+        })
+        .returning({ id: billingRunLogsTable.id });
+      logId = logRow?.id ?? null;
+      logger.debug({ logId, runId }, "[billing] Log de início criado");
+    } catch (logErr) {
+      logger.error({ err: logErr }, "[billing] Falha ao criar log de início — prosseguindo sem log");
+    }
+  }
+
+  try {
+    const baseConditions = [
+      eq(patientPackagesTable.recurrenceStatus, "ativa"),
+      eq(patientPackagesTable.recurrenceType, "mensal"),
+    ];
+    if (clinicId) baseConditions.push(eq(patientPackagesTable.clinicId, clinicId));
+
+    const activePackages = await db
+      .select({
+        pkg: patientPackagesTable,
+        patientName: patientsTable.name,
+        procedureName: proceduresTable.name,
+        procedureCategory: proceduresTable.category,
+      })
+      .from(patientPackagesTable)
+      .leftJoin(patientsTable, eq(patientPackagesTable.patientId, patientsTable.id))
+      .leftJoin(proceduresTable, eq(patientPackagesTable.procedureId, proceduresTable.id))
+      .where(and(...baseConditions));
+
+    logger.info({ count: activePackages.length }, "[billing] Pacotes recorrentes mensais ativos encontrados");
+
+    for (const row of activePackages) {
+      const pkg = row.pkg;
+      result.processed++;
+
+      const patientName = row.patientName ?? `Paciente #${pkg.patientId}`;
+      const procedureName = row.procedureName ?? `Procedimento #${pkg.procedureId}`;
+      const billingDay = pkg.billingDay;
+      const monthlyAmount = pkg.monthlyAmount;
+
+      if (!billingDay || !monthlyAmount) {
         result.skipped++;
         result.details.push({
           subscriptionId: pkg.id,
           source: "patient_package",
           patientName,
           procedureName,
-          amount: Number(monthlyAmount),
+          amount: 0,
           action: "skipped_wrong_day",
-          reason: `Dia efetivo de cobrança: ${effective}, hoje (BRT): ${brtToday.day}`,
+          reason: "Pacote recorrente sem billingDay/monthlyAmount — configuração inválida",
         });
+        logger.warn({ packageId: pkg.id, patientName }, "[billing] Pacote sem billingDay/monthlyAmount, pulando");
         continue;
       }
 
-      const existing = await db
-        .select({ id: financialRecordsTable.id })
-        .from(financialRecordsTable)
-        .where(
-          and(
-            eq(financialRecordsTable.patientPackageId, pkg.id),
-            eq(financialRecordsTable.transactionType, "creditoAReceber"),
-            sql`${financialRecordsTable.createdAt} >= ${monthStart}::date`,
-            sql`${financialRecordsTable.createdAt} < (${monthEnd}::date + interval '1 day')`
+      try {
+        if (!isWithinBillingWindow(billingDay, brtToday, toleranceDays)) {
+          const effective = effectiveBillingDay(billingDay, year, month);
+          result.skipped++;
+          result.details.push({
+            subscriptionId: pkg.id,
+            source: "patient_package",
+            patientName,
+            procedureName,
+            amount: Number(monthlyAmount),
+            action: "skipped_wrong_day",
+            reason: `Dia efetivo de cobrança: ${effective}, hoje (BRT): ${brtToday.day}`,
+          });
+          continue;
+        }
+
+        // PR-FIN7-2 (B6): idempotência por plan_month_ref, não por createdAt.
+        // Elimina falsos negativos de fuso horário quando createdAt cai fora
+        // da janela de datas local mas o registro pertence ao mês correto.
+        const existing = await db
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.patientPackageId, pkg.id),
+              eq(financialRecordsTable.transactionType, "creditoAReceber"),
+              eq(financialRecordsTable.planMonthRef, monthStart),
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (existing.length > 0) {
-        result.skipped++;
-        result.details.push({
-          subscriptionId: pkg.id,
-          source: "patient_package",
-          patientName,
-          procedureName,
-          amount: Number(monthlyAmount),
-          action: "skipped_already_billed",
-          reason: `Já existe registro #${existing[0].id} para ${monthStr}/${year}`,
+        if (existing.length > 0) {
+          result.skipped++;
+          result.details.push({
+            subscriptionId: pkg.id,
+            source: "patient_package",
+            patientName,
+            procedureName,
+            amount: Number(monthlyAmount),
+            action: "skipped_already_billed",
+            reason: `Já existe registro #${existing[0].id} para ${monthStr}/${year}`,
+          });
+          logger.debug({ packageId: pkg.id, patientName, existingId: existing[0].id }, "[billing] Já cobrado neste mês, pulando");
+          continue;
+        }
+
+        if (dryRun) {
+          result.generated++;
+          result.details.push({
+            subscriptionId: pkg.id,
+            source: "patient_package",
+            patientName,
+            procedureName,
+            amount: Number(monthlyAmount),
+            action: "generated",
+            reason: "dry-run: nenhum registro criado",
+          });
+          logger.info({ packageId: pkg.id, patientName, amount: Number(monthlyAmount) }, "[billing] [DRY RUN] Geraria cobrança");
+          continue;
+        }
+
+        const txOutcome = await withPackageBillingLock(pkg.id, year, month, async (tx) => {
+          // PR-FIN7-2 (B6): inner recheck usa planMonthRef — mesma chave do outer.
+          const recheck = await tx
+            .select({ id: financialRecordsTable.id })
+            .from(financialRecordsTable)
+            .where(
+              and(
+                eq(financialRecordsTable.patientPackageId, pkg.id),
+                eq(financialRecordsTable.transactionType, "creditoAReceber"),
+                eq(financialRecordsTable.planMonthRef, monthStart),
+              ),
+            )
+            .limit(1);
+
+          if (recheck.length > 0) {
+            return { duplicate: true as const, existingId: recheck[0].id };
+          }
+
+          const [record] = await tx
+            .insert(financialRecordsTable)
+            .values({
+              type: "receita",
+              amount: monthlyAmount,
+              description: `Mensalidade ${procedureName} — ${patientName}`,
+              category: row.procedureCategory ?? "Mensalidade",
+              patientId: pkg.patientId,
+              procedureId: pkg.procedureId,
+              clinicId: pkg.clinicId ?? null,
+              transactionType: "creditoAReceber",
+              status: "pendente",
+              dueDate: todayStr,
+              patientPackageId: pkg.id,
+              // PR-FIN7-2 (B6): marca o mês de referência para idempotência
+              // timezone-safe. Imutável após criação.
+              planMonthRef: monthStart,
+            })
+            .returning();
+
+          const nextBillingDate = calcNextBillingDate(billingDay, year, month);
+          await tx
+            .update(patientPackagesTable)
+            .set({ nextBillingDate })
+            .where(eq(patientPackagesTable.id, pkg.id));
+
+          return { duplicate: false as const, recordId: record.id, nextBillingDate };
         });
-        console.log(`[billing] Pacote #${pkg.id} (${patientName}) — já cobrado em ${monthStr}/${year}, pulando`);
-        continue;
-      }
 
-      if (dryRun) {
+        if (txOutcome.duplicate) {
+          result.skipped++;
+          result.details.push({
+            subscriptionId: pkg.id,
+            source: "patient_package",
+            patientName,
+            procedureName,
+            amount: Number(monthlyAmount),
+            action: "skipped_already_billed",
+            reason: `Race detectado — registro #${txOutcome.existingId} já existia para ${monthStr}/${year}`,
+          });
+          logger.warn({ packageId: pkg.id, existingId: txOutcome.existingId }, "[billing] Race no lock, já existia");
+          continue;
+        }
+
         result.generated++;
+        result.recordIds.push(txOutcome.recordId);
         result.details.push({
           subscriptionId: pkg.id,
           source: "patient_package",
@@ -158,117 +272,54 @@ export async function runBilling(options: {
           procedureName,
           amount: Number(monthlyAmount),
           action: "generated",
-          reason: "dry-run: nenhum registro criado",
+          reason: `Registro #${txOutcome.recordId} criado — próxima cobrança: ${txOutcome.nextBillingDate}`,
         });
-        console.log(`[billing] [DRY RUN] Pacote #${pkg.id} (${patientName}) — geraria cobrança de R$ ${Number(monthlyAmount).toFixed(2)}`);
-        continue;
-      }
 
-      const txOutcome = await withPackageBillingLock(pkg.id, year, month, async (tx) => {
-        const recheck = await tx
-          .select({ id: financialRecordsTable.id })
-          .from(financialRecordsTable)
-          .where(
-            and(
-              eq(financialRecordsTable.patientPackageId, pkg.id),
-              eq(financialRecordsTable.transactionType, "creditoAReceber"),
-              sql`${financialRecordsTable.createdAt} >= ${monthStart}::date`,
-              sql`${financialRecordsTable.createdAt} < (${monthEnd}::date + interval '1 day')`,
-            ),
-          )
-          .limit(1);
+        logger.info(
+          { packageId: pkg.id, recordId: txOutcome.recordId, nextBillingDate: txOutcome.nextBillingDate, amount: Number(monthlyAmount) },
+          "[billing] Cobrança gerada com sucesso",
+        );
 
-        if (recheck.length > 0) {
-          return { duplicate: true as const, existingId: recheck[0].id };
-        }
-
-        const [record] = await tx
-          .insert(financialRecordsTable)
-          .values({
-            type: "receita",
-            amount: monthlyAmount,
-            description: `Mensalidade ${procedureName} — ${patientName}`,
-            category: row.procedureCategory ?? "Mensalidade",
-            patientId: pkg.patientId,
-            procedureId: pkg.procedureId,
-            clinicId: pkg.clinicId ?? null,
-            transactionType: "creditoAReceber",
-            status: "pendente",
-            dueDate: todayStr,
-            patientPackageId: pkg.id,
-          })
-          .returning();
-
-        const nextBillingDate = calcNextBillingDate(billingDay, year, month);
-        await tx
-          .update(patientPackagesTable)
-          .set({ nextBillingDate })
-          .where(eq(patientPackagesTable.id, pkg.id));
-
-        return { duplicate: false as const, recordId: record.id, nextBillingDate };
-      });
-
-      if (txOutcome.duplicate) {
-        result.skipped++;
+      } catch (err) {
+        result.errors++;
         result.details.push({
           subscriptionId: pkg.id,
           source: "patient_package",
           patientName,
           procedureName,
-          amount: Number(monthlyAmount),
-          action: "skipped_already_billed",
-          reason: `Race detectado — registro #${txOutcome.existingId} já existia para ${monthStr}/${year}`,
+          amount: Number(monthlyAmount ?? 0),
+          action: "error",
+          reason: err instanceof Error ? err.message : String(err),
         });
-        console.log(`[billing] Pacote #${pkg.id} (${patientName}) — race no lock, registro #${txOutcome.existingId} já existia`);
-        continue;
+        logger.error({ err, packageId: pkg.id, patientName }, "[billing] ERRO ao processar pacote");
       }
-
-      result.generated++;
-      result.recordIds.push(txOutcome.recordId);
-      result.details.push({
-        subscriptionId: pkg.id,
-        source: "patient_package",
-        patientName,
-        procedureName,
-        amount: Number(monthlyAmount),
-        action: "generated",
-        reason: `Registro #${txOutcome.recordId} criado — próxima cobrança: ${txOutcome.nextBillingDate}`,
-      });
-
-      console.log(`[billing] Pacote #${pkg.id} (${patientName}) — cobrança R$ ${Number(monthlyAmount).toFixed(2)} gerada → registro #${txOutcome.recordId} | próxima: ${txOutcome.nextBillingDate}`);
-
-    } catch (err) {
-      result.errors++;
-      result.details.push({
-        subscriptionId: pkg.id,
-        source: "patient_package",
-        patientName,
-        procedureName,
-        amount: Number(monthlyAmount ?? 0),
-        action: "error",
-        reason: err instanceof Error ? err.message : String(err),
-      });
-      console.error(`[billing] ERRO no pacote #${pkg.id} (${patientName}):`, err);
     }
-  }
 
-  console.log(
-    `[billing] Concluído: ${result.generated} geradas, ${result.skipped} puladas, ${result.errors} erros`
-  );
+    logger.info(
+      { generated: result.generated, skipped: result.skipped, errors: result.errors },
+      "[billing] Processamento concluído",
+    );
 
-  if (!dryRun) {
-    try {
-      await db.insert(billingRunLogsTable).values({
-        triggeredBy,
-        clinicId: clinicId ?? null,
-        processed: result.processed,
-        generated: result.generated,
-        skipped: result.skipped,
-        errors: result.errors,
-        dryRun: false,
-      });
-    } catch (logErr) {
-      console.error("[billing] Falha ao gravar log de execução:", logErr);
+  } finally {
+    // PR-FIN7-3 (B7): Fase 2 — atualiza o log com contadores finais e status
+    // real. Sempre executa mesmo em caso de exceção não tratada.
+    if (!dryRun && logId !== null) {
+      const finalStatus = result.errors > 0 ? "failed" : "ok";
+      try {
+        await db
+          .update(billingRunLogsTable)
+          .set({
+            status: finalStatus,
+            processed: result.processed,
+            generated: result.generated,
+            skipped: result.skipped,
+            errors: result.errors,
+          })
+          .where(eq(billingRunLogsTable.id, logId));
+        logger.debug({ logId, status: finalStatus }, "[billing] Log de execução atualizado");
+      } catch (logErr) {
+        logger.error({ err: logErr, logId }, "[billing] Falha ao atualizar log de execução");
+      }
     }
   }
 

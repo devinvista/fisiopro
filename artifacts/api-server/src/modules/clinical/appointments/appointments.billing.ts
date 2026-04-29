@@ -4,10 +4,10 @@ import {
   patientWalletTable, patientWalletTransactionsTable,
   patientPackagesTable, treatmentPlansTable, packagesTable, clinicsTable,
 } from "@workspace/db";
-import { eq, and, gt, sql, asc, desc } from "drizzle-orm";
+import { eq, and, gt, sql, asc, desc, inArray } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
-  postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
+  postPackageCreditUsage, postReceivableRevenue, postReversal, postWalletUsage, resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import { recognizeMonthlyInvoiceRevenue } from "../medical-records/treatment-plans.revenue-recognition.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
@@ -287,6 +287,67 @@ export async function applyBillingRules(
               clinicId: resolvedClinicId,
             });
           }
+        }
+      }
+      return;
+    }
+
+    // ── PR-FIN7-4 (B12): Rollback de receita reconhecida quando TODAS as sessões
+    // do mês saem do estado confirmado (ex.: compareceu → agendado por correção).
+    // Só estorna se havia receita reconhecida (recognizedEntryId preenchido) e
+    // nenhum outro appointment do mesmo mês ainda estiver confirmado.
+    if (!confirmedSet.includes(newStatus) && confirmedSet.includes(oldStatus)) {
+      const monthlyInvoiceId: number | null = (details as any).monthlyInvoiceId ?? null;
+      if (monthlyInvoiceId) {
+        try {
+          const [invoice] = await db
+            .select({
+              id: financialRecordsTable.id,
+              recognizedEntryId: financialRecordsTable.recognizedEntryId,
+              clinicId: financialRecordsTable.clinicId,
+              patientId: financialRecordsTable.patientId,
+            })
+            .from(financialRecordsTable)
+            .where(eq(financialRecordsTable.id, monthlyInvoiceId))
+            .limit(1);
+
+          if (invoice?.recognizedEntryId) {
+            const { startDate, endDate } = monthRangeFromDate(appointmentDate);
+            const [{ confirmedCount }] = await db
+              .select({ confirmedCount: sql<number>`count(*)::int` })
+              .from(appointmentsTable)
+              .where(and(
+                eq(appointmentsTable.monthlyInvoiceId, monthlyInvoiceId),
+                inArray(appointmentsTable.status, confirmedSet as AppointmentStatus[]),
+                sql`${appointmentsTable.date} >= ${startDate}::date`,
+                sql`${appointmentsTable.date} <= ${endDate}::date`,
+                sql`${appointmentsTable.id} != ${appointmentId}`,
+              ));
+
+            if ((confirmedCount ?? 0) === 0) {
+              // Última sessão confirmada saiu do estado — estorna a receita.
+              await postReversal(invoice.recognizedEntryId, {
+                clinicId: invoice.clinicId ?? null,
+                entryDate: appointmentDate,
+                description:
+                  `[B12] Estorno de receita mensal — nenhuma sessão confirmada restante ` +
+                  `— fatura #${monthlyInvoiceId}`,
+                sourceType: "financial_record",
+                sourceId: invoice.id,
+                patientId: invoice.patientId ?? null,
+                financialRecordId: invoice.id,
+                appointmentId,
+              });
+              // Zera o sentinel para permitir novo reconhecimento quando uma
+              // sessão for confirmada novamente no mesmo mês.
+              await db
+                .update(financialRecordsTable)
+                .set({ recognizedEntryId: null, accountingEntryId: null })
+                .where(eq(financialRecordsTable.id, monthlyInvoiceId));
+            }
+          }
+        } catch (err) {
+          console.error("[applyBillingRules] B12 — falha ao estornar receita reconhecida:", err);
         }
       }
       return;

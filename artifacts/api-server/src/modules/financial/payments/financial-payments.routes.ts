@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, sessionCreditsTable, patientsTable,
+  patientWalletTable, patientWalletTransactionsTable,
 } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -14,7 +15,6 @@ import {
   allocateReceivable,
   getAccountingBalances,
   postCashAdvance,
-  postCashReceipt,
   postReceivableRevenue,
   postReceivableSettlement,
 } from "../../shared/accounting/accounting.service.js";
@@ -121,6 +121,7 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
 
     const [patient] = await db.select({ name: patientsTable.name }).from(patientsTable).where(eq(patientsTable.id, patientId));
 
+    let walletCreditedAmount = 0;
     const [record] = await db.transaction(async (tx) => {
       const [paymentRecord] = await tx
         .insert(financialRecordsTable)
@@ -373,19 +374,64 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         remaining = Math.round((remaining - allocationAmount) * 100) / 100;
       }
 
+      // PR-FIN7-1 (B8 + B15): saldo remanescente (pago acima das pendências)
+      // NÃO é receita imediata — vai para Adiantamentos de Cliente (2.1.1)
+      // e é creditado na carteira digital do paciente para uso futuro.
       if (remaining > 0) {
-        const directEntry = await postCashReceipt({
+        const advEntry = await postCashAdvance({
           clinicId: req.clinicId ?? null,
           entryDate: today,
           amount: remaining,
-          description: description || `Pagamento direto — ${patient?.name ?? "Paciente"}`,
+          description: description || `Saldo creditado na carteira — ${patient?.name ?? "Paciente"}`,
           sourceType: "financial_record",
           sourceId: paymentRecord.id,
           patientId,
           procedureId: procedureId ? parseInt(String(procedureId)) : null,
           financialRecordId: paymentRecord.id,
         }, tx as any);
-        primaryEntryId ??= directEntry.id;
+        primaryEntryId ??= advEntry.id;
+
+        // Upsert da carteira do paciente.
+        const walletClinicId = req.clinicId ?? null;
+        const walletConditions: Parameters<typeof and>[0][] = [
+          eq(patientWalletTable.patientId, patientId),
+        ];
+        if (walletClinicId) walletConditions.push(eq(patientWalletTable.clinicId, walletClinicId));
+
+        const [existingWallet] = await tx
+          .select()
+          .from(patientWalletTable)
+          .where(and(...walletConditions))
+          .limit(1);
+
+        let walletId: number;
+        if (existingWallet) {
+          const newBalance = (Number(existingWallet.balance) + remaining).toFixed(2);
+          await tx
+            .update(patientWalletTable)
+            .set({ balance: newBalance, updatedAt: new Date() })
+            .where(eq(patientWalletTable.id, existingWallet.id));
+          walletId = existingWallet.id;
+        } else {
+          const [newWallet] = await tx
+            .insert(patientWalletTable)
+            .values({ patientId, clinicId: walletClinicId, balance: remaining.toFixed(2) })
+            .returning({ id: patientWalletTable.id });
+          walletId = newWallet.id;
+        }
+
+        await tx.insert(patientWalletTransactionsTable).values({
+          walletId,
+          patientId,
+          clinicId: walletClinicId,
+          amount: remaining.toFixed(2),
+          type: "credito",
+          description:
+            description || `Saldo remanescente creditado na carteira — ${patient?.name ?? "Paciente"}`,
+          financialRecordId: paymentRecord.id,
+        });
+
+        walletCreditedAmount = remaining;
       }
 
       await tx
@@ -405,7 +451,11 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
       summary: `Pagamento registrado: R$ ${numAmount.toFixed(2)} — ${paymentMethod ?? ""}`,
     });
 
-    res.status(201).json(record);
+    // PR-FIN7-1 (B15): informa o cliente quando saldo foi creditado na carteira.
+    const responseBody = walletCreditedAmount > 0
+      ? { ...record, walletCredited: walletCreditedAmount }
+      : record;
+    res.status(201).json(responseBody);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });
