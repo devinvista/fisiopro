@@ -398,6 +398,28 @@ function ItemRow({
       toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" }),
   });
 
+  // Auto-save: assim que o item fica válido (agenda + dia + horário) e há
+  // alterações pendentes, persistimos automaticamente após um pequeno
+  // debounce. Evita o pitfall do usuário escolher tudo, navegar para a
+  // próxima etapa sem clicar em "Salvar" e ver o aviso "item recorrente sem
+  // agenda definida" em Iniciar Plano.
+  useEffect(() => {
+    if (disabled) return;
+    if (!dirty) return;
+    if (!scheduleId || weekDays.length === 0 || !startTime) return;
+    if (mutation.isPending) return;
+    const t = setTimeout(() => {
+      mutation.mutate({
+        scheduleId,
+        weekDays: JSON.stringify(weekDays),
+        defaultStartTime: startTime,
+        defaultProfessionalId: selectedSchedule?.professionalId ?? null,
+      });
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty, scheduleId, weekDays, startTime, disabled]);
+
   function toggleDay(key: WeekDayKey) {
     if (disabled) return;
     setWeekDays((prev) =>

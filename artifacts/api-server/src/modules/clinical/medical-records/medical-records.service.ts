@@ -323,6 +323,19 @@ export async function updatePatientTreatmentPlanById(
     "avulsoBillingDay",
   ]);
 
+  // Normaliza valores p/ comparação tolerante (Date→ISO date, ""→null,
+  // number↔string equivalentes). Usado para detectar se um campo "protegido"
+  // de fato mudou — se vier igual ao existente, tratamos como no-op em vez
+  // de bloquear o save (evita falsos positivos quando o front envia o form
+  // inteiro contendo campos imutáveis sem alteração real).
+  const normalize = (x: unknown): string | null => {
+    if (x === null || x === undefined || x === "") return null;
+    if (x instanceof Date) return x.toISOString().slice(0, 10);
+    return String(x);
+  };
+  const valueUnchanged = (existingVal: unknown, incomingVal: unknown): boolean =>
+    normalize(existingVal) === normalize(incomingVal);
+
   const update: Record<string, unknown> = {};
   for (const key of [
     "objectives",
@@ -339,29 +352,44 @@ export async function updatePatientTreatmentPlanById(
     "avulsoBillingDay",
   ] as const) {
     if (data[key] !== undefined) {
+      // Campos numéricos/string opcionais: undefined → ignora; null/"" → null;
+      // valor → mantém. avulsoBillingMode tem default not-null, então rejeita "".
+      const v = data[key];
+      const newValue =
+        key === "avulsoBillingMode"
+          ? v && typeof v === "string"
+            ? v
+            : "porSessao"
+          : v === ""
+          ? null
+          : v;
+
       if (isAccepted && !ALLOWED_AFTER_ACCEPT.has(key)) {
+        // Só rejeita se o valor está realmente mudando. Sends idênticos
+        // (comuns quando o front manda o form inteiro) viram no-op.
+        if (valueUnchanged((existing as Record<string, unknown>)[key], newValue)) {
+          continue;
+        }
         throw HttpError.conflict(
           `Plano já aceito em ${existing.acceptedAt?.toISOString().slice(0, 10)}. ` +
             `Para alterar "${key}" use a renegociação (gera nova versão do plano).`,
         );
       }
-      // Campos numéricos/string opcionais: undefined → ignora; null/"" → null;
-      // valor → mantém. avulsoBillingMode tem default not-null, então rejeita "".
-      const v = data[key];
-      if (key === "avulsoBillingMode") {
-        update[key] = v && typeof v === "string" ? v : "porSessao";
-      } else {
-        update[key] = v === "" ? null : v;
-      }
+      update[key] = newValue;
     }
   }
   if (data.startDate !== undefined) {
+    const newStartDate = (data.startDate as string) || null;
     if (isAccepted) {
-      throw HttpError.conflict(
-        "Plano já aceito — data de início não pode mais ser alterada. Use renegociação.",
-      );
+      if (!valueUnchanged(existing.startDate, newStartDate)) {
+        throw HttpError.conflict(
+          "Plano já aceito — data de início não pode mais ser alterada. Use renegociação.",
+        );
+      }
+      // unchanged — silenciosamente ignora
+    } else {
+      update.startDate = newStartDate;
     }
-    update.startDate = (data.startDate as string) || null;
   }
 
   const plan = await repo.updateTreatmentPlan(planId, patientId, update);
