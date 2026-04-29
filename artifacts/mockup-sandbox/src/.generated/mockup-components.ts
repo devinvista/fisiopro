@@ -5,6 +5,6 @@ export const modules: ModuleMap = {
   "./components/mockups/brand-book/IconSystem.tsx": () => import("../components/mockups/brand-book/IconSystem.tsx"),
   "./components/mockups/brand-book/LogoSystem.tsx": () => import("../components/mockups/brand-book/LogoSystem.tsx"),
   "./components/mockups/brand-book/Page.tsx": () => import("../components/mockups/brand-book/Page.tsx"),
-  "./components/mockups/tech-docs/Page.tsx": () => import("../components/mockups/tech-docs/Page.tsx"),
-  "./components/mockups/pitch-deck/Page.tsx": () => import("../components/mockups/pitch-deck/Page.tsx")
+  "./components/mockups/pitch-deck/Page.tsx": () => import("../components/mockups/pitch-deck/Page.tsx"),
+  "./components/mockups/tech-docs/Page.tsx": () => import("../components/mockups/tech-docs/Page.tsx")
 };
