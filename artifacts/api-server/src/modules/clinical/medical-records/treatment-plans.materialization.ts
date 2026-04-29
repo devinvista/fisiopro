@@ -103,6 +103,9 @@ interface PlanItem {
   packageType: string | null;
   packageBillingDay: number | null;
   packageProcedureId: number | null;
+  // Pacote mensalidade: valor mensal contratado vive em `packages.monthly_price`.
+  // Usado como fallback quando o item não tem `unitMonthlyPrice` próprio.
+  packageMonthlyPrice: string | null;
   // Sprint 1/2 — política de crédito do pacote (defaults para o pool mensal)
   packagePaymentMode: string | null;
   packageMonthlyCreditValidityDays: number | null;
@@ -210,6 +213,7 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
       packageProcedureId: packagesTable.procedureId,
       packagePaymentMode: packagesTable.paymentMode,
       packageMonthlyCreditValidityDays: packagesTable.monthlyCreditValidityDays,
+      packageMonthlyPrice: packagesTable.monthlyPrice,
     })
     .from(treatmentPlanProceduresTable)
     .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
@@ -301,10 +305,15 @@ export async function materializeTreatmentPlan(
   //   agenda + dias + horário no editor de aceite. Não criamos faturas/pool
   //   adicionais — o aceite (`acceptPlanFinancials`) já tratou a parte
   //   financeira (vendaPacote + créditos para pacote; nada para avulso).
+  // Para itens "recorrenteMensal" o valor mensal pode vir do próprio item
+  // (`unitMonthlyPrice`, comum em mensalidade de procedimento avulso) ou do
+  // pacote (`packages.monthly_price`, padrão para "pacote mensalidade" onde
+  // o valor é fixo no catálogo). A regra é a mesma para os dois casos: o
+  // pool de créditos é recalculado mês a mês conforme os dias da semana.
   const monthlyItems = items.filter(
     (i) =>
       resolveItemKind(i) === "recorrenteMensal" &&
-      Number(i.unitMonthlyPrice ?? 0) > 0,
+      Number(i.unitMonthlyPrice ?? i.packageMonthlyPrice ?? 0) > 0,
   );
   const oneShotItems = items.filter((i) => {
     const k = resolveItemKind(i);
@@ -361,9 +370,14 @@ export async function materializeTreatmentPlan(
         .limit(1);
       if (!procedure) continue;
 
+      // Mesmo fallback usado no filter acima: pacote mensalidade pode ter o
+      // valor mensal vivo apenas em `packages.monthly_price`.
+      const effectiveMonthly = Number(
+        item.unitMonthlyPrice ?? item.packageMonthlyPrice ?? 0,
+      );
       const monthlyAmount = Math.max(
         0,
-        Number(item.unitMonthlyPrice ?? 0) - Number(item.discount ?? 0),
+        effectiveMonthly - Number(item.discount ?? 0),
       );
       const billingDay = item.packageBillingDay ?? 10;
       const weekDays = parseWeekDays(item.weekDays);

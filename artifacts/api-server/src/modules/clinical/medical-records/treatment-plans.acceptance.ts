@@ -58,6 +58,9 @@ interface PlanItem {
   packageProcedureId: number | null;
   packagePaymentMode: string | null;
   packageName: string | null;
+  // Pacote mensalidade: valor mensal contratado vive em `packages.monthly_price`.
+  // Usado como fallback quando o item não tem `unitMonthlyPrice` próprio.
+  packageMonthlyPrice: string | null;
 }
 
 /**
@@ -122,6 +125,7 @@ async function loadAcceptanceItems(planId: number): Promise<PlanItem[]> {
       packageProcedureId: packagesTable.procedureId,
       packagePaymentMode: packagesTable.paymentMode,
       packageName: packagesTable.name,
+      packageMonthlyPrice: packagesTable.monthlyPrice,
     })
     .from(treatmentPlanProceduresTable)
     .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
@@ -271,10 +275,17 @@ export async function acceptPlanFinancials(
       }
 
       // ─── Recorrente mensal: somente fatura do mês corrente ───────────────
+      // Cobre tanto o caso "mensalidade de procedimento" (sem packageId,
+      // apenas `unitMonthlyPrice` no item) quanto o de "pacote mensalidade"
+      // (com packageId, valor fixo em `packages.monthly_price`). Para o
+      // segundo caso o item pode não ter `unitMonthlyPrice` próprio — então
+      // caímos no valor do pacote.
       if (kind === "recorrenteMensal") {
+        const effectiveMonthly =
+          Number(item.unitMonthlyPrice ?? item.packageMonthlyPrice ?? 0);
         const monthlyAmount = Math.max(
           0,
-          Number(item.unitMonthlyPrice ?? 0) - Number(item.discount ?? 0),
+          effectiveMonthly - Number(item.discount ?? 0),
         );
         if (monthlyAmount <= 0) continue;
 

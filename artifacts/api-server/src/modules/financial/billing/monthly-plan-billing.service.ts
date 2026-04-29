@@ -154,6 +154,8 @@ interface PlanItemRow {
   packageBillingDay: number | null;
   packageProcedureId: number | null;
   packageName: string | null;
+  // Pacote mensalidade: valor mensal vive em `packages.monthly_price`.
+  packageMonthlyPrice: string | null;
 }
 
 async function loadEligibleItems(filters: {
@@ -191,6 +193,7 @@ async function loadEligibleItems(filters: {
       packageBillingDay: packagesTable.billingDay,
       packageProcedureId: packagesTable.procedureId,
       packageName: packagesTable.name,
+      packageMonthlyPrice: packagesTable.monthlyPrice,
     })
     .from(treatmentPlansTable)
     .innerJoin(
@@ -301,10 +304,12 @@ async function ensureMonthlyInvoice(
   const lastDay = lastDayOfMonth(monthYear, monthMonth);
   const dueDay = Math.min(billingDay, lastDay);
   const dueDate = `${monthYear}-${pad(monthMonth)}-${pad(dueDay)}`;
-  const monthlyAmount = Math.max(
-    0,
-    Number(item.unitMonthlyPrice ?? 0) - Number(item.discount ?? 0),
+  // Pacote mensalidade: valor mensal vive em `packages.monthly_price` quando
+  // o item não tem `unitMonthlyPrice` próprio.
+  const effectiveMonthly = Number(
+    item.unitMonthlyPrice ?? item.packageMonthlyPrice ?? 0,
   );
+  const monthlyAmount = Math.max(0, effectiveMonthly - Number(item.discount ?? 0));
   if (monthlyAmount <= 0) {
     return { created: false, invoiceId: null, appointmentsLinked: 0 };
   }

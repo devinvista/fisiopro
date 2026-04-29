@@ -267,6 +267,7 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       packageName: packagesTable.name,
       packageType: packagesTable.packageType,
       packageProcedureId: packagesTable.procedureId,
+      packageMonthlyPrice: packagesTable.monthlyPrice,
       procedureName: proceduresTable.name,
     })
     .from(treatmentPlanProceduresTable)
@@ -282,7 +283,9 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       packageType: r.packageType,
     });
     const unit = Number(r.unitPrice ?? 0);
-    const monthly = Number(r.unitMonthlyPrice ?? 0);
+    // Pacote mensalidade: valor mensal vive em `packages.monthly_price`
+    // quando o item não tem `unitMonthlyPrice` próprio.
+    const monthly = Number(r.unitMonthlyPrice ?? r.packageMonthlyPrice ?? 0);
     const discount = Number(r.discount ?? 0);
     let effective = 0;
     let estimatedTotal = 0;

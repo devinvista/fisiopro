@@ -82,6 +82,7 @@ router.get(
           procedureName: proceduresTable.name,
           packageName: packagesTable.name,
           unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
+          packageMonthlyPrice: packagesTable.monthlyPrice,
           packageBillingDay: packagesTable.billingDay,
         })
         .from(treatmentPlanProceduresTable)
@@ -114,7 +115,8 @@ router.get(
             if (m > 12) { m = 1; y += 1; }
           }
           const nextBillingDate = `${y}-${pad(m)}-${pad(Math.min(day, 28))}`;
-          const amount = Number(it.unitMonthlyPrice ?? 0);
+          // Pacote mensalidade: o valor mensal pode estar somente no pacote.
+          const amount = Number(it.unitMonthlyPrice ?? it.packageMonthlyPrice ?? 0);
           return {
             id: it.itemId,
             patientName: it.patientName ?? `Paciente #${it.planId}`,

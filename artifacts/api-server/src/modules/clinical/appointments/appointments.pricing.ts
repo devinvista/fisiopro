@@ -165,6 +165,8 @@ export async function resolveEffectivePrice(
         packageType: packagesTable.packageType,
         packageBillingDay: packagesTable.billingDay,
         packageProcedureId: packagesTable.procedureId,
+        // Pacote mensalidade: valor mensal vive no pacote.
+        packageMonthlyPrice: packagesTable.monthlyPrice,
       })
       .from(treatmentPlanProceduresTable)
       .innerJoin(
@@ -182,8 +184,12 @@ export async function resolveEffectivePrice(
     if (planRow) {
       const discount = Math.max(0, Number(planRow.discount ?? 0));
 
-      // 1a. Plano mensal fixo com rateio proporcional
-      const monthlyUnit = Number(planRow.unitMonthlyPrice ?? 0);
+      // 1a. Plano mensal fixo com rateio proporcional.
+      // Pacote mensalidade: o valor mensal pode estar somente no pacote
+      // (`packages.monthly_price`) — o item do plano herda esse valor.
+      const monthlyUnit = Number(
+        planRow.unitMonthlyPrice ?? planRow.packageMonthlyPrice ?? 0,
+      );
       const isMonthlyPackage =
         planRow.packageId != null &&
         planRow.packageType === "mensal" &&
