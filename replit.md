@@ -157,6 +157,21 @@ Antes do Sprint 4, pagar uma `faturaMensalAvulso` causava (a) reconhecimento dob
 - **Invariante crítica:** `closeAvulsoMonth` cria `faturaMensalAvulso` com `parent.amount = SUM(filhos.amount)`. Se essa invariante for violada, o cascade marcaria filhos extras como `pago` sem cobertura — Sprint posterior pode adicionar re-agregação no `closeAvulsoMonth` quando filhos novos aparecem após o fechamento.
 - **Testes:** 4 casos em `payment-cascade.test.ts` (cascade feliz com 2 filhos + alocação por filho, idempotência sem filhos pendentes, filho sem `recognizedEntryId` marcado pago sem alocar, defesa contra `patientId=null`).
 
+### Sprint Financeiro 6 — Integridade contábil & guardas de exceção (29/04/2026)
+
+Detalhes completos em `docs/auditoria-financeira.md` (laudo dos 15 achados B1–B15 + plano por sprint). Sprint 6 fechou os 5 bugs do caminho de exceção; Sprints 7 e 8 ficam para auditabilidade fina e sub-ledger.
+
+- **PR-FIN6-1 (B1+B2) — bloqueio de edição/delete sem trilha contábil** (`financial-records.routes.ts`):
+  - `PATCH /records/:id`: retorna **HTTP 409 `RECORD_ALREADY_POSTED`** com `lockedFields` quando o cliente tenta alterar `amount`/`type`/`status`/`paymentDate` em registro com `accountingEntryId|recognizedEntryId|settlementEntryId`. Campos auxiliares (`description`, `category`, `dueDate`, `procedureId`, `paymentMethod`) seguem editáveis. Usa diff (`Number(body.x) !== Number(existing.x)`) para evitar 409 espúrio em PATCH no-op.
+  - `DELETE /records/:id` (receita) com `accountingEntry`: exige `reversalReason` (query string ou body, mín. 3 chars) → **HTTP 400 `REVERSAL_REASON_REQUIRED`** se ausente. Quando informado, executa `postReversal(entryId, ...)` em transação (mesma assinatura do `/estorno`), preenche `originalAmount`/`reversedBy`/`reversedAt`, e `logAudit('reverse', ...)`. Idempotente para registros já `estornado/cancelado` (204). Despesa segue DELETE físico. Filtro `clinicCond` aplicado no SELECT/UPDATE/DELETE.
+- **PR-FIN6-2 (B3) — paridade /payment ↔ /status** (`financial-records.routes.ts:300-360`): `PATCH /records/:id/status` com `status='pago'` agora também:
+  - chama `promotePrepaidCreditsForFinancialRecord(id)` para `faturaPlano` (promove pool prepago `pendentePagamento → disponivel`);
+  - chama `cascadeFaturaMensalAvulsoPayment` para `faturaMensalAvulso` (cascateia status para os filhos e aloca o settlement contra cada `recognizedEntryId`).
+  - Antes esses efeitos só rodavam em `POST /payment`; agora pagar manualmente uma fatura mensal via `/status` produz o mesmo resultado.
+- **PR-FIN6-3 (B5) — vendaPacote legado em /payment** (`financial-payments.routes.ts:271-312`): quando `pending.transactionType === 'vendaPacote'` e o registro **não** tem `accountingEntryId/recognizedEntryId` (cenário legado, fora do fluxo `postPackageSale`), o handler redireciona para `postCashAdvance` (D Caixa / C Adiantamentos) em vez de `postReceivableSettlement` (que gerava recebível negativo no journal). O fluxo moderno (vendaPacote criado via `postPackageSale`, com `accountingEntryId` populado) já era contabilmente correto e segue inalterado pelo path normal.
+- **PR-FIN6-4 (B4) — multi-tenant em /payment** (`financial-payments.routes.ts:142-160`): `pendingRecords` agora aplica `eq(financialRecordsTable.clinicId, req.clinicId)` quando o usuário tem clínica explícita. Super-admin sem `clinicId` mantém visão consolidada (uso restrito).
+- **Cobertura de testes:** 11 testes novos em `artifacts/api-server/src/modules/financial/records/financial-records.guards.test.ts` (B1, B2, B3) e `artifacts/api-server/src/modules/financial/payments/financial-payments.tenant-and-vendapacote.test.ts` (B4, B5). Suíte total: **347/347 ✓** (antes 336).
+
 ### UI consolidada do Plano + migração de legado (Sprint 5 Refactor — abr/2026)
 
 Detalhes em `sprints/sprint-5-ui-consolidada-e-migracao.md`.

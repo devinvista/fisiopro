@@ -29,6 +29,7 @@ import {
   RECEIVABLE_TYPES,
   monthDateRange,
 } from "../shared/financial-reports.service.js";
+import { cascadeFaturaMensalAvulsoPayment } from "../payments/payment-cascade.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
   reverseRecordSchema, listReversalsQuerySchema,
@@ -170,6 +171,34 @@ router.patch("/records/:id", requirePermission("financial.write"), async (req: A
       return;
     }
 
+    // PR-FIN6-1 (B2): bloqueia edição de campos contabilmente relevantes
+    // (amount, type, status, paymentDate) quando o registro JÁ tem
+    // lançamento contábil. A trilha correta é: estornar (`/estorno`) e
+    // emitir um novo lançamento. Campos auxiliares (descrição, categoria,
+    // dueDate, procedureId, paymentMethod) continuam editáveis.
+    const isContabilizado =
+      existing.accountingEntryId != null ||
+      existing.recognizedEntryId != null ||
+      existing.settlementEntryId != null;
+    if (isContabilizado) {
+      const lockedFields: string[] = [];
+      if (body.amount !== undefined && Number(body.amount) !== Number(existing.amount)) lockedFields.push("amount");
+      if (body.type !== undefined && body.type !== existing.type) lockedFields.push("type");
+      if (body.status !== undefined && body.status !== existing.status) lockedFields.push("status");
+      if (body.paymentDate !== undefined && body.paymentDate !== existing.paymentDate) lockedFields.push("paymentDate");
+      if (lockedFields.length > 0) {
+        res.status(409).json({
+          error: "Conflict",
+          code: "RECORD_ALREADY_POSTED",
+          message:
+            `Lançamento já contabilizado (entry #${existing.accountingEntryId ?? existing.recognizedEntryId ?? existing.settlementEntryId}). ` +
+            `Campos bloqueados: ${lockedFields.join(", ")}. Use POST /records/${id}/estorno e emita um novo lançamento.`,
+          lockedFields,
+        });
+        return;
+      }
+    }
+
     const updates: Record<string, any> = {};
     if (body.type !== undefined) updates.type = body.type;
     if (body.amount !== undefined) updates.amount = String(body.amount);
@@ -297,6 +326,31 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
           .where(eq(financialRecordsTable.id, existing.id));
 
         updated.settlementEntryId = settlement.id;
+
+        // PR-FIN6-2 (B3): efeitos pós-pagamento que antes só rodavam em
+        // POST /payment passam a rodar aqui também:
+        //  • faturaPlano paga → promove pool de créditos prepago
+        //    (`pendentePagamento` → `disponivel`).
+        //  • faturaMensalAvulso paga → cascateia status para os filhos
+        //    e aloca o settlement contra o reconhecimento de cada filho.
+        if (existing.transactionType === "faturaPlano") {
+          const { promotePrepaidCreditsForFinancialRecord } =
+            await import("../../clinical/medical-records/treatment-plans.materialization.js");
+          await promotePrepaidCreditsForFinancialRecord(existing.id);
+        } else if (existing.transactionType === "faturaMensalAvulso") {
+          await cascadeFaturaMensalAvulsoPayment({
+            tx,
+            parent: {
+              id: existing.id,
+              clinicId: existing.clinicId ?? req.clinicId ?? null,
+              patientId: existing.patientId,
+              amount: existing.amount,
+            },
+            paymentDate: paymentDate || todayBRT(),
+            paymentMethod: paymentMethod || null,
+            settlementEntryId: settlement.id,
+          });
+        }
       }
 
       if ((status === "cancelado" || status === "estornado") && existing.status !== status) {
@@ -482,24 +536,113 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
   try {
     const id = parseInt(req.params.id as string);
 
+    const cc = clinicCond(req);
+    const whereClause = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
     const [record] = await db
       .select()
       .from(financialRecordsTable)
-      .where(eq(financialRecordsTable.id, id));
+      .where(whereClause);
 
     if (!record) {
       res.status(404).json({ error: "Not Found", message: "Registro financeiro não encontrado" });
       return;
     }
 
+    // PR-FIN6-1 (B1): receita com lançamento contábil exige estorno auditado.
+    // Antes, o DELETE só fazia soft-delete (`status='estornado'`) sem postar
+    // `postReversal`, deixando o journal e o operacional dessincronizados.
+    // Agora o DELETE delega para o fluxo `/estorno`: se há accountingEntry,
+    // exige `reversalReason` (query ou body) e posta o estorno espelhado.
+    const hasAccountingEntry =
+      record.type === "receita" &&
+      (record.accountingEntryId != null ||
+        record.recognizedEntryId != null ||
+        record.settlementEntryId != null);
+
     if (record.type === "despesa") {
-      await db.delete(financialRecordsTable).where(eq(financialRecordsTable.id, id));
-    } else {
-      await db
-        .update(financialRecordsTable)
-        .set({ status: "estornado" })
-        .where(eq(financialRecordsTable.id, id));
+      await db.delete(financialRecordsTable).where(whereClause);
+      await logAudit({
+        userId: req.userId,
+        action: "delete",
+        entityType: "financial_record",
+        entityId: id,
+        patientId: record.patientId ?? null,
+        summary: `Despesa removida: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+      });
+      res.status(204).send();
+      return;
     }
+
+    if (record.status === "estornado" || record.status === "cancelado") {
+      // Já estornado: idempotente (204).
+      res.status(204).send();
+      return;
+    }
+
+    if (hasAccountingEntry) {
+      const reversalReason =
+        (req.body && typeof req.body.reversalReason === "string" ? req.body.reversalReason : undefined) ??
+        (typeof req.query.reversalReason === "string" ? req.query.reversalReason : undefined);
+
+      if (!reversalReason || reversalReason.length < 3) {
+        res.status(400).json({
+          error: "Bad Request",
+          code: "REVERSAL_REASON_REQUIRED",
+          message:
+            "Receita já contabilizada — DELETE exige `reversalReason` (mínimo 3 caracteres) " +
+            "para postar o estorno contábil. Envie no body ou na query string.",
+        });
+        return;
+      }
+
+      const reversedAt = new Date();
+      await db.transaction(async (tx) => {
+        await tx
+          .update(financialRecordsTable)
+          .set({
+            status: "estornado",
+            originalAmount: record.originalAmount ?? record.amount,
+            reversalReason,
+            reversedBy: req.userId ?? null,
+            reversedAt,
+          })
+          .where(whereClause);
+
+        const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
+        if (entryId) {
+          await postReversal(entryId, {
+            clinicId: record.clinicId ?? req.clinicId ?? null,
+            entryDate: todayBRT(),
+            description: `Estorno via DELETE — ${record.description} (motivo: ${reversalReason})`,
+            sourceType: "financial_record",
+            sourceId: record.id,
+            patientId: record.patientId,
+            appointmentId: record.appointmentId,
+            procedureId: record.procedureId,
+            subscriptionId: record.subscriptionId,
+            financialRecordId: record.id,
+            createdBy: req.userId ?? null,
+          }, tx as any);
+        }
+      });
+
+      await logAudit({
+        userId: req.userId,
+        action: "reverse",
+        entityType: "financial_record",
+        entityId: id,
+        patientId: record.patientId ?? null,
+        summary: `Estorno via DELETE: ${record.description} (R$ ${Number(record.amount).toFixed(2)}) — motivo: ${reversalReason}`,
+      });
+      res.status(204).send();
+      return;
+    }
+
+    // Receita sem lançamento contábil (estado intermediário/legado): soft delete simples.
+    await db
+      .update(financialRecordsTable)
+      .set({ status: "estornado" })
+      .where(whereClause);
 
     await logAudit({
       userId: req.userId,
@@ -507,7 +650,7 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
       entityType: "financial_record",
       entityId: id,
       patientId: record.patientId ?? null,
-      summary: `Registro financeiro estornado/removido: ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
+      summary: `Registro financeiro estornado (sem lançamento contábil): ${record.description} (R$ ${Number(record.amount).toFixed(2)})`,
     });
 
     res.status(204).send();

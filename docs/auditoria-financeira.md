@@ -40,14 +40,14 @@ Objetivo: mapear o fluxo, identificar bugs, riscos contábeis e oportunidades de
 
 ## 2. Bugs e inconsistências (com severidade e evidência)
 
-### 🔴 B1 — `DELETE /records/:id` (receita) não posta `postReversal`
+### ✅ B1 — `DELETE /records/:id` (receita) não posta `postReversal` — **RESOLVIDO em PR-FIN6-1 (Sprint 6)**
 **Arquivo:** `financial/records/financial-records.routes.ts:481-518`
 **Sintoma:** soft-delete altera apenas `status='estornado'`; o lançamento contábil (recebível, receita, settlement) permanece ativo no journal. `getAccountingBalances` e o DRE continuam contando essa receita; o saldo de Recebíveis fica inflado.
 **Cascata:** o relatório `revenueSummarySql()` filtra por status, mas a fonte da verdade contábil é o journal — eles divergem em qualquer DRE puxado de `accounting_journal_lines`.
 **Severidade:** Alta — causa divergência entre relatório operacional e contábil.
 **Correção sugerida:** rodar `postReversal(entryId, …)` dentro de transação como já é feito em `PATCH /records/:id/estorno`. Idealmente, redirecionar este endpoint internamente para o mesmo handler do estorno (exigindo `reversalReason`).
 
-### 🔴 B2 — `PATCH /records/:id` permite editar `amount`/`type` sem trilha contábil
+### ✅ B2 — `PATCH /records/:id` permite editar `amount`/`type` sem trilha contábil — **RESOLVIDO em PR-FIN6-1 (Sprint 6)**
 **Arquivo:** `financial-records.routes.ts:158-214`
 **Sintoma:** o handler atualiza `amount`, `type`, `paymentDate` e `status` sem:
 - preencher `originalAmount` (só é preenchido nos handlers de estorno);
@@ -60,14 +60,14 @@ Objetivo: mapear o fluxo, identificar bugs, riscos contábeis e oportunidades de
 2. Para mudanças permitidas (descrição/categoria/dueDate/paymentMethod), apenas `logAudit` antes/depois; nunca tocar em `paymentDate`/`status` por aqui — usar o handler `/status`.
 3. Se a edição `pendente → pago` chegar via `/status`, ele já trata. Não duplicar caminhos.
 
-### 🔴 B3 — `PATCH /records/:id/status` para `pago` não promove créditos prepago nem trata cascata avulso
+### ✅ B3 — `PATCH /records/:id/status` para `pago` não promove créditos prepago nem trata cascata avulso — **RESOLVIDO em PR-FIN6-2 (Sprint 6)**
 **Arquivo:** `financial-records.routes.ts:268-300`
 **Sintoma:** quando uma `faturaPlano` é marcada paga manualmente por este endpoint, a função `promotePrepaidCreditsForFinancialRecord` (chamada apenas em `/payment`) não é executada → o pool `pendentePagamento` não é promovido para `disponivel`. Idem para `faturaMensalAvulso`: o cascata para os filhos roda só em `/payment`.
 **Cascata:** plano com pagamento registrado por aqui fica com créditos travados em `pendentePagamento`, sessões filhas continuam `pendente`, paciente recebe alerta de inadimplência.
 **Severidade:** Alta.
 **Correção sugerida:** extrair a lógica de cascata + promoção para um helper compartilhado e chamá-lo em ambos os endpoints quando a transição final for para `pago`.
 
-### 🔴 B4 — Vazamento multi-tenant em `/payment` (super-admin)
+### ✅ B4 — Vazamento multi-tenant em `/payment` (super-admin) — **RESOLVIDO em PR-FIN6-4 (Sprint 6)**
 **Arquivo:** `financial/payments/financial-payments.routes.ts:142-150`
 **Sintoma:** `pendingRecords` é selecionado **sem** `clinicCond(req)`. Para usuário comum, o filtro por `patientId` + `assertPatientInClinic` salva, mas:
 - super-admin atendendo requisição cross-tenant pega pendências de outras clínicas do mesmo paciente (cenário raro, mas possível em pacientes compartilhados em ambientes de teste);
@@ -75,7 +75,7 @@ Objetivo: mapear o fluxo, identificar bugs, riscos contábeis e oportunidades de
 **Severidade:** Média-Alta.
 **Correção sugerida:** filtrar `pendingRecords` por `clinicId = paymentRecord.clinicId ?? pending.clinicId`; quando super-admin sem `clinicId`, exigir cabeçalho de clínica explícito.
 
-### 🔴 B5 — `vendaPacote` no loop de alocação cai em `postReceivableSettlement` sem recebível
+### ✅ B5 — `vendaPacote` no loop de alocação cai em `postReceivableSettlement` sem recebível — **RESOLVIDO em PR-FIN6-3 (Sprint 6)**
 **Arquivo:** `financial-payments.routes.ts:264, 285-297`
 **Sintoma:** `vendaPacote` está incluído em `pendingRecords` (linha 148). O guard `pending.transactionType !== "vendaPacote"` (linha 264) **só** evita `postReceivableRevenue`. O fluxo segue para `postReceivableSettlement` (D Caixa / C Recebíveis). Como `vendaPacote` nunca foi reconhecido como recebível (é Adiantamento), o crédito em 1.1.2 fica negativo.
 **Cascata:** balancete com Recebíveis < 0 (impossível); DRE ok porque não há receita postada; carteira do cliente não é creditada.
@@ -205,13 +205,17 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 
 ## 6. Plano de correções proposto (priorizado)
 
-### Sprint financeiro 6 — Integridade contábil (1-2 semanas)
-- **PR-FIN6-1**: B1 + B2 — bloquear edição/delete sem estorno.
-  - `DELETE /records/:id` (receita) → reusa lógica de `/estorno` (exige motivo).
-  - `PATCH /records/:id` rejeita `amount`/`type` quando `accountingEntryId IS NOT NULL`.
-- **PR-FIN6-2**: B3 — promoção de prepago + cascade compartilhada entre `/payment` e `/status`.
-- **PR-FIN6-3**: B5 — `vendaPacote` em `/payment` deve usar `postCashAdvance` + creditar carteira; cobrir com teste.
-- **PR-FIN6-4**: B4 — sanitizar filtro multi-tenant em `pendingRecords`.
+### ✅ Sprint Financeiro 6 — Integridade contábil — **CONCLUÍDA (29/04/2026)**
+- ✅ **PR-FIN6-1 (B1 + B2)** — bloqueio de edição/delete sem trilha contábil.
+  - `DELETE /records/:id` (receita) com `accountingEntry` agora exige `reversalReason` (query ou body, mín. 3 chars) e dispara `postReversal` espelhado dentro de transação + `logAudit('reverse')`. Receita já `estornado/cancelado` é idempotente (204). Despesa segue DELETE físico. Filtro multi-tenant (`clinicCond`) aplicado.
+  - `PATCH /records/:id` retorna **409 `RECORD_ALREADY_POSTED`** com `lockedFields` quando o cliente tenta alterar `amount`/`type`/`status`/`paymentDate` em registro com `accountingEntryId|recognizedEntryId|settlementEntryId`. Campos auxiliares (descrição, categoria, dueDate, procedureId, paymentMethod) continuam editáveis.
+- ✅ **PR-FIN6-2 (B3)** — `PATCH /records/:id/status` com `status='pago'` agora também:
+  - chama `promotePrepaidCreditsForFinancialRecord(id)` para `faturaPlano` (promove pool prepago `pendentePagamento → disponivel`);
+  - chama `cascadeFaturaMensalAvulsoPayment` para `faturaMensalAvulso` (cascateia status para os filhos e aloca o settlement contra cada `recognizedEntryId`).
+  - Antes esses efeitos só existiam em `POST /payment`; agora há paridade entre os dois caminhos.
+- ✅ **PR-FIN6-3 (B5)** — em `POST /payment`, quando `pending.transactionType === 'vendaPacote'` e o registro **não** tem `accountingEntryId/recognizedEntryId` (legado), o fluxo redireciona para `postCashAdvance` (D Caixa / C Adiantamentos) em vez de `postReceivableSettlement` (que gerava recebível negativo). Marca como pago e fecha o ciclo. O caminho moderno (vendaPacote criado via `postPackageSale`) já estava correto e segue inalterado.
+- ✅ **PR-FIN6-4 (B4)** — `pendingRecords` em `/payment` agora aplica `eq(clinicId, req.clinicId)` quando o usuário tem clínica explícita. Super-admin sem `clinicId` mantém visão consolidada (uso restrito de operação).
+- 📊 **Cobertura adicionada:** 11 testes novos em `financial-records.guards.test.ts` e `financial-payments.tenant-and-vendapacote.test.ts` (suíte total: **347/347 ✓**, antes 336).
 
 ### Sprint financeiro 7 — Auditabilidade & idempotência (1 semana)
 - **PR-FIN7-1**: B8 + B15 — direcionar `remaining > 0` para Adiantamentos (carteira), nunca receita direta.
@@ -227,24 +231,28 @@ Quando há múltiplas pendências, só a primeira fica vinculada. O estorno dess
 
 ---
 
-## 7. Testes recomendados (a adicionar à suíte vitest atual: 336 ✓)
+## 7. Testes recomendados (suíte vitest atual: 347 ✓ — Sprint 6 já contemplada abaixo)
 
-| Caso | Arquivo de teste sugerido |
-|---|---|
-| Estorno via DELETE posta `postReversal` | `financial-records.delete.reversal.test.ts` |
-| Edição de `amount` em registro contabilizado é rejeitada (409) | `financial-records.patch.guard.test.ts` |
-| `/status: pago` em `faturaPlano` promove créditos prepago | `financial-records.status.cascade.test.ts` |
-| `/payment` em `vendaPacote` credita carteira (não Recebíveis) | `financial-payments.vendaPacote.test.ts` |
-| `runBilling` idempotente entre fim/início de mês usando `planMonthRef` | `billing.idempotency.test.ts` |
-| Confirmação concorrente da 1ª sessão do mês não duplica receita | `revenue-recognition.race.test.ts` |
-| Conciliação: soma `revenueSummarySql` = soma `4.1.x` no journal | `reconciliation.test.ts` |
+| Caso | Arquivo de teste | Status |
+|---|---|---|
+| Estorno via DELETE posta `postReversal` | `financial-records.guards.test.ts` | ✅ Sprint 6 |
+| Edição de `amount` em registro contabilizado é rejeitada (409) | `financial-records.guards.test.ts` | ✅ Sprint 6 |
+| `/status: pago` em `faturaPlano` promove créditos prepago | `financial-records.guards.test.ts` | ✅ Sprint 6 |
+| `/status: pago` em `faturaMensalAvulso` cascateia filhos | `financial-records.guards.test.ts` | ✅ Sprint 6 |
+| `/payment` em `vendaPacote` legado usa `postCashAdvance` (não settlement) | `financial-payments.tenant-and-vendapacote.test.ts` | ✅ Sprint 6 |
+| `/payment` filtra `pendingRecords` por `clinicId` (B4) | `financial-payments.tenant-and-vendapacote.test.ts` | ✅ Sprint 6 |
+| `runBilling` idempotente entre fim/início de mês usando `planMonthRef` | `billing.idempotency.test.ts` | ⏳ Sprint 7 |
+| Confirmação concorrente da 1ª sessão do mês não duplica receita | `revenue-recognition.race.test.ts` | ⏳ Sprint 7 |
+| Conciliação: soma `revenueSummarySql` = soma `4.1.x` no journal | `reconciliation.test.ts` | ⏳ Sprint 8 |
 
 ---
 
 ## 8. Conclusão executiva
 
-O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. Porém, **três caminhos de exceção quebram a integridade contábil** (B1, B2, B5) e dois quebram a integridade operacional (B3, B4) — todos exploráveis em uso normal, não em corner cases raros.
+O fluxo financeiro do FisioGest Pro evoluiu para um modelo bem estruturado por evento (sessão → reconhecimento de receita), com sub-contas contábeis por procedimento e idempotência via `planMonthRef`. **Após a Sprint Financeiro 6 (29/04/2026)**, os cinco bugs críticos do caminho de exceção (B1, B2, B3, B4, B5) estão corrigidos com cobertura de testes — o sistema agora **bloqueia edições contabilmente perigosas**, **dispara estorno auditado** em DELETE, **mantém paridade** entre `/payment` e `/status` para promoção de créditos e cascade de avulsos, **isola tenants** no caminho de pagamento e **direciona vendaPacote legado** para Adiantamentos.
 
-O caminho **feliz** está consistente; o caminho de **edição/estorno/exceção** precisa ser fechado antes de qualquer onboarding de cliente que exija auditoria contábil formal (escritório contador externo, e-Social, fiscalização).
+Próximos passos:
+- **Sprint 7** (B6, B7, B8, B10, B12, B15): fortalecer auditabilidade e idempotência (`planMonthRef`/`billingMonthRef` como chave universal, advisory locks, rollback de receita reconhecida, eliminar receita-fantasma do `postCashReceipt`).
+- **Sprint 8** (B9, B11, B14): sub-ledger via `payment_allocations`, cascata de estorno mãe→filhos, job noturno de conciliação operacional × contábil, e correções menores de `closeAvulsoMonth` + `SELECT FOR UPDATE` na carteira.
 
-Após Sprint 6 + 7 acima, o sistema atinge nível “auditável”. Sprint 8 fecha o ciclo de excelência (sub-ledger e conciliação automatizada).
+O caminho feliz já estava consistente; o caminho de **edição/estorno/exceção** agora também — o sistema atingiu o nível mínimo "auditável" exigido para onboarding de clientes com auditoria contábil formal (CFC/CRC, escritório contador externo).

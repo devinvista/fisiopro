@@ -139,14 +139,21 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         })
         .returning();
 
+      // PR-FIN6-4 (B4): filtro multi-tenant. Usuário comum: limita ao
+      // `req.clinicId`. Super-admin sem clínica explícita: vê todas as
+      // pendências do paciente (cenários de teste / consolidação).
+      const pendingConditions: any[] = [
+        eq(financialRecordsTable.patientId, patientId),
+        eq(financialRecordsTable.status, "pendente"),
+        inArray(financialRecordsTable.transactionType, [...RECEIVABLE_TYPES, "vendaPacote"]),
+      ];
+      if (req.clinicId) {
+        pendingConditions.push(eq(financialRecordsTable.clinicId, req.clinicId));
+      }
       const pendingRecords = await tx
         .select()
         .from(financialRecordsTable)
-        .where(and(
-          eq(financialRecordsTable.patientId, patientId),
-          eq(financialRecordsTable.status, "pendente"),
-          inArray(financialRecordsTable.transactionType, [...RECEIVABLE_TYPES, "vendaPacote"])
-        ))
+        .where(and(...pendingConditions))
         .orderBy(financialRecordsTable.dueDate, financialRecordsTable.createdAt);
 
       let remaining = numAmount;
@@ -254,6 +261,46 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
                 paymentDate: today,
                 paymentMethod: paymentMethod || null,
                 settlementEntryId: settlementEntry.id,
+              })
+              .where(eq(financialRecordsTable.id, pending.id));
+          }
+          remaining = Math.round((remaining - allocationAmount) * 100) / 100;
+          continue;
+        }
+
+        // PR-FIN6-3 (B5): vendaPacote SEM accountingEntryId é um caso legado
+        // (registro criado fora do fluxo `postPackageSale`). Antes, o código
+        // pulava a recognition mas seguia para `postReceivableSettlement`,
+        // gerando D Caixa / C Recebíveis sem saldo de Recebíveis prévio →
+        // recebível negativo. Agora, redirecionamos para `postCashAdvance`
+        // (D Caixa / C Adiantamentos), que é a contabilização correta de uma
+        // venda de pacote: passivo até a execução das sessões.
+        if (!receivableEntryId && pending.transactionType === "vendaPacote") {
+          const advanceEntry = await postCashAdvance({
+            clinicId: pending.clinicId ?? req.clinicId ?? null,
+            entryDate: today,
+            amount: allocationAmount,
+            description: `Pagamento de venda de pacote (legado, sem entry prévio) — ${pending.description}`,
+            sourceType: "financial_record",
+            sourceId: paymentRecord.id,
+            patientId,
+            appointmentId: pending.appointmentId,
+            procedureId: pending.procedureId,
+            patientPackageId: pending.patientPackageId,
+            subscriptionId: pending.subscriptionId,
+            financialRecordId: paymentRecord.id,
+          }, tx as any);
+          primaryEntryId ??= advanceEntry.id;
+
+          if (allocationAmount >= Number(pending.amount)) {
+            await tx
+              .update(financialRecordsTable)
+              .set({
+                status: "pago",
+                paymentDate: today,
+                paymentMethod: paymentMethod || null,
+                accountingEntryId: advanceEntry.id,
+                settlementEntryId: advanceEntry.id,
               })
               .where(eq(financialRecordsTable.id, pending.id));
           }
