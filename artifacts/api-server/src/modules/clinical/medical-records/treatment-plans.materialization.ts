@@ -95,6 +95,7 @@ interface PlanItem {
   weekDays: string | null;
   defaultStartTime: string | null;
   defaultProfessionalId: number | null;
+  scheduleId: number | null;
   sessionDurationMinutes: number | null;
   packageType: string | null;
   packageBillingDay: number | null;
@@ -175,6 +176,7 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
       weekDays: treatmentPlanProceduresTable.weekDays,
       defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
       defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
+      scheduleId: treatmentPlanProceduresTable.scheduleId,
       sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
       packageType: packagesTable.packageType,
       packageBillingDay: packagesTable.billingDay,
@@ -266,7 +268,7 @@ export async function materializeTreatmentPlan(
     .limit(1);
   const patientName = patient?.name ?? `paciente#${plan.patientId}`;
 
-  const scheduleId = await defaultScheduleId(plan.clinicId ?? null);
+  const fallbackScheduleId = await defaultScheduleId(plan.clinicId ?? null);
 
   let appointmentsCreated = 0;
   let invoicesCreated = 0;
@@ -436,7 +438,7 @@ export async function materializeTreatmentPlan(
             endTime,
             status: "agendado" as const,
             clinicId: plan.clinicId,
-            scheduleId,
+            scheduleId: item.scheduleId ?? fallbackScheduleId,
             treatmentPlanProcedureId: item.id,
             monthlyInvoiceId: invoice.id,
             source: "presencial" as const,

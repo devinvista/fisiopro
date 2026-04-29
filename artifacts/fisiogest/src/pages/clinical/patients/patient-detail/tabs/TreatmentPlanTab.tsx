@@ -32,7 +32,6 @@ import {
 
 import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSection";
 import { ObjectivesField } from "./treatment-plan/ObjectivesField";
-import { WeeklyAgendaPreview } from "./treatment-plan/WeeklyAgendaPreview";
 import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
 import { AcceptanceScheduleEditor } from "./treatment-plan/AcceptanceScheduleEditor";
 import { AvulsoMonthlyEstimate } from "./treatment-plan/AvulsoMonthlyEstimate";
@@ -984,7 +983,7 @@ function StepAceite({
               <div>
                 <h4 className="text-sm font-bold text-slate-800">Agenda do paciente</h4>
                 <p className="text-[11px] text-slate-500">
-                  Escolha dia, horário e profissional para cada item recorrente — limite por contrato
+                  Escolha a agenda, depois os dias — sugerimos só horários realmente livres
                 </p>
               </div>
             </div>
@@ -997,12 +996,6 @@ function StepAceite({
               isAccepted={isAccepted}
             />
           </div>
-
-          <WeeklyAgendaPreview
-            planItems={planItems as any}
-            startDate={selectedPlan?.startDate ?? form.startDate ?? null}
-            durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-          />
 
           {!isStarted && (
             <div className="flex justify-end pt-2">

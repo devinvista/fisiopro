@@ -70,6 +70,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
           weekDays: treatmentPlanProceduresTable.weekDays,
           defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
           defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
+          scheduleId: treatmentPlanProceduresTable.scheduleId,
           sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
           defaultProfessionalName: usersTable.name,
           createdAt: treatmentPlanProceduresTable.createdAt,
@@ -194,7 +195,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
     const {
       procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
       unitPrice, unitMonthlyPrice, discount,
-      weekDays, defaultStartTime, defaultProfessionalId, sessionDurationMinutes,
+      weekDays, defaultStartTime, defaultProfessionalId, scheduleId, sessionDurationMinutes,
     } = req.body;
 
     if (!procedureId && !packageId) {
@@ -234,6 +235,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
         weekDays: weekDays ?? null,
         defaultStartTime: defaultStartTime ?? null,
         defaultProfessionalId: defaultProfessionalId != null ? Number(defaultProfessionalId) : null,
+        scheduleId: scheduleId != null ? Number(scheduleId) : null,
         sessionDurationMinutes: sessionDurationMinutes != null ? Number(sessionDurationMinutes) : null,
       })
       .returning();
@@ -251,7 +253,7 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     const {
       procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
       unitPrice, unitMonthlyPrice, discount,
-      weekDays, defaultStartTime, defaultProfessionalId, sessionDurationMinutes,
+      weekDays, defaultStartTime, defaultProfessionalId, scheduleId, sessionDurationMinutes,
     } = req.body;
 
     if (!(await verifyItemOwnership(id, req))) {
@@ -272,6 +274,7 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     if (weekDays !== undefined) updateData.weekDays = weekDays;
     if (defaultStartTime !== undefined) updateData.defaultStartTime = defaultStartTime;
     if (defaultProfessionalId !== undefined) updateData.defaultProfessionalId = defaultProfessionalId != null ? Number(defaultProfessionalId) : null;
+    if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;
     if (sessionDurationMinutes !== undefined) updateData.sessionDurationMinutes = sessionDurationMinutes != null ? Number(sessionDurationMinutes) : null;
 
     const [updated] = await db

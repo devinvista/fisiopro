@@ -213,6 +213,11 @@ export const treatmentPlanProceduresTable = pgTable("treatment_plan_procedures",
   defaultStartTime: text("default_start_time"),
   // Profissional padrão das consultas materializadas (FK lógica para users.id).
   defaultProfessionalId: integer("default_professional_id"),
+  // Agenda (calendário/sala/profissional) onde as consultas materializadas
+  // serão criadas. NULL = usar a agenda padrão da clínica no materialize.
+  // FK lógica para schedules.id; usamos integer simples (sem references) para
+  // evitar dependência circular com lib/db/src/schema/schedules.ts.
+  scheduleId: integer("schedule_id"),
   // Duração de cada sessão em minutos (define endTime). Default 60.
   sessionDurationMinutes: integer("session_duration_minutes"),
   priority: integer("priority").notNull().default(1),
