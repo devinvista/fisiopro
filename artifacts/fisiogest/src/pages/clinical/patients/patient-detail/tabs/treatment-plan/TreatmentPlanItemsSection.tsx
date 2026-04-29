@@ -28,12 +28,14 @@ export function TreatmentPlanItemsSection({
   planItemsKey,
   planDurationMonths,
   planStartDate,
+  isAccepted = false,
 }: {
   planId: number | undefined;
   planItems: PlanProcedureItem[];
   planItemsKey: string[] | null;
   planDurationMonths?: number | null;
   planStartDate?: string | null;
+  isAccepted?: boolean;
 }) {
   const planMonths = Math.max(1, Number(planDurationMonths ?? 12));
   const { toast } = useToast();
@@ -219,8 +221,13 @@ export function TreatmentPlanItemsSection({
         <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 min-w-0">
           <Package className="w-4 h-4 text-primary shrink-0" />
           <span className="truncate">Procedimentos e Pacotes do Plano</span>
+          {isAccepted && (
+            <Badge variant="outline" className="ml-1 gap-1 border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] px-1.5 py-0">
+              <Lock className="h-3 w-3" /> Itens congelados
+            </Badge>
+          )}
         </p>
-        {addMode === null && editingId === null && (
+        {addMode === null && editingId === null && !isAccepted && (
           <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-1.5">
             <Button size="sm" variant="outline" className="w-full sm:w-auto h-9 rounded-xl text-xs gap-1.5 px-3" onClick={() => { setAddMode("package"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
               <Plus className="h-3.5 w-3.5 shrink-0" /> Pacote
@@ -232,8 +239,21 @@ export function TreatmentPlanItemsSection({
         )}
       </div>
 
+      {/* Banner pós-aceite — itens viraram "venda formal" e ficaram congelados */}
+      {isAccepted && (
+        <div className="flex items-start gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <Lock className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs text-emerald-800 leading-relaxed">
+            <strong className="font-semibold">Plano já aceito —</strong>{" "}
+            os procedimentos e valores estão congelados como venda formal e não podem ser
+            adicionados, removidos ou alterados aqui. Para mudar o escopo comercial, use
+            a <strong>renegociação</strong>: ela encerra este plano e cria uma nova versão.
+          </div>
+        </div>
+      )}
+
       {/* Add form */}
-      {addMode !== null && (
+      {addMode !== null && !isAccepted && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
           <p className="text-xs font-semibold text-slate-600">
             {addMode === "package" ? "➕ Adicionar pacote ao plano" : "➕ Adicionar procedimento avulso"}
@@ -530,7 +550,7 @@ export function TreatmentPlanItemsSection({
                     )}
                   </div>
 
-                  {!isEditing && (
+                  {!isEditing && !isAccepted && (
                     <div className="flex gap-0.5 shrink-0">
                       <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-blue-600" onClick={() => startEdit(item)}>
                         <Pencil className="h-3 w-3" />

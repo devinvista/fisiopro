@@ -31,6 +31,48 @@ async function verifyItemOwnership(itemId: number, req: AuthRequest): Promise<bo
   return row?.clinicId === req.clinicId;
 }
 
+// Sprint 2 — após o aceite, o "carrinho" do plano vira venda formal e fica
+// imutável em campos comerciais. Itens só podem mudar campos operacionais
+// (agenda/profissional/notas). Adição/remoção de itens fica bloqueada — para
+// isso o usuário deve usar a renegociação (que cria nova versão do plano).
+async function getPlanAcceptedAt(planId: number): Promise<Date | null> {
+  const [row] = await db
+    .select({ acceptedAt: treatmentPlansTable.acceptedAt })
+    .from(treatmentPlansTable)
+    .where(eq(treatmentPlansTable.id, planId))
+    .limit(1);
+  return row?.acceptedAt ?? null;
+}
+
+async function getItemAndPlanAcceptedAt(
+  itemId: number,
+): Promise<{ item: typeof treatmentPlanProceduresTable.$inferSelect; acceptedAt: Date | null } | null> {
+  const [row] = await db
+    .select({
+      item: treatmentPlanProceduresTable,
+      acceptedAt: treatmentPlansTable.acceptedAt,
+    })
+    .from(treatmentPlanProceduresTable)
+    .innerJoin(treatmentPlansTable, eq(treatmentPlanProceduresTable.treatmentPlanId, treatmentPlansTable.id))
+    .where(eq(treatmentPlanProceduresTable.id, itemId))
+    .limit(1);
+  if (!row) return null;
+  return { item: row.item, acceptedAt: row.acceptedAt };
+}
+
+function fmtAcceptedDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Comparação tolerante para detectar mudança real (number↔string, ""↔null).
+function normalizeForCompare(x: unknown): string | null {
+  if (x === null || x === undefined || x === "") return null;
+  return String(x);
+}
+function valueChanged(prev: unknown, next: unknown): boolean {
+  return normalizeForCompare(prev) !== normalizeForCompare(next);
+}
+
 router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res) => {
   try {
     const planId = parseInt(req.params.planId as string);
@@ -209,7 +251,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
 
     // Verify plan exists before ownership check to give a clear 404
     const [planExists] = await db
-      .select({ id: treatmentPlansTable.id })
+      .select({ id: treatmentPlansTable.id, acceptedAt: treatmentPlansTable.acceptedAt })
       .from(treatmentPlansTable)
       .where(eq(treatmentPlansTable.id, planId))
       .limit(1);
@@ -220,6 +262,17 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
 
     if (!(await verifyPlanOwnership(planId, req))) {
       res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    // Sprint 2 — bloqueio pós-aceite: o "carrinho" do plano fica congelado.
+    if (planExists.acceptedAt) {
+      res.status(409).json({
+        error: "plan_already_accepted",
+        message:
+          `Plano já aceito em ${fmtAcceptedDate(planExists.acceptedAt)}. ` +
+          `Não é possível adicionar novos procedimentos. Use a renegociação para criar uma nova versão do plano.`,
+      });
       return;
     }
 
@@ -267,14 +320,83 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
       return;
     }
 
-    const updateData: any = {};
-    if (procedureId !== undefined) updateData.procedureId = procedureId ? parseInt(procedureId) : null;
-    if (packageId !== undefined) updateData.packageId = packageId ? parseInt(packageId) : null;
-    if (sessionsPerWeek !== undefined) updateData.sessionsPerWeek = parseInt(sessionsPerWeek);
-    if (totalSessions !== undefined) updateData.totalSessions = totalSessions ? parseInt(totalSessions) : null;
-    if (unitPrice !== undefined) updateData.unitPrice = unitPrice != null ? String(unitPrice) : null;
-    if (unitMonthlyPrice !== undefined) updateData.unitMonthlyPrice = unitMonthlyPrice != null ? String(unitMonthlyPrice) : null;
-    if (discount !== undefined) updateData.discount = String(discount ?? 0);
+    // Sprint 2 — após aceite, só campos operacionais (agenda/profissional/notas)
+    // continuam editáveis. Mudar identidade do item ou valores comerciais
+    // exige renegociação. No-ops (mesmo valor) são silenciosamente aceitos
+    // para o frontend poder reenviar o objeto inteiro sem ser bloqueado.
+    const ctx = await getItemAndPlanAcceptedAt(id);
+    if (!ctx) {
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+    const { item: existing, acceptedAt } = ctx;
+    const isAccepted = !!acceptedAt;
+
+    const updateData: Record<string, unknown> = {};
+
+    // Helper que aplica a regra de bloqueio para campos comerciais:
+    // se o plano está aceito e o valor mudou de fato, rejeita; se for igual,
+    // ignora; se não está aceito, simplesmente aplica a mudança.
+    const setLocked = (
+      key: keyof typeof treatmentPlanProceduresTable.$inferSelect,
+      incoming: unknown,
+      label: string,
+    ): { reject?: { error: string; message: string } } => {
+      if (isAccepted && valueChanged(existing[key], incoming)) {
+        return {
+          reject: {
+            error: "plan_already_accepted",
+            message:
+              `Plano já aceito em ${fmtAcceptedDate(acceptedAt!)}. ` +
+              `Não é possível alterar "${label}" — use a renegociação para criar uma nova versão do plano.`,
+          },
+        };
+      }
+      if (!isAccepted || valueChanged(existing[key], incoming)) {
+        updateData[key] = incoming;
+      }
+      return {};
+    };
+
+    // Campos comerciais / de identidade do item — bloqueados após aceite.
+    if (procedureId !== undefined) {
+      const next = procedureId ? parseInt(procedureId) : null;
+      const r = setLocked("procedureId", next, "procedimento");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (packageId !== undefined) {
+      const next = packageId ? parseInt(packageId) : null;
+      const r = setLocked("packageId", next, "pacote");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (sessionsPerWeek !== undefined) {
+      const next = parseInt(sessionsPerWeek);
+      const r = setLocked("sessionsPerWeek", next, "sessões por semana");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (totalSessions !== undefined) {
+      const next = totalSessions ? parseInt(totalSessions) : null;
+      const r = setLocked("totalSessions", next, "total de sessões");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (unitPrice !== undefined) {
+      const next = unitPrice != null ? String(unitPrice) : null;
+      const r = setLocked("unitPrice", next, "valor unitário");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (unitMonthlyPrice !== undefined) {
+      const next = unitMonthlyPrice != null ? String(unitMonthlyPrice) : null;
+      const r = setLocked("unitMonthlyPrice", next, "valor mensal");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+    if (discount !== undefined) {
+      const next = String(discount ?? 0);
+      const r = setLocked("discount", next, "desconto");
+      if (r.reject) { res.status(409).json(r.reject); return; }
+    }
+
+    // Campos operacionais — sempre editáveis (inclusive pós-aceite, usados
+    // pelo AcceptanceScheduleEditor para configurar a materialização).
     if (priority !== undefined) updateData.priority = parseInt(priority);
     if (notes !== undefined) updateData.notes = notes;
     if (weekDays !== undefined) updateData.weekDays = weekDays;
@@ -283,6 +405,11 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;
     // Duração da consulta vem SEMPRE do procedimento vinculado — sem
     // override por item. Se algum cliente legado mandar o campo, ignora.
+
+    if (Object.keys(updateData).length === 0) {
+      res.json(existing);
+      return;
+    }
 
     const [updated] = await db
       .update(treatmentPlanProceduresTable)
@@ -307,6 +434,23 @@ router.delete("/:id", requirePermission("medical.write"), async (req: AuthReques
 
     if (!(await verifyItemOwnership(id, req))) {
       res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    // Sprint 2 — bloqueio pós-aceite: itens vendidos não podem ser removidos
+    // (impacto contábil/financeiro). Use renegociação para refazer o plano.
+    const ctx = await getItemAndPlanAcceptedAt(id);
+    if (!ctx) {
+      res.status(404).json({ error: "Not Found" });
+      return;
+    }
+    if (ctx.acceptedAt) {
+      res.status(409).json({
+        error: "plan_already_accepted",
+        message:
+          `Plano já aceito em ${fmtAcceptedDate(ctx.acceptedAt)}. ` +
+          `Não é possível remover procedimentos. Use a renegociação para criar uma nova versão do plano.`,
+      });
       return;
     }
 
