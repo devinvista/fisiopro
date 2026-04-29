@@ -2,6 +2,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { PatientBasic, ClinicInfo, PlanProcedureItem } from "../../types";
 import { todayBRTDate } from "../format";
+import { plannedSessionsForItem } from "../sessionCount";
 import { buildClinicHeaderHTML, fmtCurrency } from "./_shared";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -79,12 +80,11 @@ export function generatePlanHTML(
 
   // ── Métricas de progresso ─────────────────────────────────────────────────
   const planMonths = Math.max(1, Number(plan.durationMonths ?? 12));
-  const sumPlannedFromItems = planItems.reduce((acc, it) => {
-    const isMensal = it.packageType === "mensal";
-    const isAvulso = !it.packageId;
-    const planned = it.totalSessions ?? (isMensal ? (it.sessionsPerWeek ?? 1) * 4 * planMonths : isAvulso ? 1 : 0);
-    return acc + (planned || 0);
-  }, 0);
+  const planStart = plan.startDate ?? null;
+  const sumPlannedFromItems = planItems.reduce(
+    (acc, it) => acc + plannedSessionsForItem(it, planStart, planMonths),
+    0,
+  );
   const estimatedFromPlan = plan.estimatedSessions ? Number(plan.estimatedSessions) : 0;
   const totalEstimated = sumPlannedFromItems > 0 ? sumPlannedFromItems : estimatedFromPlan;
   const pct = totalEstimated > 0 ? Math.min(100, (totalCompleted / totalEstimated) * 100) : 0;
@@ -159,12 +159,12 @@ export function generatePlanHTML(
     const gross = isMensal ? Number(item.monthlyPrice ?? price) : isAvulso ? price * (item.totalSessions ?? 1) : price;
     const net = Math.max(0, gross - disc);
     const used = item.usedSessions ?? 0;
-    const planned = item.totalSessions ?? (isMensal ? (item.sessionsPerWeek ?? 1) * 4 * planMonths : 0);
+    const planned = plannedSessionsForItem(item, planStart, planMonths);
     const pctItem = planned > 0 ? Math.min(100, (used / planned) * 100) : 0;
     const badge = isMensal ? "Mensal" : isAvulso ? "Avulso" : "Pacote";
     const label = item.packageName ?? item.procedureName ?? "—";
     const sessInfo = isMensal
-      ? `${item.sessionsPerWeek}x/sem · ${(item.sessionsPerWeek ?? 1) * 4 * planMonths} sessões em ${planMonths} ${planMonths === 1 ? "mês" : "meses"}`
+      ? `${item.sessionsPerWeek}x/sem · ${planned} sessões em ${planMonths} ${planMonths === 1 ? "mês" : "meses"}`
       : item.totalSessions ? `${item.totalSessions} sessões · ${item.sessionsPerWeek ?? 1}x/sem` : "—";
     const valueInfo = isMensal
       ? `${fmtCurrency(net)}<span style="font-size:8pt">/mês</span>${disc > 0 ? `<br/><span style="color:#16a34a;font-size:8pt">– desc. ${fmtCurrency(disc)}</span>` : ""}`

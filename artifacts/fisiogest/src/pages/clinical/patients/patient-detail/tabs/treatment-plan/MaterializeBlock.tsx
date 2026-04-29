@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/lib/toast";
 import { apiSendJson } from "@/lib/api";
+import { countRecurringSessions } from "../../utils/sessionCount";
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -61,14 +62,10 @@ export function MaterializeBlock({
   });
   const hasMissingSchedule = itemsMissingSchedule.length > 0;
 
-  const totalApptsEstimate = monthlyItems.reduce((sum, i) => {
-    let weekDaysCount = 0;
-    try {
-      const wd = i.weekDays ? (typeof i.weekDays === "string" ? JSON.parse(i.weekDays) : i.weekDays) : [];
-      weekDaysCount = Array.isArray(wd) ? wd.length : 0;
-    } catch { weekDaysCount = 0; }
-    return sum + weekDaysCount * 4 * durationMonths;
-  }, 0);
+  const totalApptsEstimate = monthlyItems.reduce(
+    (sum, i) => sum + countRecurringSessions(startDate, durationMonths, i.weekDays),
+    0,
+  );
 
   async function doMaterialize() {
     setBusy("materialize");

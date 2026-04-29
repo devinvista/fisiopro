@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { countRecurringSessions } from "../../utils/sessionCount";
 
 type PlanItem = {
   id: number;
@@ -111,12 +112,12 @@ export function WeeklyAgendaPreview({ planItems, startDate, durationMonths }: Pr
 
   const totalEstimate = useMemo(() => {
     const months = durationMonths ?? 12;
-    const slotsPerWeek = recurringItems.reduce(
-      (s, i) => s + (Array.isArray(i.weekDays) ? i.weekDays.length : 0),
+    const start = startDate ?? null;
+    return recurringItems.reduce(
+      (s, i) => s + countRecurringSessions(start, months, i.weekDays as string[]),
       0,
     );
-    return slotsPerWeek * 4 * months;
-  }, [recurringItems, durationMonths]);
+  }, [recurringItems, durationMonths, startDate]);
 
   if (recurringItems.length === 0) {
     return (

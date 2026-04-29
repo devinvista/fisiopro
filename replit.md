@@ -746,12 +746,23 @@ da fatura mensal**.
   somar a coluna "mensalidade" no `TOTAL ESTIMADO` — esse total já
   vem de `getPlanItemsTotal`, que multiplica corretamente
   mensal × meses e avulso × sessões.
-* **Total de sessões para itens `mensal`:** sempre o total contratado
-  do plano = `sessionsPerWeek × 4 × planDurationMonths` (não apenas
-  mensal). Aplicado em (29/04/2026):
-  - `TreatmentPlanItemsSection.tsx` — recebe `planDurationMonths` como
-    prop, usa em `planned` e em `totalSessions` agregado.
+* **Total de sessões para itens `mensal`:** sempre o **total real
+  contratado** do plano — contagem dia-a-dia das ocorrências dos
+  `weekDays` no intervalo `[startDate, startDate + durationMonths)`,
+  espelhando o backend `enumerateDates` em
+  `treatment-plans.materialization.ts`. Não usar a aproximação
+  `sessionsPerWeek × 4 × meses` (essa só é fallback quando o item
+  ainda não tem `weekDays` configurados). Helper compartilhado em
+  `patient-detail/utils/sessionCount.ts` (`countRecurringSessions`,
+  `plannedSessionsForItem`). Aplicado em (29/04/2026):
+  - `TreatmentPlanItemsSection.tsx` — recebe `planStartDate` e
+    `planDurationMonths`, usa o helper em `planned` por item e no
+    `totalSessions` agregado.
   - `utils/print/plan.ts` — `generatePlanHTML` aceita
-    `plan.durationMonths`, usa em `sumPlannedFromItems` e no `planned`
-    da barra de progresso de cada item; rótulo do print agora mostra
-    "Nx/sem · M sessões em K meses".
+    `plan.startDate` + `plan.durationMonths`; usa o helper em
+    `sumPlannedFromItems` e no `planned` da barra de progresso de
+    cada linha; rótulo "Nx/sem · M sessões em K meses".
+  - `WeeklyAgendaPreview.tsx` e `MaterializeBlock.tsx` — também usam
+    `countRecurringSessions` para badge "consultas no total" e
+    "Consultas a gerar", garantindo consistência com o que será
+    materializado.

@@ -64,4 +64,8 @@ export interface PlanProcedureItem {
   unitPrice?: string | null;
   discount?: string | null;
   usedSessions?: number;
+  weekDays?: string | string[] | null;
+  defaultStartTime?: string | null;
+  defaultProfessionalId?: number | null;
+  defaultProfessionalName?: string | null;
 }
