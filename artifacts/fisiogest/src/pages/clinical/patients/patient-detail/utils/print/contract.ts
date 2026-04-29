@@ -51,15 +51,19 @@ export function generateContractHTML(
   const itemRows = planItems.map((item) => {
     const isMensal = item.packageType === "mensal";
     const isAvulso = !item.packageId;
-    const sessionCount = item.totalSessions ?? 0;
+    const sessionCount = item.totalSessions ?? (isAvulso ? 1 : 0);
     const disc = Number(item.discount ?? 0);
     const unitP = Number(item.price ?? 0);
-    const unitM = Number(item.monthlyPrice ?? 0);
+    // Para itens mensais, usar `monthlyPrice` quando disponível e cair de
+    // volta para `price` (mesmo comportamento do `calcItemTotal` da UI viva
+    // em `TreatmentPlanItemsSection.tsx`). Sem o fallback, itens cuja
+    // mensalidade vem do campo `unitPrice` apareciam como R$ 0,00.
+    const unitM = isMensal ? Number(item.monthlyPrice ?? item.price ?? 0) : 0;
 
     const gross = isMensal
       ? unitM
       : isAvulso
-        ? unitP * (sessionCount || 1)
+        ? unitP * sessionCount
         : unitP;
     const net = Math.max(0, gross - disc);
 
@@ -79,7 +83,7 @@ export function generateContractHTML(
 
     const priceDetail = isMensal
       ? `${fmtCurrency(unitM)}/mês`
-      : isAvulso && sessionCount > 0
+      : isAvulso && sessionCount > 1
         ? `${fmtCurrency(unitP)} × ${sessionCount} sessões`
         : fmtCurrency(unitP);
     const discDetail = disc > 0 ? `<br/><span style="color:#16a34a;font-size:8pt">– Desconto: ${fmtCurrency(disc)}</span>` : "";
@@ -94,7 +98,13 @@ export function generateContractHTML(
     </tr>`;
   }).join("");
 
-  const grandTotal = totalSessoesVal + totalMensalVal;
+  // Total apresentado no rodapé:
+  // - Se há somente itens à vista (sessões/pacotes), o total é o investimento único.
+  // - Se há somente mensalidade, o total é a recorrência mensal (sem soma à vista).
+  // - Se há ambos, mostramos o investimento à vista e a mensalidade separadamente
+  //   para não dar a impressão (errada) de que a mensalidade já está embutida no total.
+  const hasMensal = totalMensalVal > 0;
+  const hasSessoes = totalSessoesVal > 0;
 
   const contratadaCouncil = clinicCrefito;
 
@@ -159,9 +169,15 @@ export function generateContractHTML(
         <tbody>${itemRows}</tbody>
         <tfoot>
           ${totalDisconto > 0 ? `<tr><td colspan="4" style="text-align:right;color:#16a34a;font-weight:600">Total de descontos concedidos:</td><td style="text-align:right;color:#16a34a;font-weight:600">– ${fmtCurrency(totalDisconto)}</td></tr>` : ""}
-          ${totalSessoesVal > 0 ? `<tr><td colspan="4" style="text-align:right;font-weight:600">Subtotal (sessões/pacotes):</td><td style="text-align:right;font-weight:600">${fmtCurrency(totalSessoesVal)}</td></tr>` : ""}
-          ${totalMensalVal > 0 ? `<tr><td colspan="4" style="text-align:right;font-weight:600">Mensalidade recorrente:</td><td style="text-align:right;font-weight:600">${fmtCurrency(totalMensalVal)}/mês</td></tr>` : ""}
-          <tr style="background:#eff6ff"><td colspan="4" style="text-align:right;font-weight:700;color:#1e40af;font-size:10pt">TOTAL ESTIMADO DO PLANO:</td><td style="text-align:right;font-weight:700;color:#1e40af;font-size:11pt">${fmtCurrency(grandTotal)}${totalMensalVal > 0 && totalSessoesVal > 0 ? `<br/><span style="font-size:8pt;font-weight:400">+ ${fmtCurrency(totalMensalVal)}/mês</span>` : ""}</td></tr>
+          ${hasSessoes ? `<tr><td colspan="4" style="text-align:right;font-weight:600">Subtotal (sessões/pacotes):</td><td style="text-align:right;font-weight:600">${fmtCurrency(totalSessoesVal)}</td></tr>` : ""}
+          ${hasMensal ? `<tr><td colspan="4" style="text-align:right;font-weight:600">Mensalidade recorrente:</td><td style="text-align:right;font-weight:600">${fmtCurrency(totalMensalVal)}/mês</td></tr>` : ""}
+          ${
+            hasSessoes && hasMensal
+              ? `<tr style="background:#eff6ff"><td colspan="4" style="text-align:right;font-weight:700;color:#1e40af;font-size:10pt">TOTAL ESTIMADO DO PLANO:</td><td style="text-align:right;font-weight:700;color:#1e40af;font-size:11pt">${fmtCurrency(totalSessoesVal)} <span style="font-size:9pt;font-weight:600">à vista</span><br/><span style="font-size:9pt;font-weight:600">+ ${fmtCurrency(totalMensalVal)}/mês recorrente</span></td></tr>`
+              : hasMensal
+                ? `<tr style="background:#eff6ff"><td colspan="4" style="text-align:right;font-weight:700;color:#1e40af;font-size:10pt">TOTAL ESTIMADO DO PLANO:</td><td style="text-align:right;font-weight:700;color:#1e40af;font-size:11pt">${fmtCurrency(totalMensalVal)}<span style="font-size:9pt;font-weight:600">/mês</span></td></tr>`
+                : `<tr style="background:#eff6ff"><td colspan="4" style="text-align:right;font-weight:700;color:#1e40af;font-size:10pt">TOTAL ESTIMADO DO PLANO:</td><td style="text-align:right;font-weight:700;color:#1e40af;font-size:11pt">${fmtCurrency(totalSessoesVal)}</td></tr>`
+          }
         </tfoot>
       </table>
       ` : "<p>Nenhum serviço vinculado ao plano.</p>"}
