@@ -145,7 +145,6 @@ Substituiu a materialização antecipada de 12 meses pela geração mês a mês 
 - **Job:** `monthlyPlanBilling` registrado em `scheduler/index.ts` com cron `30 9 * * *` (06:30 BRT). Para cada item `recorrenteMensal` de plano `vigente`/`ativo`: gera o mês corrente em **D-5 do `billingDay`** (clamp para o último dia do mês quando `billingDay` excede) e faz **gap-fill** de meses passados ainda ausentes em ordem cronológica. Re-vincula appointments daquele mês cujo `monthlyInvoiceId` estava nulo.
 - **Roll-up de avulsos no mês:** o bloco `creditoAReceber` em `appointments.billing.ts` agora seta `parent_record_id` para a `faturaPlano` do mês de competência da sessão sempre que `priceResolution.treatmentPlanId` está definido. Quando a fatura mensal for paga, o handler de pagamento cascateará para os filhos (Sprint 4 do refator).
 - **Log:** linha em `billing_run_logs` com `triggered_by = 'monthlyPlanBilling:<scheduler|manual>'` (o schema é compartilhado com os demais jobs e não tem coluna para `jobName`/`details`).
-- **Limpeza de legado:** `artifacts/api-server/src/scripts/cleanup-future-faturaplano.ts` (`--dry-run` por padrão; `--apply`, `--plan=<id>`, `--clinic=<id>`, `--month=YYYY-MM`). Remove `faturaPlano` `pendente` com `recognized_entry_id IS NULL` e `plan_month_ref > <mês de corte>` (default mês corrente em BRT) e zera `appointments.monthlyInvoiceId` antes da exclusão.
 - **Testes:** 12 casos unitários em `monthly-plan-billing.service.test.ts` cobrem `iterMonths` (virada de ano, intervalo invertido, range longo) e `isMonthDue` (gap-fill, mês corrente com tolerância, billingDay no início do mês, clamp em fevereiro, `tolerance=0`).
 
 #### Cascade de pagamento de fatura agrupadora (Sprint 4 Refactor — abr/2026)
@@ -713,10 +712,8 @@ da fatura mensal**.
   (2.1.1) via `postCashAdvance`. Receita só é reconhecida no consumo.
 * **Idempotência:** `financial_records.recognizedEntryId` é o sentinel
   — chamadas repetidas para a mesma fatura são no-op.
-* **Migração one-shot** executada em 28/04/2026:
-  `src/scripts/reverse-premature-monthly-revenue.ts` estornou ~200
-  faturas (R$ 39.210) que tinham receita reconhecida pela regra
-  antiga sem nenhuma sessão confirmada do mês.
+* **Migração one-shot** já consumida e removida do repositório
+  (29/04/2026), junto com o legado de planos de tratamento.
 
 ### Notas técnicas
 
