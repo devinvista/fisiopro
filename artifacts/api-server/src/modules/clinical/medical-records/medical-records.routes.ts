@@ -239,31 +239,12 @@ router.post(
   }),
 );
 
-// ─── Materialização do plano (gera consultas + faturas mensais) ──────────────
-router.post(
-  "/treatment-plans/:planId/materialize",
-  requirePermission("medical.write"),
-  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
-    const planId = parseInt(req.params.planId);
-    const { force, durationMonths, startDate } = (req.body ?? {}) as {
-      force?: boolean; durationMonths?: number; startDate?: string;
-    };
-    const { materializeTreatmentPlan } = await import("./treatment-plans.materialization.js");
-    const result = await materializeTreatmentPlan(planId, { force, durationMonths, startDate });
-    res.json(result);
-  }),
-);
-
-router.delete(
-  "/treatment-plans/:planId/materialize",
-  requirePermission("medical.write"),
-  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
-    const planId = parseInt(req.params.planId);
-    const { dematerializeTreatmentPlan } = await import("./treatment-plans.materialization.js");
-    const result = await dematerializeTreatmentPlan(planId);
-    res.json(result);
-  }),
-);
+// ─── Materialização do plano ─────────────────────────────────────────────────
+// Os endpoints POST/DELETE `/treatment-plans/:planId/materialize` agora vivem
+// em `treatment-plans-materialize.routes.ts`, montados em
+// `/api/treatment-plans/:planId/materialize` (sem o prefixo `/patients/:id`),
+// alinhando com o caminho usado pelo frontend e pelos demais endpoints de
+// `/treatment-plans/:planId`.
 
 // Sprint 4 — Fechamento mensal de itens avulsos do plano.
 // Body opcional `{ ref: 'YYYY-MM' }`; querystring `?ref=YYYY-MM`; padrão: mês atual.

@@ -23,6 +23,7 @@ import packagesRouter from "./catalog/packages/packages.routes.js";
 import patientPackagesRouter from "./catalog/patient-packages/patient-packages.routes.js";
 import treatmentPlanProceduresRouter from "./catalog/treatment-plan-procedures/treatment-plan-procedures.routes.js";
 import treatmentPlanInstallmentsRouter from "./financial/records/treatment-plan-installments.routes.js";
+import treatmentPlansMaterializeRouter from "./clinical/medical-records/treatment-plans-materialize.routes.js";
 
 // Financial domain
 import financialRouter from "./financial/financial.routes.js";
@@ -88,6 +89,7 @@ router.use("/procedures", proceduresRouter);
 router.use("/packages", packagesRouter);
 router.use("/treatment-plans/:planId/procedures", treatmentPlanProceduresRouter);
 router.use("/treatment-plans/:planId/installments", treatmentPlanInstallmentsRouter);
+router.use("/treatment-plans/:planId", treatmentPlansMaterializeRouter);
 
 // Financial
 router.use("/financial", financialRouter);
