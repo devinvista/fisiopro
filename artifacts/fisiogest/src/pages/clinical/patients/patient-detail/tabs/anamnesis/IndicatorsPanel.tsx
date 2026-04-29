@@ -352,7 +352,7 @@ export function IndicatorsPanel({ patientId }: { patientId: number }) {
 
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Perimetria (cm)</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <MeasField label="Cintura" value={mf("waist")} onChange={sf("waist")} />
                 <MeasField label="Abdômen" value={mf("abdomen")} onChange={sf("abdomen")} />
                 <MeasField label="Quadril" value={mf("hips")} onChange={sf("hips")} />

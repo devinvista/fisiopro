@@ -196,8 +196,15 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
           </div>
         )}
 
-        {/* ── Template Selector ── */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        {/* ── Template Selector ──
+            Responsividade: o tab vive dentro de `lg:col-span-2` da página de
+            paciente, então a largura útil ao final é ~2/3 da página. Forçar 4
+            colunas a partir de `lg` (1024 px) deixa cada card com ~120-180 px
+            e a descrição quebra em 5 linhas. Por isso:
+              - 4 templates: 1 col → 2 cols (sm) → 4 cols só em 2xl (≥1536 px)
+              - 3 templates: 1 col → 2 cols (sm) → 3 cols em xl (≥1280 px)
+              - 2 templates: 1 col → 2 cols (sm) */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
             Tipo de Atendimento
             {visibleTemplates.length < TEMPLATE_OPTIONS.length && (
@@ -206,7 +213,17 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
               </span>
             )}
           </p>
-          <div className={`grid grid-cols-1 sm:grid-cols-2 ${visibleTemplates.length >= 3 ? "lg:grid-cols-4" : "lg:grid-cols-3"} gap-3`}>
+          <div
+            className={`grid gap-2.5 sm:gap-3 ${
+              visibleTemplates.length >= 4
+                ? "grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4"
+                : visibleTemplates.length === 3
+                ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
+                : visibleTemplates.length === 2
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-1"
+            }`}
+          >
             {visibleTemplates.map(opt => {
               const isActive = template === opt.value;
               const isFilled = filledTypes.has(opt.value);
@@ -223,25 +240,42 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
                 pilates: "bg-teal-100 text-teal-600",
               };
               return (
-                <button key={opt.value} type="button" onClick={() => setTemplate(opt.value)}
-                  className={`relative flex items-start gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                    isActive ? activeStyles[opt.value] : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
-                  }`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    isActive ? iconStyles[opt.value] : "bg-slate-100 text-slate-500"
-                  }`}>{opt.icon}</div>
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setTemplate(opt.value)}
+                  aria-pressed={isActive}
+                  aria-label={`${opt.label}${isFilled ? " (preenchida)" : ""}`}
+                  className={`relative flex items-start gap-2.5 p-2.5 sm:p-3 pr-7 sm:pr-8 rounded-xl border-2 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                    isActive
+                      ? activeStyles[opt.value]
+                      : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? iconStyles[opt.value] : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {opt.icon}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="text-sm font-bold leading-tight">{opt.label}</p>
+                      <p className="text-sm font-bold leading-tight break-words">{opt.label}</p>
                       {isFilled && !isActive && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">
-                          <Check className="w-2.5 h-2.5" />preenchida
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 whitespace-nowrap">
+                          <Check className="w-2.5 h-2.5" />
+                          preenchida
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] mt-0.5 opacity-70">{opt.desc}</p>
+                    <p className="text-[11px] mt-0.5 opacity-70 leading-snug line-clamp-2 break-words">
+                      {opt.desc}
+                    </p>
                   </div>
-                  {isActive && <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-current opacity-60" />}
+                  {isActive && (
+                    <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-current opacity-60" />
+                  )}
                 </button>
               );
             })}
