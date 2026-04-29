@@ -294,6 +294,34 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const isAccepted = !!selectedPlan?.acceptedAt;
   const isStarted = !!selectedPlan?.materializedAt;
 
+  // Contagem de itens com agenda completa (agenda + dia(s) + horário)
+  const aceiteStats = useMemo(() => {
+    if (planItems.length === 0) return { configured: 0, total: 0 };
+    let configured = 0;
+    for (const item of planItems as Array<PlanProcedureItem & {
+      weekDays?: string | string[] | null;
+      defaultStartTime?: string | null;
+      scheduleId?: number | null;
+    }>) {
+      let weekDaysCount = 0;
+      const wdRaw = item.weekDays;
+      if (Array.isArray(wdRaw)) {
+        weekDaysCount = wdRaw.length;
+      } else if (typeof wdRaw === "string" && wdRaw.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(wdRaw);
+          weekDaysCount = Array.isArray(parsed) ? parsed.length : 0;
+        } catch {
+          weekDaysCount = wdRaw.split(",").filter(Boolean).length;
+        }
+      }
+      if (item.scheduleId && weekDaysCount > 0 && item.defaultStartTime) {
+        configured++;
+      }
+    }
+    return { configured, total: planItems.length };
+  }, [planItems]);
+
   // Auto-avança visualmente se etapa atual ficou inválida
   useEffect(() => {
     if (activeStep === "aceite" && !hasItems) setActiveStep("itens");
@@ -388,6 +416,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         hasItems={hasItems}
         isAccepted={isAccepted}
         isStarted={isStarted}
+        aceiteStats={aceiteStats}
         onSelect={setActiveStep}
       />
 

@@ -22,6 +22,7 @@ interface Props {
   hasItems: boolean;
   isAccepted: boolean;
   isStarted: boolean;
+  aceiteStats?: { configured: number; total: number };
   onSelect: (step: PlanStepKey) => void;
 }
 
@@ -73,7 +74,14 @@ const styleByStatus: Record<PlanStepStatus, { circle: string; label: string; lin
   },
 };
 
-export function PlanStepper({ current, hasItems, isAccepted, isStarted, onSelect }: Props) {
+export function PlanStepper({ current, hasItems, isAccepted, isStarted, aceiteStats, onSelect }: Props) {
+  const showAceiteCounter =
+    !!aceiteStats && aceiteStats.total > 0 && hasItems && !isStarted;
+  const aceiteAllSet =
+    showAceiteCounter && aceiteStats!.configured === aceiteStats!.total;
+  const aceitePending = showAceiteCounter
+    ? aceiteStats!.total - aceiteStats!.configured
+    : 0;
   return (
     <div
       className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
@@ -122,10 +130,47 @@ export function PlanStepper({ current, hasItems, isAccepted, isStarted, onSelect
                   )}
                 </span>
                 <span className="min-w-0 hidden sm:flex flex-col leading-tight">
-                  <span className={`text-xs ${styles.label}`}>{step.label}</span>
-                  <span className="text-[10px] text-slate-400 truncate">{step.hint}</span>
+                  <span className={`text-xs ${styles.label} flex items-center gap-1.5`}>
+                    {step.label}
+                    {step.key === "aceite" && showAceiteCounter && (
+                      <span
+                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                          aceiteAllSet
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border border-amber-200"
+                        }`}
+                        aria-label={
+                          aceiteAllSet
+                            ? `Todas as ${aceiteStats!.total} agendas definidas`
+                            : `${aceiteStats!.configured} de ${aceiteStats!.total} agendas definidas`
+                        }
+                      >
+                        {aceiteStats!.configured}/{aceiteStats!.total}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate">
+                    {step.key === "aceite" && showAceiteCounter
+                      ? aceiteAllSet
+                        ? "Todas as agendas definidas"
+                        : `${aceitePending} pendente${aceitePending > 1 ? "s" : ""}`
+                      : step.hint}
+                  </span>
                 </span>
-                <span className={`sm:hidden text-xs truncate ${styles.label}`}>{step.label}</span>
+                <span className={`sm:hidden text-xs truncate ${styles.label} flex items-center gap-1.5`}>
+                  {step.label}
+                  {step.key === "aceite" && showAceiteCounter && (
+                    <span
+                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                        aceiteAllSet
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                      }`}
+                    >
+                      {aceiteStats!.configured}/{aceiteStats!.total}
+                    </span>
+                  )}
+                </span>
               </button>
               {!isLast && (
                 <span
