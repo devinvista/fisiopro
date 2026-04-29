@@ -81,6 +81,7 @@ import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSe
 import { ObjectivesField } from "./treatment-plan/ObjectivesField";
 import { WeeklyAgendaPreview } from "./treatment-plan/WeeklyAgendaPreview";
 import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
+import { AcceptanceScheduleEditor } from "./treatment-plan/AcceptanceScheduleEditor";
 
 // ─── Treatment Plan Tab ─────────────────────────────────────────────────────────
 
@@ -547,6 +548,14 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
               {/* ── Aba Aceite ───────────────────────────────────────────── */}
               <TabsContent value="aceite" className="p-6 space-y-6 mt-0">
+                <AcceptanceScheduleEditor
+                  planId={selectedPlanId!}
+                  planItems={planItems as any}
+                  planItemsKey={planItemsKey}
+                  isMaterialized={!!selectedPlan?.materializedAt}
+                  isAccepted={!!selectedPlan?.acceptedAt}
+                />
+
                 <AcceptanceBlock
                   patientId={patientId}
                   planId={selectedPlanId!}
