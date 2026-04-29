@@ -88,10 +88,13 @@ export interface MaterializeResult {
 
 interface PlanItem {
   id: number;
+  kind: string | null;
   procedureId: number | null;
   packageId: number | null;
+  unitPrice: string | null;
   unitMonthlyPrice: string | null;
   discount: string | null;
+  totalSessions: number | null;
   weekDays: string | null;
   defaultStartTime: string | null;
   defaultProfessionalId: number | null;
@@ -103,6 +106,27 @@ interface PlanItem {
   // Sprint 1/2 — política de crédito do pacote (defaults para o pool mensal)
   packagePaymentMode: string | null;
   packageMonthlyCreditValidityDays: number | null;
+}
+
+/**
+ * Resolve o tipo (kind) efetivo do item, derivando dos campos legados quando
+ * o `kind` ainda não foi preenchido (planos pré-Sprint 2). Mantido em paralelo
+ * com `treatment-plans.acceptance.ts/resolveItemKind` para evitar import
+ * circular.
+ */
+function resolveItemKind(
+  item: Pick<PlanItem, "kind" | "packageId" | "packageType">,
+): "recorrenteMensal" | "pacoteSessoes" | "avulso" {
+  if (item.kind === "recorrenteMensal") return "recorrenteMensal";
+  if (item.kind === "pacoteSessoes") return "pacoteSessoes";
+  if (item.kind === "avulso") return "avulso";
+  if (item.packageId != null) {
+    if (item.packageType === "mensal" || item.packageType === "faturaConsolidada") {
+      return "recorrenteMensal";
+    }
+    return "pacoteSessoes";
+  }
+  return "avulso";
 }
 
 function parseWeekDays(raw: string | null): number[] {
@@ -169,10 +193,13 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
   return db
     .select({
       id: treatmentPlanProceduresTable.id,
+      kind: treatmentPlanProceduresTable.kind,
       procedureId: treatmentPlanProceduresTable.procedureId,
       packageId: treatmentPlanProceduresTable.packageId,
+      unitPrice: treatmentPlanProceduresTable.unitPrice,
       unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
       discount: treatmentPlanProceduresTable.discount,
+      totalSessions: treatmentPlanProceduresTable.totalSessions,
       weekDays: treatmentPlanProceduresTable.weekDays,
       defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
       defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
@@ -187,6 +214,32 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
     .from(treatmentPlanProceduresTable)
     .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
     .where(eq(treatmentPlanProceduresTable.treatmentPlanId, planId));
+}
+
+/**
+ * Enumera as primeiras N datas (YYYY-MM-DD) entre `startDate` (inclusivo) e
+ * `endDate` (exclusivo) que caem em algum dos `weekDayIndexes` (0=domingo).
+ * Diferente de `enumerateDates`, para no `take`-ésimo match.
+ */
+function enumerateFirstN(
+  startDate: string,
+  endDate: string,
+  weekDayIndexes: number[],
+  take: number,
+): string[] {
+  if (weekDayIndexes.length === 0 || take <= 0) return [];
+  const out: string[] = [];
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const cur = new Date(Date.UTC(sy, sm - 1, sd));
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  while (cur < end && out.length < take) {
+    if (weekDayIndexes.includes(cur.getUTCDay())) {
+      out.push(cur.toISOString().slice(0, 10));
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return out;
 }
 
 async function defaultScheduleId(clinicId: number | null): Promise<number> {
@@ -241,13 +294,22 @@ export async function materializeTreatmentPlan(
     throw new Error(`Plano #${planId} sem itens — adicione procedimentos/pacotes antes.`);
   }
 
-  // Validação dos itens mensais.
+  // ── Particiona itens por kind efetivo ─────────────────────────────────────
+  // Mensais: comportamento existente (faturas mensais + pool de créditos +
+  //   appointments recorrentes durante toda a vigência do plano).
+  // Pacotes/avulsos: somente geramos appointments se o usuário configurou
+  //   agenda + dias + horário no editor de aceite. Não criamos faturas/pool
+  //   adicionais — o aceite (`acceptPlanFinancials`) já tratou a parte
+  //   financeira (vendaPacote + créditos para pacote; nada para avulso).
   const monthlyItems = items.filter(
     (i) =>
-      i.packageId != null &&
-      i.packageType === "mensal" &&
+      resolveItemKind(i) === "recorrenteMensal" &&
       Number(i.unitMonthlyPrice ?? 0) > 0,
   );
+  const oneShotItems = items.filter((i) => {
+    const k = resolveItemKind(i);
+    return k === "pacoteSessoes" || k === "avulso";
+  });
   for (const it of monthlyItems) {
     const wd = parseWeekDays(it.weekDays);
     if (wd.length === 0) {
@@ -494,6 +556,115 @@ export async function materializeTreatmentPlan(
               `Validade até ${poolValidUntil}.`,
           });
         }
+      }
+    }
+
+    // ── 3) Pacotes de sessões e avulsos ──────────────────────────────────────
+    // Geramos appointments apenas se o usuário configurou agenda + dias +
+    // horário no editor de aceite. Nada de faturas ou pool extras: o aceite
+    // já criou `vendaPacote` + créditos para pacotes; avulsos são cobrados
+    // por sessão pelo `applyBillingRules`.
+    //
+    // Limites por kind:
+    //   • pacoteSessoes → no máximo `totalSessions` consultas (série fechada)
+    //   • avulso        → `totalSessions ?? 1` consultas
+    //
+    // Janela de busca: do `startDate` até o `endDate` do plano. Itens com
+    // mais sessões do que cabem na janela ficam parcialmente materializados
+    // (o usuário pode estender a vigência e remateralizar com `force: true`).
+    for (const item of oneShotItems) {
+      const wd = parseWeekDays(item.weekDays);
+      if (wd.length === 0 || !item.defaultStartTime || !item.scheduleId) {
+        // Item sem configuração de agenda — preserva comportamento legado:
+        // o usuário marcará as sessões manualmente. Não falha.
+        continue;
+      }
+
+      const procedureId = item.packageProcedureId ?? item.procedureId;
+      if (!procedureId) continue;
+
+      const [procedure] = await tx
+        .select({
+          name: proceduresTable.name,
+          category: proceduresTable.category,
+          price: proceduresTable.price,
+        })
+        .from(proceduresTable)
+        .where(eq(proceduresTable.id, procedureId))
+        .limit(1);
+      if (!procedure) continue;
+
+      const kind = resolveItemKind(item);
+      const cap =
+        kind === "pacoteSessoes"
+          ? Math.max(0, item.totalSessions ?? 0)
+          : Math.max(1, item.totalSessions ?? 1);
+      if (cap === 0) continue;
+
+      const duration = item.sessionDurationMinutes ?? 60;
+      const winEndExclusive = (() => {
+        const [y, mo, d] = endDate.split("-").map(Number);
+        const dt = new Date(Date.UTC(y, mo - 1, d));
+        return dt.toISOString().slice(0, 10);
+      })();
+      const dates = enumerateFirstN(startDate, winEndExclusive, wd, cap);
+      if (dates.length === 0) continue;
+
+      // Idempotência: vincula appointments já existentes nesses slots ao item
+      // (mesmo paciente, datas, horário, status ativo). Evita duplicar quando
+      // a materialização é re-executada com `{ force: true }` ou quando o
+      // usuário já marcou consultas manualmente.
+      const existingRows = await tx
+        .select({
+          id: appointmentsTable.id,
+          date: appointmentsTable.date,
+        })
+        .from(appointmentsTable)
+        .where(
+          and(
+            eq(appointmentsTable.patientId, plan.patientId),
+            inArray(appointmentsTable.date, dates),
+            eq(appointmentsTable.startTime, item.defaultStartTime),
+            sql`${appointmentsTable.status} NOT IN ('cancelado','faltou','remarcado')`,
+          ),
+        );
+
+      const existingDates = new Set<string>();
+      const existingIds: number[] = [];
+      for (const row of existingRows) {
+        existingDates.add(row.date);
+        existingIds.push(row.id);
+      }
+
+      if (existingIds.length > 0) {
+        await tx
+          .update(appointmentsTable)
+          .set({ treatmentPlanProcedureId: item.id })
+          .where(inArray(appointmentsTable.id, existingIds));
+        appointmentsCreated += existingIds.length;
+      }
+
+      const datesToInsert = dates.filter((d) => !existingDates.has(d));
+      if (datesToInsert.length > 0) {
+        const endTime = addMinutesToTime(item.defaultStartTime, duration);
+        const rows = datesToInsert.map((date) => ({
+          patientId: plan.patientId,
+          procedureId,
+          professionalId: item.defaultProfessionalId,
+          date,
+          startTime: item.defaultStartTime!,
+          endTime,
+          status: "agendado" as const,
+          clinicId: plan.clinicId,
+          scheduleId: item.scheduleId ?? fallbackScheduleId,
+          treatmentPlanProcedureId: item.id,
+          // Pacotes consomem do pool de créditos (criado no aceite).
+          // Avulsos seguem o fluxo padrão de cobrança por sessão.
+          monthlyInvoiceId: null,
+          source: "presencial" as const,
+        }));
+        await tx.insert(appointmentsTable).values(rows);
+        appointmentsCreated += datesToInsert.length;
       }
     }
 

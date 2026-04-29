@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 import {
   CalendarDays, Clock, Lock, CheckCircle2, Loader2, AlertTriangle, Sparkles,
-  CalendarCheck, MapPin, ChevronRight, Users,
+  CalendarCheck, MapPin, ChevronRight, Users, Repeat, Package, Hash,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
@@ -16,17 +16,21 @@ import { useToast } from "@/lib/toast";
 // ───────────────────────────────────────────────────────────────────────────
 // Editor de agenda do plano (pós-aceite).
 //
-// Fluxo redesenhado conforme pedido:
-//   1) Selecionar a AGENDA (calendário/sala/profissional configurada na clínica)
-//      antes de tudo. Isso define quem atende, dias úteis, faixa horária e
-//      duração-padrão dos slots — ou seja, é o filtro mestre.
+// Exibe TODOS os itens do plano (mensalidades, pacotes de sessões e avulsos)
+// e permite configurar agenda + dias da semana + horário sugerido para cada
+// um. A geração efetiva de consultas ocorre na materialização ("Iniciar
+// plano"), conforme o tipo do item:
+//   - Recorrente mensal: N consultas/mês ao longo de toda a vigência
+//   - Pacote de sessões: até `totalSessions` consultas (uma série fechada)
+//   - Avulso: 1 consulta única (na próxima ocorrência do dia escolhido)
+//
+// Fluxo de configuração (sempre o mesmo, independente do tipo):
+//   1) Selecionar a AGENDA (calendário/sala/profissional). Define quem
+//      atende, dias úteis, faixa horária e duração-padrão dos slots.
 //   2) Selecionar os DIAS DA SEMANA, restrito aos dias úteis da agenda.
 //   3) Selecionar o HORÁRIO a partir de uma lista de slots realmente livres
 //      (intersecção dos slots disponíveis em cada dia escolhido na próxima
 //      semana de referência), consultando /api/appointments/available-slots.
-//
-// O profissional e a duração são derivados da agenda + procedimento, não
-// pedidos como campos extras (os antigos selects foram removidos).
 // ───────────────────────────────────────────────────────────────────────────
 
 const WEEK_DAYS = [
@@ -41,14 +45,19 @@ const WEEK_DAYS = [
 
 type WeekDayKey = (typeof WEEK_DAYS)[number]["key"];
 
+type ItemKind = "recorrenteMensal" | "pacoteSessoes" | "avulso";
+
 type PlanItem = {
   id: number;
+  kind?: string | null;
   procedureId?: number | null;
+  packageId?: number | null;
   procedureName?: string | null;
   packageName?: string | null;
   packageType?: string | null;
   packageProcedureId?: number | null;
   sessionsPerWeek?: number | null;
+  totalSessions?: number | null;
   weekDays?: string | string[] | null;
   defaultStartTime?: string | null;
   defaultProfessionalId?: number | null;
@@ -78,6 +87,19 @@ interface Props {
   isAccepted: boolean;
 }
 
+function resolveItemKind(item: PlanItem): ItemKind {
+  if (item.kind === "recorrenteMensal") return "recorrenteMensal";
+  if (item.kind === "pacoteSessoes") return "pacoteSessoes";
+  if (item.kind === "avulso") return "avulso";
+  if (item.packageId != null) {
+    if (item.packageType === "mensal" || item.packageType === "faturaConsolidada") {
+      return "recorrenteMensal";
+    }
+    return "pacoteSessoes";
+  }
+  return "avulso";
+}
+
 function parseWeekDays(raw: string | string[] | null | undefined): WeekDayKey[] {
   if (!raw) return [];
   const arr: any[] = Array.isArray(raw)
@@ -105,6 +127,32 @@ function nextDateForDow(dow: number, refDate = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+const KIND_META: Record<ItemKind, {
+  label: string;
+  Icon: typeof Repeat;
+  badgeClass: string;
+  hint: string;
+}> = {
+  recorrenteMensal: {
+    label: "Mensalidade",
+    Icon: Repeat,
+    badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    hint: "Consultas recorrentes durante toda a vigência do plano.",
+  },
+  pacoteSessoes: {
+    label: "Pacote de sessões",
+    Icon: Package,
+    badgeClass: "bg-violet-50 text-violet-700 border-violet-200",
+    hint: "Série fechada — limitada ao total de sessões contratadas.",
+  },
+  avulso: {
+    label: "Avulso",
+    Icon: Hash,
+    badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+    hint: "Sessão única — agendada na próxima ocorrência do dia escolhido.",
+  },
+};
+
 export function AcceptanceScheduleEditor({
   planId,
   planItems,
@@ -112,10 +160,7 @@ export function AcceptanceScheduleEditor({
   isMaterialized,
   isAccepted,
 }: Props) {
-  const recurringItems = useMemo(
-    () => planItems.filter((i) => i.packageType === "mensal"),
-    [planItems],
-  );
+  const allItems = useMemo(() => planItems ?? [], [planItems]);
 
   const { data: allSchedules = [], isLoading: schedulesLoading } = useQuery<Schedule[]>({
     queryKey: ["/api/schedules"],
@@ -127,14 +172,34 @@ export function AcceptanceScheduleEditor({
     [allSchedules],
   );
 
-  if (recurringItems.length === 0) return null;
+  if (allItems.length === 0) return null;
+
+  const counts = allItems.reduce(
+    (acc, i) => {
+      const k = resolveItemKind(i);
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    },
+    { recorrenteMensal: 0, pacoteSessoes: 0, avulso: 0 } as Record<ItemKind, number>,
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Badge variant="outline" className="text-[10px] font-normal">
-          {recurringItems.length} item{recurringItems.length === 1 ? "" : "s"} recorrente{recurringItems.length === 1 ? "" : "s"}
-        </Badge>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(counts) as ItemKind[]).map((k) =>
+            counts[k] > 0 ? (
+              <Badge
+                key={k}
+                variant="outline"
+                className={`text-[10px] font-normal ${KIND_META[k].badgeClass}`}
+              >
+                {counts[k]} {KIND_META[k].label.toLowerCase()}
+                {counts[k] === 1 ? "" : "s"}
+              </Badge>
+            ) : null,
+          )}
+        </div>
         {isMaterialized && (
           <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
             <Lock className="w-3 h-3" /> Plano já iniciado — alterações exigem reverter
@@ -143,11 +208,12 @@ export function AcceptanceScheduleEditor({
       </div>
 
       <div className="space-y-3">
-        {recurringItems.map((item) => (
+        {allItems.map((item) => (
           <ItemRow
             key={item.id}
             planId={planId}
             item={item}
+            kind={resolveItemKind(item)}
             planItemsKey={planItemsKey}
             disabled={isMaterialized}
             schedules={schedules}
@@ -159,18 +225,21 @@ export function AcceptanceScheduleEditor({
       <p className="text-[11px] text-slate-500 flex items-start gap-1.5 border-t border-slate-100 pt-3">
         <Sparkles className="w-3 h-3 text-primary mt-0.5 shrink-0" />
         Os horários sugeridos consideram a agenda escolhida e os bloqueios já
-        existentes. Após confirmar, avance para <strong>Cobrança</strong> para
-        gerar parcelas e iniciar o plano.
+        existentes. Mensalidades geram consultas recorrentes; pacotes geram
+        uma série limitada às sessões contratadas; avulsos geram uma única
+        consulta. Itens sem agenda configurada continuam livres para serem
+        marcados manualmente.
       </p>
     </div>
   );
 }
 
 function ItemRow({
-  planId, item, planItemsKey, disabled, schedules, schedulesLoading,
+  planId, item, kind, planItemsKey, disabled, schedules, schedulesLoading,
 }: {
   planId: number;
   item: PlanItem;
+  kind: ItemKind;
   planItemsKey: string[] | null;
   disabled: boolean;
   schedules: Schedule[];
@@ -178,6 +247,8 @@ function ItemRow({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const meta = KIND_META[kind];
 
   const initialWeekDays = parseWeekDays(item.weekDays);
   const [scheduleId, setScheduleId] = useState<number | null>(item.scheduleId ?? null);
@@ -290,6 +361,23 @@ function ItemRow({
 
   const isValid = !!scheduleId && weekDays.length > 0 && !!startTime;
   const slotsPerWeek = weekDays.length;
+  const totalSessions = item.totalSessions ?? null;
+
+  // Resumo "X sessões previstas" por tipo
+  const projectionLabel = useMemo(() => {
+    if (slotsPerWeek === 0) return null;
+    if (kind === "recorrenteMensal") {
+      return `${slotsPerWeek}x/semana · ~${slotsPerWeek * 4} sessões/mês`;
+    }
+    if (kind === "pacoteSessoes") {
+      const total = totalSessions ?? 0;
+      if (total <= 0) return `${slotsPerWeek}x/semana`;
+      const weeks = Math.ceil(total / slotsPerWeek);
+      return `${total} sessões em ~${weeks} semana${weeks === 1 ? "" : "s"}`;
+    }
+    // avulso
+    return `1 consulta única (próxima ${slotsPerWeek > 1 ? "ocorrência disponível" : "semana"})`;
+  }, [kind, slotsPerWeek, totalSessions]);
 
   const mutation = useMutation({
     mutationFn: (body: object) =>
@@ -367,6 +455,8 @@ function ItemRow({
     </span>
   );
 
+  const KindIcon = meta.Icon;
+
   return (
     <div
       className={`rounded-2xl border ${
@@ -375,13 +465,18 @@ function ItemRow({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-wrap items-baseline gap-2 min-w-0">
+          <Badge
+            variant="outline"
+            className={`text-[10px] font-medium py-0 px-1.5 flex items-center gap-1 ${meta.badgeClass}`}
+          >
+            <KindIcon className="w-2.5 h-2.5" />
+            {meta.label}
+          </Badge>
           <p className="text-sm font-semibold text-slate-700 truncate">
-            {item.packageName ?? item.procedureName ?? "Item recorrente"}
+            {item.packageName ?? item.procedureName ?? "Item do plano"}
           </p>
-          {slotsPerWeek > 0 && (
-            <span className="text-[11px] text-slate-500">
-              {slotsPerWeek}x/semana · ~{slotsPerWeek * 4} sessões/mês
-            </span>
+          {projectionLabel && (
+            <span className="text-[11px] text-slate-500">{projectionLabel}</span>
           )}
           {!isValid && (
             <Badge
@@ -416,6 +511,8 @@ function ItemRow({
           </Button>
         )}
       </div>
+
+      <p className="text-[11px] text-slate-500 -mt-2">{meta.hint}</p>
 
       {/* Etapa 1 — Agenda */}
       <div className="space-y-1.5">
@@ -482,7 +579,7 @@ function ItemRow({
       <div className="space-y-1.5">
         <Label className="text-[11px] text-slate-500 uppercase font-semibold tracking-wide flex items-center">
           {stepBadge(2, !!scheduleId && weekDays.length === 0, weekDays.length > 0)}
-          Dias da semana
+          {kind === "avulso" ? "Dia da semana" : "Dias da semana"}
           {!scheduleId && (
             <span className="ml-2 text-[10px] text-slate-400 normal-case font-normal">
               (escolha a agenda primeiro)
