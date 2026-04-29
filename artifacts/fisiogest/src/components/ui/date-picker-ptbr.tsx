@@ -69,7 +69,7 @@ export function DatePickerPTBR({
     if (current !== display) {
       setDisplay(current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [value]);
 
   // Parse ISO for calendar
@@ -96,7 +96,7 @@ export function DatePickerPTBR({
     if (open) {
       setCalendarMonth(displayAsDate ?? calendarDate ?? new Date());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [open]);
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {

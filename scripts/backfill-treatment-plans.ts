@@ -229,8 +229,8 @@ async function ensurePlanFields(plan: PlanRow, defaultDuration: number, dryRun: 
   changed: boolean;
 }> {
   let changed = false;
-  let durationMonths = plan.durationMonths ?? defaultDuration;
-  let startDate = plan.startDate ?? firstDayOfCurrentMonth();
+  const durationMonths = plan.durationMonths ?? defaultDuration;
+  const startDate = plan.startDate ?? firstDayOfCurrentMonth();
   if (plan.durationMonths == null) changed = true;
   if (plan.startDate == null) changed = true;
 
@@ -260,8 +260,8 @@ async function ensureItemFields(
       weekDays = item.weekDays.split(",").map((s) => s.trim());
     }
   }
-  let startTime = item.defaultStartTime;
-  let professionalId = item.defaultProfessionalId;
+  const startTime = item.defaultStartTime;
+  const professionalId = item.defaultProfessionalId;
 
   // Sempre tenta inferir do histórico — útil para preencher campos
   // ausentes mesmo quando já há alguns valores configurados (ex.: dias

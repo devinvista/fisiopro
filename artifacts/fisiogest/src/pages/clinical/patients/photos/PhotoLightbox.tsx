@@ -23,6 +23,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -165,7 +167,11 @@ export function PhotoLightbox({
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-2xl p-0 overflow-hidden" aria-describedby="photo-lightbox-description">
+          <DialogTitle className="sr-only">{VIEW_LABELS[photo.viewType]}</DialogTitle>
+          <DialogDescription id="photo-lightbox-description" className="sr-only">
+            Visualização ampliada da foto do paciente. Use os controles para aplicar zoom, baixar ou editar metadados.
+          </DialogDescription>
           {/* Image */}
           <div
             className="relative bg-black overflow-hidden"

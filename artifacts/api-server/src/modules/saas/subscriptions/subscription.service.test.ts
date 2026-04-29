@@ -4,7 +4,7 @@ import { createDbMock } from "../../shared/test-utils/db-mock.js";
 // Hoisted: precisa estar disponível antes de o vi.mock executar.
 const dbMock = vi.hoisted(() => {
   // Re-import dentro do hoist seria circular; recriamos a fábrica inline.
-  let queue: any[] = [];
+  const queue: any[] = [];
   const callLog: string[] = [];
   function makeChain(result: any): any {
     const handler: ProxyHandler<any> = {

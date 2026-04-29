@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const dbMock = vi.hoisted(() => {
-  let queue: any[] = [];
+  const queue: any[] = [];
   const callLog: string[] = [];
   function makeChain(result: any): any {
     const handler: ProxyHandler<any> = {

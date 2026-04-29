@@ -729,3 +729,17 @@ da fatura mensal**.
   `className="[&>button[aria-label='Fechar diálogo']]:hidden"` +
   `onPointerDownOutside`/`onEscapeKeyDown` com `preventDefault()`
   para bloquear fechamento.
+* **DialogContent sempre exige `DialogTitle` (Radix a11y):** todo
+  `<DialogContent>` precisa renderizar um `<DialogTitle>` (mesmo
+  oculto via `className="sr-only"`) e idealmente um
+  `<DialogDescription id="...">` com `aria-describedby="..."`. Quando
+  o título visual não couber no layout, use `sr-only`. Caso o diálogo
+  não tenha descrição, passe explicitamente `aria-describedby={undefined}`
+  no `DialogContent` para silenciar o aviso do Radix (padrão usado nos
+  modais da agenda). Aplicado em 29/04/2026 ao `PhotoLightbox`.
+* **Contrato impresso (`utils/print/contract.ts`):** preço unitário
+  para itens `mensal` deve usar `monthlyPrice ?? price ?? 0` (mesma
+  fórmula de `calcItemTotal` em `TreatmentPlanItemsSection.tsx`). Não
+  somar a coluna "mensalidade" no `TOTAL ESTIMADO` — esse total já
+  vem de `getPlanItemsTotal`, que multiplica corretamente
+  mensal × meses e avulso × sessões.
