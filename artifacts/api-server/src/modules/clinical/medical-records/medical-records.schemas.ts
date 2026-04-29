@@ -114,7 +114,7 @@ export const updateTreatmentPlanSchema = createTreatmentPlanSchema.partial();
 
 // ─── Evolution ────────────────────────────────────────────────────────────────
 export const createEvolutionSchema = z.object({
-  appointmentId: z.number().int().positive().optional().nullable(),
+  appointmentId: z.number({ required_error: "Vincule a evolução a um agendamento" }).int().positive(),
   description: z.string().min(1, "Descrição é obrigatória").max(10000),
   patientResponse: z.string().max(5000).optional().nullable(),
   clinicalNotes: z.string().max(5000).optional().nullable(),

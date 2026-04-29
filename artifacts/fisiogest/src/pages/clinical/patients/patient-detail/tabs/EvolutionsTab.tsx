@@ -72,6 +72,10 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
   });
 
   const handleCreate = () => {
+    if (!form.appointmentId) {
+      toast({ title: "Selecione o agendamento", description: "É obrigatório vincular a evolução a um agendamento.", variant: "destructive" });
+      return;
+    }
     createMutation.mutate({ patientId, data: buildPayload() }, {
       onSuccess: () => {
         toast({ title: "Evolução registrada", description: "Anotação de evolução salva com sucesso." });
@@ -84,6 +88,10 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
   };
 
   const handleUpdate = (id: number) => {
+    if (!form.appointmentId) {
+      toast({ title: "Selecione o agendamento", description: "É obrigatório vincular a evolução a um agendamento.", variant: "destructive" });
+      return;
+    }
     updateMutation.mutate({ patientId, evolutionId: id, data: buildPayload() }, {
       onSuccess: () => {
         toast({ title: "Evolução atualizada", description: "Alterações salvas com sucesso." });

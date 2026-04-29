@@ -232,7 +232,7 @@ export type TreatmentPlanProcedure = typeof treatmentPlanProceduresTable.$inferS
 export const evolutionsTable = pgTable("evolutions", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
-  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
+  appointmentId: integer("appointment_id").notNull().references(() => appointmentsTable.id, { onDelete: "restrict" }),
   description: text("description"),
   patientResponse: text("patient_response"),
   clinicalNotes: text("clinical_notes"),

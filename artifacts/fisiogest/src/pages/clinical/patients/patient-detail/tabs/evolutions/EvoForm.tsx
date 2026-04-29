@@ -138,16 +138,15 @@ export function EvoForm({ onSave, onCancel, saving, title, form, setForm, appoin
         {/* Consulta + Duração */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2 space-y-1.5">
-            <Label className="text-sm font-semibold text-slate-700">Consulta Vinculada <span className="text-slate-400 font-normal">(opcional)</span></Label>
+            <Label className="text-sm font-semibold text-slate-700">Consulta Vinculada <span className="text-rose-500 font-normal">*</span></Label>
             <Select
               value={String(form.appointmentId || "")}
-              onValueChange={v => setForm({ ...form, appointmentId: v === "none" ? "" : v })}
+              onValueChange={v => setForm({ ...form, appointmentId: v })}
             >
               <SelectTrigger className="bg-slate-50 border-slate-200">
                 <SelectValue placeholder="Selecionar consulta..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nenhuma consulta vinculada</SelectItem>
                 {appointments.map((appt: any) => (
                   <SelectItem key={appt.id} value={String(appt.id)}>
                     {formatDate(appt.date)} — {appt.startTime} — {appt.procedure?.name || "Consulta"}

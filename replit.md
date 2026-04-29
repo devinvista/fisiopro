@@ -396,6 +396,12 @@ Criadas pelo seed (`pnpm run db:seed-demo`):
   - TS: assinaturas de `createAppointment`, `createRecurringAppointments` e `publicRepository.insertAppointment` usam `scheduleId: number` (sem `null`)
   - Frontend: o seletor de agenda no formulário é obrigatório quando a página não recebe a prop `scheduleId`
 
+- **`evolutions.appointment_id` é NOT NULL e ON DELETE RESTRICT** — toda evolução **deve** estar vinculada a um agendamento, e agendamentos com evolução **não podem** ser apagados (o DB rejeita o DELETE). Validações:
+  - DB: coluna `evolutions.appointment_id` com NOT NULL e FK `ON DELETE RESTRICT`
+  - Drizzle: `evolutionsTable.appointmentId` em `lib/db/src/schema/medical-records.ts` com `.notNull()` e `references(..., { onDelete: "restrict" })`
+  - Zod: `createEvolutionSchema.appointmentId` em `medical-records.schemas.ts` é `z.number().int().positive()` obrigatório (mensagem `"Vincule a evolução a um agendamento"`)
+  - Frontend: `EvoForm` marca "Consulta Vinculada" como obrigatória (com asterisco vermelho), removeu a opção "Nenhuma consulta vinculada" e bloqueia o submit em `EvolutionsTab` se vazio
+
 ### Backend — `modules/<dominio>/<feature>/`
 
 Padrão obrigatório para qualquer feature nova ou refatoração:
