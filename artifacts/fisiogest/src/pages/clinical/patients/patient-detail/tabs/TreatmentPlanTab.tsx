@@ -34,7 +34,7 @@ import {
   FileImage, File, Download, ScrollText, Printer, BadgeCheck, CalendarDays,
   ClipboardCheck, PenLine, Package, Layers, RefreshCw, Info,
   Milestone, RotateCcw, Filter,
-  Check, ArrowUpRight, Zap, X,
+  Check, ArrowUpRight, ArrowRight, Zap, X,
   Wallet, TrendingDown, ArrowDownRight,
   Sparkles, Leaf, Droplets, Sun, Dumbbell, Scale, Ruler, FlaskConical,
   ShieldCheck, Link2, Camera,
@@ -82,6 +82,7 @@ import { ObjectivesField } from "./treatment-plan/ObjectivesField";
 import { WeeklyAgendaPreview } from "./treatment-plan/WeeklyAgendaPreview";
 import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
 import { AcceptanceScheduleEditor } from "./treatment-plan/AcceptanceScheduleEditor";
+import { AvulsoMonthlyEstimate } from "./treatment-plan/AvulsoMonthlyEstimate";
 
 // ─── Treatment Plan Tab ─────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   });
 
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("itens");
   const [creatingNew, setCreatingNew] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -397,7 +399,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                 modelo anterior em coluna única. As mutações ficam dentro da
                 aba "Itens" (campos editáveis); aceite e cobrança são read-only
                 após o aceite formal. */}
-            <Tabs defaultValue="itens" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="w-full justify-start gap-1 px-6 pt-4 pb-0 bg-transparent border-b border-slate-100 rounded-none h-auto">
                 <TabsTrigger value="itens" className="data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none rounded-lg gap-1.5 text-xs">
                   <ClipboardList className="w-3.5 h-3.5" /> Itens
@@ -548,14 +550,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
               {/* ── Aba Aceite ───────────────────────────────────────────── */}
               <TabsContent value="aceite" className="p-6 space-y-6 mt-0">
-                <AcceptanceScheduleEditor
-                  planId={selectedPlanId!}
-                  planItems={planItems as any}
-                  planItemsKey={planItemsKey}
-                  isMaterialized={!!selectedPlan?.materializedAt}
-                  isAccepted={!!selectedPlan?.acceptedAt}
-                />
-
+                {/* 1) Aceite formal — sempre no topo */}
                 <AcceptanceBlock
                   patientId={patientId}
                   planId={selectedPlanId!}
@@ -571,41 +566,103 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                   }}
                 />
 
-                <WeeklyAgendaPreview
-                  planItems={planItems as any}
-                  startDate={selectedPlan?.startDate ?? form.startDate ?? null}
-                  durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-                />
+                {/* 2) Após aceite: agendamento simplificado + preview + avançar */}
+                {selectedPlan?.acceptedAt ? (
+                  <>
+                    <AcceptanceScheduleEditor
+                      planId={selectedPlanId!}
+                      planItems={planItems as any}
+                      planItemsKey={planItemsKey}
+                      isMaterialized={!!selectedPlan?.materializedAt}
+                      isAccepted={!!selectedPlan?.acceptedAt}
+                    />
 
-                <MaterializeBlock
-                  planId={selectedPlanId!}
-                  materializedAt={selectedPlan?.materializedAt ?? null}
-                  planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-                  planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-                  planItems={planItems}
-                  onChanged={() => {
-                    queryClient.invalidateQueries({ queryKey: plansKey });
-                    queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
-                    queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
-                    queryClient.invalidateQueries({ queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`] });
-                  }}
-                />
+                    <WeeklyAgendaPreview
+                      planItems={planItems as any}
+                      startDate={selectedPlan?.startDate ?? form.startDate ?? null}
+                      durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+                    />
+
+                    {!selectedPlan?.materializedAt && (
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => setActiveTab("cobranca")}
+                          className="h-10 gap-1.5 rounded-lg shadow-md shadow-primary/20"
+                        >
+                          Avançar para Cobrança <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center space-y-2">
+                    <Lock className="w-6 h-6 text-slate-400 mx-auto" />
+                    <p className="text-sm font-medium text-slate-600">Plano ainda não aceito</p>
+                    <p className="text-xs text-slate-500">
+                      Após o aceite formal acima, esta seção libera a escolha de
+                      dias e horários da agenda do paciente.
+                    </p>
+                  </div>
+                )}
               </TabsContent>
 
               {/* ── Aba Cobrança ─────────────────────────────────────────── */}
               <TabsContent value="cobranca" className="p-6 space-y-6 mt-0">
-                <PlanInstallmentsPanel
-                  patientId={patientId}
-                  planId={selectedPlanId!}
-                  isAccepted={!!selectedPlan?.acceptedAt}
-                  isMaterialized={!!selectedPlan?.materializedAt}
-                />
-
+                {/* 1) Configurações de cobrança (vencimento, método etc.) */}
                 <BillingSettingsBlock
                   form={form}
                   setForm={setForm}
                   isAccepted={!!selectedPlan?.acceptedAt}
                 />
+
+                {/* 2) Iniciar plano: gera parcelas + agenda. Só após aceite, antes da materialização. */}
+                {selectedPlan?.acceptedAt && !selectedPlan?.materializedAt && (
+                  <MaterializeBlock
+                    planId={selectedPlanId!}
+                    materializedAt={selectedPlan?.materializedAt ?? null}
+                    planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+                    planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+                    planItems={planItems}
+                    onChanged={() => {
+                      queryClient.invalidateQueries({ queryKey: plansKey });
+                      queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+                      queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                      queryClient.invalidateQueries({ queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`] });
+                    }}
+                  />
+                )}
+
+                {/* 3) Após iniciado: parcelas e estimativa mensal de avulsos */}
+                {selectedPlan?.materializedAt && (
+                  <>
+                    <PlanInstallmentsPanel
+                      patientId={patientId}
+                      planId={selectedPlanId!}
+                      isAccepted={!!selectedPlan?.acceptedAt}
+                      isMaterialized={!!selectedPlan?.materializedAt}
+                    />
+
+                    <AvulsoMonthlyEstimate
+                      planItems={planItems as any}
+                      durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+                    />
+
+                    {/* Reverter materialização (administrativo) */}
+                    <MaterializeBlock
+                      planId={selectedPlanId!}
+                      materializedAt={selectedPlan?.materializedAt ?? null}
+                      planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+                      planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+                      planItems={planItems}
+                      onChanged={() => {
+                        queryClient.invalidateQueries({ queryKey: plansKey });
+                        queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+                        queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+                        queryClient.invalidateQueries({ queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`] });
+                      }}
+                    />
+                  </>
+                )}
 
                 {selectedPlan?.acceptedAt && form.avulsoBillingMode === "mensalConsolidado" && (
                   <CloseMonthBlock
@@ -781,13 +838,11 @@ function MaterializeBlock({
     }
   }
 
-  if (!hasMonthly) return null;
-
   return (
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <CalendarDays className="w-4 h-4 text-primary" />
-        <h4 className="text-sm font-semibold text-slate-700">Geração de consultas e faturas</h4>
+        <Zap className="w-4 h-4 text-primary" />
+        <h4 className="text-sm font-semibold text-slate-700">Iniciar plano</h4>
       </div>
       {isMaterialized ? (
         <div className="space-y-2">
@@ -875,14 +930,24 @@ function MaterializeBlock({
             </div>
           </div>
 
-          <p className="text-xs text-slate-600">
-            Será gerada uma agenda iniciando em <strong>{fmtBR(startDate)}</strong> com aproximadamente
-            {" "}<strong>{totalApptsEstimate} consultas</strong> e
-            {" "}<strong>{monthlyItems.length * durationMonths} faturas mensais</strong>{" "}
-            (uma por mês de cada item de pacote mensal).
-          </p>
+          {hasMonthly ? (
+            <p className="text-xs text-slate-600">
+              Será gerada uma agenda iniciando em <strong>{fmtBR(startDate)}</strong> com aproximadamente
+              {" "}<strong>{totalApptsEstimate} consultas</strong> e
+              {" "}<strong>{monthlyItems.length * durationMonths} parcelas mensais</strong>{" "}
+              (uma por mês de cada item de pacote mensal).
+            </p>
+          ) : (
+            <p className="text-xs text-slate-600">
+              Plano sem itens mensais. Iniciando em <strong>{fmtBR(startDate)}</strong>{" "}
+              o plano fica ativo e os atendimentos avulsos passam a gerar cobrança
+              conforme realizados.
+            </p>
+          )}
           <p className="text-[11px] text-slate-400">
-            Os dias da semana, horário e profissional definidos em cada item serão usados para criar as consultas.
+            {hasMonthly
+              ? "Os dias da semana e horário definidos no Aceite serão usados para criar as consultas."
+              : "Você pode acompanhar a estimativa mensal logo abaixo."}
           </p>
           <Button
             size="sm"
@@ -891,7 +956,7 @@ function MaterializeBlock({
             disabled={busy !== null}
           >
             {busy === "materialize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Materializar plano
+            Iniciar plano
           </Button>
         </div>
       )}

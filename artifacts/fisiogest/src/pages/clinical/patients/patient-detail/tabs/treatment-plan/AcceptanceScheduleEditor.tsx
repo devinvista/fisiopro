@@ -107,13 +107,11 @@ export function AcceptanceScheduleEditor({
         ))}
       </div>
 
-      {!isAccepted && (
-        <p className="text-[11px] text-slate-500 flex items-start gap-1.5 border-t border-slate-100 pt-2">
-          <Sparkles className="w-3 h-3 text-primary mt-0.5 shrink-0" />
-          Após o aceite formal do plano, basta clicar em <strong>Materializar plano</strong>
-          para gerar todas as consultas com base nestes horários.
-        </p>
-      )}
+      <p className="text-[11px] text-slate-500 flex items-start gap-1.5 border-t border-slate-100 pt-2">
+        <Sparkles className="w-3 h-3 text-primary mt-0.5 shrink-0" />
+        Após confirmar os horários, avance para <strong>Cobrança</strong> para
+        configurar vencimentos e iniciar o plano (gera parcelas e consultas).
+      </p>
     </div>
   );
 }

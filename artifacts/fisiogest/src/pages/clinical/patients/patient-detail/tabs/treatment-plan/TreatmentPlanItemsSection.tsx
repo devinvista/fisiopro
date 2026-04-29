@@ -42,16 +42,6 @@ export function TreatmentPlanItemsSection({
   const [itemDiscount, setItemDiscount] = useState<string>("0");
   const [itemDiscountType, setItemDiscountType] = useState<"reais" | "percent">("reais");
   const [itemCustomPrice, setItemCustomPrice] = useState<string>("");
-  // ── Materialização: campos exigidos para itens de pacote mensal ───────────
-  const [itemWeekDays, setItemWeekDays] = useState<string[]>([]);
-  const [itemStartTime, setItemStartTime] = useState<string>("");
-  const [itemDuration, setItemDuration] = useState<string>("60");
-  const [itemProfessionalId, setItemProfessionalId] = useState<string>("");
-
-  const { data: professionals = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["/api/users/professionals"],
-    queryFn: () => apiFetchJson<{ id: number; name: string }[]>("/api/users/professionals"),
-  });
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSpw, setEditSpw] = useState(1);
@@ -132,21 +122,6 @@ export function TreatmentPlanItemsSection({
       body.discount = discAmt;
       body.sessionsPerWeek = itemSpw || selectedPkg.sessionsPerWeek;
       body.totalSessions = itemSessions ? Number(itemSessions) : (selectedPkg.totalSessions ?? null);
-      // Para pacotes mensais: validar e enviar campos de materialização.
-      if (isMensal) {
-        if (itemWeekDays.length === 0) {
-          toast({ title: "Dias da semana obrigatórios", description: "Selecione os dias em que as consultas acontecerão.", variant: "destructive" });
-          return;
-        }
-        if (!itemStartTime) {
-          toast({ title: "Horário obrigatório", description: "Defina o horário padrão das consultas.", variant: "destructive" });
-          return;
-        }
-        body.weekDays = JSON.stringify(itemWeekDays);
-        body.defaultStartTime = itemStartTime;
-        body.sessionDurationMinutes = Number(itemDuration) || 60;
-        body.defaultProfessionalId = itemProfessionalId ? Number(itemProfessionalId) : null;
-      }
     } else if (addMode === "procedure" && selectedProc) {
       const effectivePrice = Number(itemCustomPrice || selectedProc.price || 0);
       const sessCount = Number(itemSessions) || 1;
@@ -321,57 +296,6 @@ export function TreatmentPlanItemsSection({
               </div>
             ) : <div />}
           </div>
-
-          {/* Pacote mensal: agenda das consultas (obrigatório p/ materializar) */}
-          {selectedPkg && selectedPkg.packageType === "mensal" && (
-            <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2">
-              <div className="text-xs font-medium text-primary">
-                Agenda do plano <span className="text-slate-500 font-normal">(usado para gerar as consultas e faturas mensais)</span>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Dias da semana</Label>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { v: "monday", label: "Seg" },
-                    { v: "tuesday", label: "Ter" },
-                    { v: "wednesday", label: "Qua" },
-                    { v: "thursday", label: "Qui" },
-                    { v: "friday", label: "Sex" },
-                    { v: "saturday", label: "Sáb" },
-                    { v: "sunday", label: "Dom" },
-                  ].map(d => {
-                    const active = itemWeekDays.includes(d.v);
-                    return (
-                      <button
-                        key={d.v} type="button"
-                        className={`px-2 py-1 text-xs rounded border ${active ? "bg-primary text-white border-primary" : "bg-white border-slate-300 text-slate-600"}`}
-                        onClick={() => setItemWeekDays(active ? itemWeekDays.filter(x => x !== d.v) : [...itemWeekDays, d.v])}
-                      >{d.label}</button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Horário</Label>
-                  <Input className="h-8 text-xs" type="time" value={itemStartTime} onChange={e => setItemStartTime(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Duração (min)</Label>
-                  <Input className="h-8 text-xs" type="number" min={15} step={15} value={itemDuration} onChange={e => setItemDuration(e.target.value)} />
-                </div>
-                <div className="space-y-1 col-span-2 sm:col-span-1">
-                  <Label className="text-xs">Profissional</Label>
-                  <Select value={itemProfessionalId} onValueChange={setItemProfessionalId}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      {professionals.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Price override + discount */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
