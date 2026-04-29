@@ -1,3 +1,8 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "nNZwjwk4FzikxQRj20N_V"
+uri = "file://fisiogest-pro-production.zip"
+type = "unspecified"
+title = "FisioGest Pro — Pacote de Produção (Hostinger VPS)"
