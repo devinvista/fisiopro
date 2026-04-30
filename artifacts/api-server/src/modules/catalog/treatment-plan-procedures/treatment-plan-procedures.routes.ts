@@ -399,7 +399,42 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     // pelo AcceptanceScheduleEditor para configurar a materialização).
     if (priority !== undefined) updateData.priority = parseInt(priority);
     if (notes !== undefined) updateData.notes = notes;
-    if (weekDays !== undefined) updateData.weekDays = weekDays;
+    if (weekDays !== undefined) {
+      // Regra do plano contratado: a quantidade de dias da semana marcados
+      // não pode exceder `sessions_per_week`. Como a materialização inicial
+      // é semanal, weekDays.length = sessões/semana criadas. Após a
+      // materialização o paciente pode passar do limite via reagendamentos
+      // ou créditos de falta — esta regra vale apenas no setup do plano.
+      const incomingWeekDays = (() => {
+        if (Array.isArray(weekDays)) return weekDays;
+        if (typeof weekDays === "string") {
+          try {
+            const p = JSON.parse(weekDays);
+            return Array.isArray(p) ? p : [];
+          } catch { return []; }
+        }
+        return [];
+      })();
+      const effectiveSessionsPerWeek =
+        updateData.sessionsPerWeek !== undefined
+          ? Number(updateData.sessionsPerWeek)
+          : Number(existing.sessionsPerWeek ?? 0);
+      if (
+        effectiveSessionsPerWeek > 0 &&
+        incomingWeekDays.length > effectiveSessionsPerWeek
+      ) {
+        res.status(400).json({
+          error: "weekdays_exceed_sessions_per_week",
+          message:
+            `Foram marcados ${incomingWeekDays.length} dias da semana, mas o ` +
+            `plano contratou apenas ${effectiveSessionsPerWeek} sessão(ões) ` +
+            `por semana neste item. Reduza os dias selecionados ou renegocie ` +
+            `o plano para aumentar a frequência.`,
+        });
+        return;
+      }
+      updateData.weekDays = weekDays;
+    }
     if (defaultStartTime !== undefined) updateData.defaultStartTime = defaultStartTime;
     if (defaultProfessionalId !== undefined) updateData.defaultProfessionalId = defaultProfessionalId != null ? Number(defaultProfessionalId) : null;
     if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;

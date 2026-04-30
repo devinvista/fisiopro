@@ -94,6 +94,7 @@ This rule takes precedence over any other technical choice. Any runtime, framewo
 - Remote acceptance via public link is supported (`/aceite/:token`).
 - Financial effects of plan acceptance are idempotent and transactional, creating invoices and session credits.
 - Lazy generation of monthly plan invoices (`faturaPlano`) via a daily job.
+- **Initial scheduling cap**: in `AcceptanceScheduleEditor` and at materialization, the number of `weekDays` selected per plan item cannot exceed `sessionsPerWeek` (the contracted weekly frequency). Enforced in three layers: UX (block toggle + counter `X/N`), `PUT /api/treatment-plans/:planId/procedures/:itemId` (returns 400 `weekdays_exceed_sessions_per_week`), and `materializeTreatmentPlan` (sanity check). After materialization, reschedules and absence credits may exceed the limit — the rule applies only at the initial setup step.
 
 **Quantitative Limits Enforcement (SaaS Plans):**
 - `enforceLimit(resource, options?)` middleware prevents actions when `maxPatients`, `maxUsers`, `maxSchedules`, or `maxProfessionals` limits are reached, returning a `402 Payment Required` error with details.

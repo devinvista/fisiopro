@@ -420,10 +420,33 @@ function ItemRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty, scheduleId, weekDays, startTime, disabled]);
 
+  // Limite contratado: o número de dias da semana selecionados não pode
+  // ultrapassar `sessionsPerWeek` (frequência aprovada no plano). Como a
+  // recorrência é semanal, weekDays.length = sessões/semana criadas na
+  // materialização inicial. Esta regra vale apenas no setup; após o plano
+  // iniciar, o paciente pode exceder o limite via reagendamentos ou
+  // créditos de falta.
+  const maxWeekDays =
+    item.sessionsPerWeek != null && item.sessionsPerWeek > 0
+      ? item.sessionsPerWeek
+      : null;
+  const limitReached = maxWeekDays != null && weekDays.length >= maxWeekDays;
+
   function toggleDay(key: WeekDayKey) {
     if (disabled) return;
+    const isSelected = weekDays.includes(key);
+    if (!isSelected && maxWeekDays != null && weekDays.length >= maxWeekDays) {
+      toast({
+        title: "Limite do plano atingido",
+        description:
+          `Este item foi contratado para ${maxWeekDays} sessão(ões) por ` +
+          `semana. Desmarque outro dia antes de escolher um novo.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setWeekDays((prev) =>
-      prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key],
+      isSelected ? prev.filter((d) => d !== key) : [...prev, key],
     );
     setStartTime(""); // muda o conjunto de slots disponíveis
   }
@@ -599,12 +622,26 @@ function ItemRow({
 
       {/* Etapa 2 — Dias da semana */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] text-slate-500 uppercase font-semibold tracking-wide flex items-center">
-          {stepBadge(2, !!scheduleId && weekDays.length === 0, weekDays.length > 0)}
-          {kind === "avulso" ? "Dia da semana" : "Dias da semana"}
+        <Label className="text-[11px] text-slate-500 uppercase font-semibold tracking-wide flex items-center flex-wrap gap-x-2">
+          <span className="flex items-center">
+            {stepBadge(2, !!scheduleId && weekDays.length === 0, weekDays.length > 0)}
+            {kind === "avulso" ? "Dia da semana" : "Dias da semana"}
+          </span>
           {!scheduleId && (
-            <span className="ml-2 text-[10px] text-slate-400 normal-case font-normal">
+            <span className="text-[10px] text-slate-400 normal-case font-normal">
               (escolha a agenda primeiro)
+            </span>
+          )}
+          {maxWeekDays != null && (
+            <span
+              className={`text-[10px] normal-case font-medium px-1.5 py-0.5 rounded ${
+                limitReached
+                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                  : "bg-slate-50 text-slate-500 border border-slate-200"
+              }`}
+              title={`Plano contratado: ${maxWeekDays} sessão(ões) por semana`}
+            >
+              {weekDays.length}/{maxWeekDays} {maxWeekDays === 1 ? "dia" : "dias"} · máx. do plano
             </span>
           )}
         </Label>
@@ -612,18 +649,24 @@ function ItemRow({
           {WEEK_DAYS.map((d) => {
             const allowed = allowedDows.includes(d.dow);
             const active = weekDays.includes(d.key);
-            const isDisabled = disabled || !scheduleId || !allowed;
+            const blockedByLimit = !active && limitReached;
+            const isDisabled = disabled || !scheduleId || !allowed || blockedByLimit;
+            const titleText = !allowed
+              ? `${d.long} — agenda não funciona neste dia`
+              : blockedByLimit
+              ? `${d.long} — limite do plano atingido (${maxWeekDays}/semana)`
+              : d.long;
             return (
               <button
                 key={d.key}
                 type="button"
                 onClick={() => allowed && toggleDay(d.key)}
                 disabled={isDisabled}
-                title={allowed ? d.long : `${d.long} — agenda não funciona neste dia`}
+                title={titleText}
                 className={`h-9 px-3 rounded-md border text-xs font-medium transition flex items-center justify-center min-w-[44px] ${
                   active
                     ? "bg-primary text-white border-primary shadow-sm"
-                    : allowed
+                    : allowed && !blockedByLimit
                     ? "bg-white text-slate-600 border-slate-200 hover:border-primary/40 hover:text-primary"
                     : "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
                 } ${isDisabled && !active ? "opacity-60" : ""}`}
@@ -633,6 +676,12 @@ function ItemRow({
             );
           })}
         </div>
+        {limitReached && (
+          <p className="text-[10px] text-amber-700 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            Limite contratado atingido. Para escolher outro dia, desmarque um dos selecionados ou renegocie a frequência do plano.
+          </p>
+        )}
       </div>
 
       {/* Etapa 3 — Horário (sugestões reais) */}

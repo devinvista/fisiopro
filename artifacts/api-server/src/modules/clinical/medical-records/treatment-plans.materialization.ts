@@ -95,6 +95,7 @@ interface PlanItem {
   unitPrice: string | null;
   unitMonthlyPrice: string | null;
   discount: string | null;
+  sessionsPerWeek: number | null;
   totalSessions: number | null;
   weekDays: string | null;
   defaultStartTime: string | null;
@@ -203,6 +204,7 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
       unitPrice: treatmentPlanProceduresTable.unitPrice,
       unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
       discount: treatmentPlanProceduresTable.discount,
+      sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
       totalSessions: treatmentPlanProceduresTable.totalSessions,
       weekDays: treatmentPlanProceduresTable.weekDays,
       defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
@@ -330,6 +332,19 @@ export async function materializeTreatmentPlan(
     }
     if (!it.defaultStartTime) {
       throw new Error(`Item #${it.id} (pacote mensal) sem horário padrão.`);
+    }
+    // Regra de aceite: a quantidade de dias da semana selecionados não pode
+    // exceder a frequência contratada (sessions_per_week). Como a recorrência
+    // é semanal, weekDays.length é exatamente quantas sessões/semana serão
+    // criadas na materialização inicial. Após esta etapa, o paciente pode
+    // exceder o limite via reagendamentos ou créditos de falta — esta regra
+    // vale apenas para o plano contratado.
+    if (it.sessionsPerWeek != null && it.sessionsPerWeek > 0 && wd.length > it.sessionsPerWeek) {
+      throw new Error(
+        `Item #${it.id}: foram marcados ${wd.length} dias da semana, mas o ` +
+          `plano contratou apenas ${it.sessionsPerWeek} sessão(ões) por semana. ` +
+          `Reduza os dias selecionados ou ajuste sessionsPerWeek do item.`,
+      );
     }
   }
 
@@ -600,6 +615,21 @@ export async function materializeTreatmentPlan(
         // Item sem configuração de agenda — preserva comportamento legado:
         // o usuário marcará as sessões manualmente. Não falha.
         continue;
+      }
+      // Mesma regra de aceite dos itens mensais: o usuário não pode marcar
+      // mais dias da semana do que o limite contratado (sessions_per_week).
+      // Como `enumerateFirstN` percorre datas em sequência, marcar 3 dias
+      // num plano de 2x/semana resultaria em 3 sessões na primeira semana.
+      if (
+        item.sessionsPerWeek != null &&
+        item.sessionsPerWeek > 0 &&
+        wd.length > item.sessionsPerWeek
+      ) {
+        throw new Error(
+          `Item #${item.id}: foram marcados ${wd.length} dias da semana, mas ` +
+            `o plano contratou apenas ${item.sessionsPerWeek} sessão(ões) por ` +
+            `semana. Reduza os dias selecionados antes de materializar.`,
+        );
       }
 
       const procedureId = item.packageProcedureId ?? item.procedureId;
