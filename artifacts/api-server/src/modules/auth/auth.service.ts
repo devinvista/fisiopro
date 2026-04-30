@@ -5,6 +5,7 @@ import { todayBRT } from "../../utils/dateUtils.js";
 import { authRepository } from "./auth.repository.js";
 import { generateResetToken, hashToken, passwordResetRepository } from "./password-reset.js";
 import { lgpdRepository } from "../lgpd/lgpd.repository.js";
+import { logger } from "../../lib/logger.js";
 import type {
   ForgotPasswordInput,
   LoginInput,
@@ -261,10 +262,9 @@ export const authService = {
 
     const resetUrl = `${appBaseUrl.replace(/\/$/, "")}/redefinir-senha?token=${rawToken}`;
 
-    // Dev: log so the developer can click the link without email.
-    console.log(
-      `[auth] Password reset requested for ${email}\n        Reset URL (válido por 1h): ${resetUrl}`,
-    );
+    // Dev: loga a URL para que o dev possa clicar sem precisar de e-mail.
+    logger.info({ email, resetUrl: process.env.NODE_ENV !== "production" ? resetUrl : "[redacted]" },
+      "[auth] Password reset requested");
 
     // Only return the URL in non-production to support local testing.
     const devResetUrl = process.env.NODE_ENV === "production" ? null : resetUrl;

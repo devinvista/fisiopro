@@ -147,6 +147,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   useEffect(() => {
     planItemsInitRef.current = false;
+    // Limpa o hold quando o plano selecionado muda — o hold anterior pertence
+    // ao plano anterior e não deve aparecer no novo plano aberto.
+    setHoldExpiresAt(null);
     if (selectedPlan) {
       setForm({
         objectives: selectedPlan.objectives || "",

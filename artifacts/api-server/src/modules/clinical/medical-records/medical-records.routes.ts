@@ -273,28 +273,32 @@ router.get(
   }),
 );
 
-// Sprint 15 (F5) — Slot holds (TTL 15min). Reserva os horários escolhidos
-// pelo paciente/operador no editor de agenda enquanto ele caminha para o
-// aceite, impedindo que outro plano roube o slot.
+// Sprint 15 (F5) — Slot holds (TTL padrão 30min). Reserva os horários
+// escolhidos pelo operador no editor de agenda enquanto o paciente caminha
+// para o aceite, impedindo que outro plano roube o slot.
 //
 // POST: cria/renova hold. Body `{ slots: [{itemId,date,startTime,endTime,scheduleId,procedureId}], ttlMinutes? }`.
-//   - 200 com `{ ok, slots, expiresAt, ttlSecondsRemaining }`.
-//   - 409 com `{ code:"slot_conflict", conflicts: [...] }` se algum slot
-//     já está ocupado por appointment ou hold de outro plano.
+//   - 200 com `{ ok, planId, slots, expiresAt, ttlSecondsRemaining }`.
+//   - 409 com `{ issues: { code:"slot_conflict", conflicts:[...] } }` se
+//     algum slot já está ocupado por appointment ou hold de outro plano.
 //   - 400 se algum slot é mal-formado ou item não pertence ao plano.
+//   - 404 se planId não pertence ao patientId da rota.
 //
-// DELETE: libera o hold. Idempotente.
+// DELETE: libera o hold. Idempotente (204 mesmo sem hold ativo).
+//   - 404 se planId não pertence ao patientId da rota.
 //
 // GET: status atual `{ slots, expiresAt, ttlSecondsRemaining }`. Slots
 //   vazios quando inexistente OU expirado.
+//   - 404 se planId não pertence ao patientId da rota.
 router.post(
   "/treatment-plans/:planId/holds",
   requirePermission("medical.write"),
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
-    if (!Number.isFinite(planId) || planId <= 0) {
-      throw HttpError.badRequest("planId inválido");
-    }
+    if (!Number.isFinite(planId) || planId <= 0) throw HttpError.badRequest("planId inválido");
+    // Garante que o plano pertence ao paciente (throws 404 se não for).
+    await svc.getPatientTreatmentPlan(patientId, planId);
     const body = (req.body ?? {}) as { slots?: unknown; ttlMinutes?: unknown };
     const { createOrRenewHolds } = await import("./slot-holds.service.js");
     const result = await createOrRenewHolds(
@@ -310,10 +314,11 @@ router.delete(
   "/treatment-plans/:planId/holds",
   requirePermission("medical.write"),
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
-    if (!Number.isFinite(planId) || planId <= 0) {
-      throw HttpError.badRequest("planId inválido");
-    }
+    if (!Number.isFinite(planId) || planId <= 0) throw HttpError.badRequest("planId inválido");
+    // Garante que o plano pertence ao paciente (throws 404 se não for).
+    await svc.getPatientTreatmentPlan(patientId, planId);
     const { releaseHolds } = await import("./slot-holds.service.js");
     await releaseHolds(planId);
     res.status(204).end();
@@ -324,10 +329,11 @@ router.get(
   "/treatment-plans/:planId/holds",
   requirePermission("medical.read"),
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
-    if (!Number.isFinite(planId) || planId <= 0) {
-      throw HttpError.badRequest("planId inválido");
-    }
+    if (!Number.isFinite(planId) || planId <= 0) throw HttpError.badRequest("planId inválido");
+    // Garante que o plano pertence ao paciente (throws 404 se não for).
+    await svc.getPatientTreatmentPlan(patientId, planId);
     const { getHolds } = await import("./slot-holds.service.js");
     res.json(await getHolds(planId));
   }),
