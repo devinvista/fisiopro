@@ -133,7 +133,12 @@ export function TreatmentPlanItemsSection({
     } else if (addMode === "procedure" && selectedProc) {
       const effectivePrice = Number(itemCustomPrice || selectedProc.price || 0);
       const sessCount = Number(itemSessions) || 1;
-      const discAmt = resolveDiscountAmount(itemDiscount, itemDiscountType, effectivePrice * sessCount);
+      // Procedimento avulso: desconto é POR SESSÃO. Em reais entra como
+      // abatimento direto do preço unitário; em % é aplicado ao preço
+      // unitário. Multiplicamos por sessões para armazenar o total em
+      // `item.discount` (mantendo a convenção do schema de "desconto total").
+      const unitDisc = resolveDiscountAmount(itemDiscount, itemDiscountType, effectivePrice);
+      const discAmt = unitDisc * sessCount;
       body.procedureId = selectedProc.id;
       body.unitPrice = itemCustomPrice ? Number(itemCustomPrice) : selectedProc.price;
       body.discount = discAmt;
@@ -146,17 +151,37 @@ export function TreatmentPlanItemsSection({
     setEditSpw(item.sessionsPerWeek);
     setEditSessions(String(item.totalSessions ?? ""));
     setEditNotes(item.notes ?? "");
-    setEditDiscount(String(item.discount ?? "0"));
+    // Para procedimentos avulsos o desconto é por sessão na UI, mas o banco
+    // armazena o total. Divide por sessões para exibir o valor por unidade.
+    const isMensal = item.packageType === "mensal";
+    const isPackage = !!item.packageId && !isMensal;
+    const sessCountInit = Number(item.totalSessions) || 1;
+    const storedDisc = Number(item.discount ?? 0);
+    const initialDisc =
+      !isMensal && !isPackage && sessCountInit > 0
+        ? storedDisc / sessCountInit
+        : storedDisc;
+    setEditDiscount(String(initialDisc));
     setEditDiscountType("reais");
     setEditCustomPrice(String(item.unitPrice ?? item.price ?? ""));
   }
 
   function handleEditSave(item: PlanProcedureItem) {
     const isMensal = item.packageType === "mensal";
+    const isPackage = !!item.packageId && !isMensal;
     const baseUnitPrice = Number(editCustomPrice || item.unitPrice || item.price || 0);
     const sessCount = Number(editSessions) || item.totalSessions || 1;
-    const baseForDiscount = isMensal ? baseUnitPrice : baseUnitPrice * sessCount;
-    const discAmt = resolveDiscountAmount(editDiscount, editDiscountType, baseForDiscount);
+    let discAmt: number;
+    if (isMensal || isPackage) {
+      // Mensalidade/pacote: desconto incide sobre o preço-bundle (mensal ou
+      // pacote completo) — comportamento legado preservado.
+      discAmt = resolveDiscountAmount(editDiscount, editDiscountType, baseUnitPrice);
+    } else {
+      // Procedimento avulso: desconto entrado é POR SESSÃO. Multiplicamos
+      // por sessões para armazenar o total no schema.
+      const unitDisc = resolveDiscountAmount(editDiscount, editDiscountType, baseUnitPrice);
+      discAmt = unitDisc * sessCount;
+    }
     const updateBody: Record<string, unknown> = {
       sessionsPerWeek: editSpw,
       totalSessions: editSessions ? Number(editSessions) : null,
@@ -357,7 +382,12 @@ export function TreatmentPlanItemsSection({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Desconto <span className="text-slate-400 font-normal">(opcional)</span></Label>
+              <Label className="text-xs">
+                Desconto
+                <span className="text-slate-400 font-normal">
+                  {addMode === "procedure" ? " (por sessão, opcional)" : " (opcional)"}
+                </span>
+              </Label>
               <div className="flex gap-1">
                 <Input
                   className="h-8 text-xs flex-1"
@@ -387,26 +417,40 @@ export function TreatmentPlanItemsSection({
           {/* Estimated net price preview */}
           {(selectedPkg || selectedProc) && (() => {
             const isMensal = selectedPkg?.packageType === "mensal";
+            const isProcedure = addMode === "procedure";
             const baseUnit = itemCustomPrice
               ? Number(itemCustomPrice)
               : selectedPkg
                 ? isMensal ? Number(selectedPkg.monthlyPrice ?? 0) : Number(selectedPkg.price ?? 0)
                 : Number(selectedProc?.price ?? 0);
-            const sessCount = Number(itemSessions) || (addMode === "procedure" ? 1 : selectedPkg?.totalSessions ?? 1);
-            const baseForDiscount = isMensal ? baseUnit : baseUnit * sessCount;
-            const discAmt = resolveDiscountAmount(itemDiscount, itemDiscountType, baseForDiscount);
-            const net = Math.max(0, baseForDiscount - discAmt);
+            const sessCount = Number(itemSessions) || (isProcedure ? 1 : selectedPkg?.totalSessions ?? 1);
+            // Procedimento avulso: desconto é por sessão (preview reflete UX do save).
+            // Pacote/mensalidade: desconto incide sobre o preço-bundle.
+            const unitDisc = resolveDiscountAmount(itemDiscount, itemDiscountType, baseUnit);
+            const discAmtTotal = isProcedure
+              ? unitDisc * sessCount
+              : resolveDiscountAmount(itemDiscount, itemDiscountType, isMensal ? baseUnit : baseUnit * sessCount);
+            const grossTotal = isMensal ? baseUnit : baseUnit * sessCount;
+            const net = Math.max(0, grossTotal - discAmtTotal);
             return (
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-2">
                 <span className="text-slate-600">
-                  {discAmt > 0 && <span className="line-through text-slate-400 mr-1.5">{fmtCur(baseForDiscount)}</span>}
+                  {discAmtTotal > 0 && <span className="line-through text-slate-400 mr-1.5">{fmtCur(grossTotal)}</span>}
                   Valor final estimado: <strong className="text-emerald-700 text-sm">{fmtCur(net)}</strong>
                   {isMensal && <span className="text-slate-500">/mês</span>}
-                  {!isMensal && sessCount > 1 && <span className="text-slate-500 ml-1">({sessCount} × {fmtCur(baseUnit)})</span>}
+                  {!isMensal && sessCount > 1 && (
+                    <span className="text-slate-500 ml-1">
+                      ({sessCount} × {isProcedure && unitDisc > 0
+                        ? <>({fmtCur(baseUnit)} − {fmtCur(unitDisc)}) = {fmtCur(Math.max(0, baseUnit - unitDisc))}</>
+                        : fmtCur(baseUnit)})
+                    </span>
+                  )}
                 </span>
-                {discAmt > 0 && (
+                {discAmtTotal > 0 && (
                   <span className="text-emerald-600 font-semibold whitespace-nowrap">
-                    Desc: {fmtCur(discAmt)}
+                    {isProcedure
+                      ? <>Desc: {fmtCur(unitDisc)}/sessão</>
+                      : <>Desc: {fmtCur(discAmtTotal)}</>}
                     {itemDiscountType === "percent" && <span className="text-slate-400 ml-0.5">({itemDiscount}%)</span>}
                   </span>
                 )}
@@ -478,9 +522,13 @@ export function TreatmentPlanItemsSection({
                             <span className="text-emerald-600 font-medium">{item.absenceCreditLimit} falta(s) c/ crédito/mês</span>
                           )}
                           <span className="font-semibold text-slate-700">
-                            {isMensal
-                              ? <>{fmtCur(net)}/mês{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>
-                              : <>{fmtCur(net)}{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>}
+                            {isMensal ? (
+                              <>{fmtCur(net)}/mês{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>
+                            ) : isAvulso && planned > 0 && disc > 0 ? (
+                              <>{fmtCur(net)}<span className="text-emerald-600 ml-1">(-{fmtCur(disc / planned)}/sessão)</span></>
+                            ) : (
+                              <>{fmtCur(net)}{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>
+                            )}
                           </span>
                           {item.notes && <span className="text-slate-400 italic w-full">{item.notes}</span>}
                         </div>
@@ -535,7 +583,10 @@ export function TreatmentPlanItemsSection({
                             <Input className="h-7 text-xs" type="number" min={0} step={0.01} placeholder={String(item.unitPrice ?? item.price ?? "")} value={editCustomPrice} onChange={e => setEditCustomPrice(e.target.value)} />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px]">Desconto</Label>
+                            <Label className="text-[10px]">
+                              Desconto
+                              {!isMensal && isAvulso && <span className="text-slate-400 font-normal"> (por sessão)</span>}
+                            </Label>
                             <div className="flex gap-1">
                               <Input className="h-7 text-xs flex-1" type="number" min={0} step={editDiscountType === "percent" ? 1 : 0.01} max={editDiscountType === "percent" ? 100 : undefined} value={editDiscount} onChange={e => setEditDiscount(e.target.value)} />
                               <Select value={editDiscountType} onValueChange={(v: "reais" | "percent") => { setEditDiscountType(v); setEditDiscount("0"); }}>
@@ -593,10 +644,16 @@ export function TreatmentPlanItemsSection({
               const isAvulso = !item.packageId;
               const label = item.packageName ?? item.procedureName ?? "—";
               const isEstimate = isAvulso && item.totalSessions == null && sessions > 1;
+              const unitPrice = Number(item.price ?? 0);
+              // Para avulsos o desconto armazenado é total (perSession × sessões),
+              // então divide por sessões para mostrar o abatimento por sessão.
+              const unitDisc = isAvulso && sessions > 0 ? disc / sessions : 0;
               const detail = isMensal
                 ? `${fmtCur(net)}/mês`
                 : isAvulso && sessions > 1
-                  ? `${sessions}${isEstimate ? "*" : ""} × ${fmtCur(Number(item.price ?? 0))}${disc > 0 ? ` − ${fmtCur(disc)}` : ""} = ${fmtCur(net)}`
+                  ? disc > 0
+                    ? `${sessions}${isEstimate ? "*" : ""} × (${fmtCur(unitPrice)} − ${fmtCur(unitDisc)}) = ${fmtCur(net)}`
+                    : `${sessions}${isEstimate ? "*" : ""} × ${fmtCur(unitPrice)} = ${fmtCur(net)}`
                   : `${fmtCur(net)}${disc > 0 ? ` (desc. ${fmtCur(disc)})` : ""}`;
               return (
                 <div key={item.id} className="flex justify-between items-center py-0.5 border-b border-primary/10 last:border-0">

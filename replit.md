@@ -17,6 +17,17 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 
 ## Recent Changes
 
+**30/04/2026 — Bugfix: desconto na Previsão Financeira do Plano (procedimentos avulsos)**
+- **Bug:** o campo "Desconto" em procedimentos avulsos era armazenado como abatimento fixo no total — entrar R$ 80 num procedimento de R$ 180 com 17 sessões resultava em `17 × 180 − 80 = R$ 2.980,00`, em vez do esperado `17 × (180 − 80) = R$ 1.700,00`.
+- **Correção (`TreatmentPlanItemsSection.tsx`):** o desconto digitado para procedimento avulso passa a ter semântica **por sessão** (em R$ ou %), e o componente armazena `unitDisc × sessões` no campo `discount` do schema (mantendo a convenção de "desconto total" no banco — sem migração necessária).
+  - `handleAddSubmit` (procedure): `unitDisc = resolveDiscountAmount(input, type, unitPrice)` → `body.discount = unitDisc * sessCount`.
+  - `handleEditSave`: distingue mensalidade/pacote (desconto sobre bundle, comportamento legado) de avulso (per-session × sessões).
+  - `startEdit`: para avulso, divide o desconto armazenado por sessões para exibir o valor por unidade no input.
+  - **Preview** do form, **cabeçalho do item** ("(-R$ X/sessão)") e **linha da Previsão Financeira** atualizados para mostrar a fórmula `N × (preço − desconto/sessão) = total`.
+  - **Labels** "Desconto (por sessão, opcional)" no add e "(por sessão)" no edit, somente para avulsos.
+- **Pacotes/mensalidades intocados:** desconto continua incidindo sobre o preço-bundle (semântica original).
+- **Estado validado:** `pnpm typecheck` verde, `pnpm test` 351/351 verde.
+
 **30/04/2026 — Bugfix: persistência e materialização de horários por dia (planos)**
 - **Bug 1 (POST `/api/treatment-plans/:planId/procedures`):** o campo `startTimesByDay` era desestruturado mas nunca gravado na criação do item — qualquer cliente que enviasse o mapa por dia perdia a configuração silenciosamente. Corrigido: o POST agora valida (formato HH:MM, chaves de dia válidas) e persiste como JSON, espelhando o PUT. Também aplica a mesma validação `weekDays.length ≤ sessionsPerWeek` que já existia no PUT.
 - **Bug 2 (`materializeTreatmentPlan`, ramo `oneShotItems`):** o gate exigia `defaultStartTime`, ignorando `startTimesByDay`. Itens de pacote/avulso configurados *só* com mapa por dia (sem fallback) eram silenciosamente pulados na materialização. Corrigido: agora aceita qualquer fonte de horário (mapa por dia OU `defaultStartTime`).
