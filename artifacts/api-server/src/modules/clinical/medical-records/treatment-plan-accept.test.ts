@@ -33,6 +33,16 @@ vi.mock("./treatment-plans.acceptance.js", () => ({
   })),
 }));
 
+// Sprint 11 (P5): o aceite valida cláusulas. Para esta suíte (que cobre
+// snapshot de preços + trilha LGPD), simulamos clínica SEM cláusulas
+// configuradas — o helper devolve `snapshot=null` e o fluxo prossegue.
+vi.mock("../contract-clauses/contract-clauses.service.js", () => ({
+  buildAcceptedClausesSnapshot: vi.fn(async () => ({
+    snapshot: null,
+    missingRequired: [],
+  })),
+}));
+
 const {
   acceptPatientTreatmentPlan,
   updatePatientTreatmentPlanById,

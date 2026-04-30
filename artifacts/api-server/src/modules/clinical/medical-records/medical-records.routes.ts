@@ -175,12 +175,17 @@ router.post(
     const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
     // Sprint 2 — captura trilha LGPD: assinatura digitada + IP + user-agent.
-    const body = (req.body ?? {}) as { signature?: string };
+    // Sprint 11 (P5) — também captura os códigos das cláusulas marcadas pelo
+    // paciente. O service valida obrigatoriedade contra `is_required=true`.
+    const body = (req.body ?? {}) as { signature?: string; acceptedClauseCodes?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
     if (!signature) {
       res.status(400).json({ error: "signature_required", message: "Assinatura (nome completo) é obrigatória." });
       return;
     }
+    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
+      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
+      : [];
     const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
     const ip = ipHeader || req.ip || null;
     const ua = (req.headers["user-agent"] as string | undefined) ?? null;
@@ -189,6 +194,7 @@ router.post(
       ip,
       device: ua,
       via: "presencial",
+      acceptedClauseCodes,
     });
     res.json(plan);
   }),

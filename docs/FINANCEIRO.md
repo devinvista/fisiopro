@@ -764,6 +764,25 @@ Cobertura: 4 testes novos em `payment-cascade.test.ts`. Suite: **351/351 ✓**.
 - `tryAcquireAdvisoryLock`: retry com backoff (3x, 200/400ms) para tolerar erros transitórios do Postgres serverless; falha residual logada como `warn` (não-fatal).
 - Documentação consolidada em `docs/FINANCEIRO.md` (este arquivo).
 
+### Sprint Financeiro 11 (P5) — Cláusulas contratuais configuráveis · ✅ 30/04/2026
+
+| Item | Status |
+|---|---|
+| Migration `0015_clinic_contract_clauses.sql` (tabela + `treatment_plans.accepted_clauses_json`) | ✅ |
+| Schema Drizzle `clinic-contract-clauses.ts` | ✅ |
+| Service CRUD com versionamento (publicar nova versão = desativar anteriores) + `seedDefaults` + `buildAcceptedClausesSnapshot` | ✅ |
+| Routes `/api/clinics/current/contract-clauses` (`settings.manage`) | ✅ |
+| Aceite (presencial + público) valida cláusulas obrigatórias e congela snapshot em `accepted_clauses_json` | ✅ |
+| Snapshot público expõe `contractClauses` (vigentes) e `acceptedClauses` (congeladas) | ✅ |
+| Seeds das 3 cláusulas-padrão (REAGENDAMENTO_INTRAMENSAL, PRECO_DIFERENCIADO, TITULO_EXECUTIVO) | ✅ |
+| Front-end Configurações → Cláusulas (CRUD com toggles e versionamento) | ✅ |
+| Front-end aceite (`AcceptanceBlock` interno + `aceite.tsx` público) com checkboxes obrigatórios | ✅ |
+| Testes vitest (`contract-clauses.test.ts` × 12 + `acceptance.clauses.test.ts` × 4) | ✅ |
+
+Cobertura: +15 testes novos. Suite total: **388/388 ✓**.
+
+**Modelo:** cada clínica define cláusulas via `code` estável (ex.: `REAGENDAMENTO_INTRAMENSAL`) com `version` que incrementa quando o `body` muda — versões antigas ficam preservadas como `is_active=false`. No aceite, `acceptedClauseCodes: string[]` enumera quais foram marcadas; cláusulas `is_required=true` que faltarem retornam **HTTP 400** com `issues=[{code, code:'clause_required_missing'}]`. O snapshot persistido em `treatment_plans.accepted_clauses_json` contém `{acceptedAt, items:[{code, version, title, body, isRequired}]}` — congelado para audit/LGPD/CPC art. 784, III.
+
 ---
 
 ## 15. Governança & observabilidade

@@ -145,6 +145,10 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // Snapshot dos preços vigentes no momento do aceite, para auditoria fiscal.
   // Estrutura: [{ procedureId, packageId, unitPrice, discount, totalSessions, snapshotPrice }]
   frozenPricesJson: text("frozen_prices_json"),
+  // ── Sprint Financeiro 11 (P5) — Snapshot das cláusulas aceitas ──────────
+  // Estrutura: { capturedAt, items: [{ id, code, version, title, body, isRequired }] }.
+  // Imutável após o aceite — preserva o "contrato congelado" (LGPD/CPC art. 784, III).
+  acceptedClausesJson: text("accepted_clauses_json"),
   // Quando o plano é renegociado, o novo plano referencia o anterior aqui.
   parentPlanId: integer("parent_plan_id"),
   // ── Política de crédito (override do pacote) ────────────────────────────

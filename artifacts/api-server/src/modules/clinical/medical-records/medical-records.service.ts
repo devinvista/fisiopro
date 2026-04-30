@@ -8,6 +8,7 @@ import { logAudit } from "../../../utils/auditLog.js";
 import { deleteCloudinaryAsset, extractPublicId } from "../../../utils/cloudinary.js";
 import * as repo from "./medical-records.repository.js";
 import { acceptPlanFinancials } from "./treatment-plans.acceptance.js";
+import { buildAcceptedClausesSnapshot } from "../contract-clauses/contract-clauses.service.js";
 
 export type AuthCtx = { userId?: number };
 
@@ -450,6 +451,11 @@ export interface AcceptanceTrailInput {
   ip?: string | null;
   device?: string | null;
   via?: "presencial" | "link" | "legado";
+  // ── Sprint Financeiro 11 (P5) — códigos das cláusulas aceitas pelo paciente.
+  // Quando a clínica tem cláusulas configuradas, todas as `is_required=true`
+  // ativas precisam estar nesta lista; caso contrário o aceite é rejeitado
+  // com 400 ("clause_required_missing").
+  acceptedClauseCodes?: string[];
 }
 
 /**
@@ -500,6 +506,23 @@ export async function acceptPatientTreatmentPlan(
     );
   }
 
+  // Sprint Financeiro 11 (P5): valida e congela cláusulas. Quando a clínica
+  // não tem cláusulas configuradas, `snapshot=null` e prosseguimos. Quando
+  // tem cláusulas obrigatórias e o paciente não marcou, devolve 400.
+  let acceptedClausesJsonStr: string | null = null;
+  const clinicId = existing.clinicId ?? (await repo.getPatientClinicId(patientId));
+  if (clinicId) {
+    const codes = trail.acceptedClauseCodes ?? [];
+    const { snapshot, missingRequired } = await buildAcceptedClausesSnapshot(clinicId, codes);
+    if (missingRequired.length > 0) {
+      throw HttpError.badRequest(
+        `Cláusulas obrigatórias não aceitas: ${missingRequired.join(", ")}`,
+        { code: "clause_required_missing", missing: missingRequired },
+      );
+    }
+    if (snapshot) acceptedClausesJsonStr = JSON.stringify(snapshot);
+  }
+
   let totalRevenue = 0;
   const frozenItems: FrozenPriceItem[] = items.map((row) => {
     const unit = Number(row.unitPrice ?? row.tablePrice ?? 0);
@@ -539,6 +562,7 @@ export async function acceptPatientTreatmentPlan(
       device: trail.device ?? null,
       via: trail.via ?? "presencial",
     },
+    acceptedClausesJsonStr,
   );
   if (!updated) throw HttpError.notFound("Plano de tratamento não encontrado");
 

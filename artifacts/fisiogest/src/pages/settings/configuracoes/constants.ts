@@ -1,5 +1,5 @@
 import type { SectionConfig } from "./types";
-import { Building2, UserCog, CalendarDays, Sparkles, Wallet } from "lucide-react";
+import { Building2, UserCog, CalendarDays, Sparkles, Wallet, FileText } from "lucide-react";
 import { API_BASE } from "@/lib/api";
 import type { Role } from "@/utils/permissions";
 import type { ScheduleFormState } from "./types";
@@ -101,6 +101,13 @@ export const SECTIONS: SectionConfig[] = [
     icon: Wallet,
     permission: "settings.manage",
     feature: "financial.view.budget",
+  },
+  {
+    id: "clausulas",
+    label: "Cláusulas",
+    description: "Cláusulas contratuais do aceite do plano",
+    icon: FileText,
+    permission: "settings.manage",
   },
   {
     id: "plano",

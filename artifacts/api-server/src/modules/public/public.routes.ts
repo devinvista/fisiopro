@@ -155,11 +155,14 @@ router.post(
   "/treatment-plans/by-token/:token/accept",
   handle(async (req, res) => {
     const token = String(req.params.token);
-    const body = (req.body ?? {}) as { signature?: string };
+    const body = (req.body ?? {}) as { signature?: string; acceptedClauseCodes?: unknown };
     const signature = typeof body.signature === "string" ? body.signature.trim() : "";
     if (signature.length < 3) {
       throw new PublicError(400, "signature_required", "Digite seu nome completo como assinatura.");
     }
+    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
+      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
+      : [];
     const { lookupAcceptanceToken, consumeAcceptanceToken } = await import(
       "../clinical/medical-records/treatment-plans.tokens.js"
     );
@@ -199,6 +202,7 @@ router.post(
       ip,
       device: ua,
       via: "link",
+      acceptedClauseCodes,
     });
 
     await consumeAcceptanceToken(token);

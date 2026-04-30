@@ -50,9 +50,11 @@ vi.mock("@workspace/db", async () => {
 });
 
 const postReversalMock = vi.hoisted(() =>
-  vi.fn(async (entryId: number) => ({ id: entryId + 50000 }))
+  vi.fn(async (...args: any[]) => ({ id: (args[0] as number) + 50000 }))
 );
-const allocateReceivableMock = vi.hoisted(() => vi.fn(async () => undefined));
+const allocateReceivableMock = vi.hoisted(() =>
+  vi.fn(async (..._args: any[]) => undefined)
+);
 vi.mock("../../shared/accounting/accounting.service.js", () => ({
   postReversal: postReversalMock,
   allocateReceivable: allocateReceivableMock,

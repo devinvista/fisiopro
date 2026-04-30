@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  BadgeCheck, ClipboardCheck, Link2, Loader2, Mail, Paperclip, PenLine, Phone,
+  BadgeCheck, ClipboardCheck, Link2, Loader2, Mail, Paperclip, PenLine, Phone, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,19 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/lib/toast";
-import { apiSendJson } from "@/lib/api";
+import { apiSendJson, apiFetchJson, API_BASE } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+
+interface ContractClause {
+  id: number;
+  code: string;
+  title: string;
+  body: string;
+  version: number;
+  isRequired: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
 
 function buildWhatsAppUrl(rawPhone: string, message: string): string {
   const digits = rawPhone.replace(/\D/g, "");
@@ -73,15 +85,36 @@ export function AcceptanceBlock({
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [linkInfo, setLinkInfo] = useState<{ url: string; expiresAt: string; reused: boolean } | null>(null);
+  const [acceptedClauseCodes, setAcceptedClauseCodes] = useState<Set<string>>(new Set());
 
   const isAccepted = !!plan?.acceptedAt;
 
+  // Sprint 11 (P5): cláusulas vigentes da clínica para o aceite presencial.
+  const { data: clauses } = useQuery<ContractClause[]>({
+    queryKey: ["contract-clauses-acceptance"],
+    queryFn: () => apiFetchJson<ContractClause[]>(`${API_BASE}/api/clinics/current/contract-clauses`),
+    enabled: openPresencial && !isAccepted,
+  });
+
+  const requiredCodes = (clauses ?? []).filter((c) => c.isRequired).map((c) => c.code);
+  const allRequiredAccepted = requiredCodes.every((c) => acceptedClauseCodes.has(c));
+
+  function toggleClause(code: string) {
+    setAcceptedClauseCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
   async function handlePresencial() {
-    if (!signature.trim() || !agreed) return;
+    if (!signature.trim() || !agreed || !allRequiredAccepted) return;
     setBusy(true);
     try {
       await apiSendJson(`/api/patients/${patientId}/treatment-plans/${planId}/accept`, "POST", {
         signature: signature.trim(),
+        acceptedClauseCodes: Array.from(acceptedClauseCodes),
       });
       toast({
         title: "Plano aceito!",
@@ -90,6 +123,7 @@ export function AcceptanceBlock({
       setOpenPresencial(false);
       setSignature("");
       setAgreed(false);
+      setAcceptedClauseCodes(new Set());
       onChanged();
     } catch (err: any) {
       toast({
@@ -201,7 +235,7 @@ export function AcceptanceBlock({
       </div>
 
       <Dialog open={openPresencial} onOpenChange={setOpenPresencial}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Aceite presencial</DialogTitle>
             <DialogDescription>
@@ -210,6 +244,54 @@ export function AcceptanceBlock({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {clauses && clauses.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wide text-slate-500">
+                  Cláusulas contratuais
+                </Label>
+                <ul className="space-y-2 max-h-56 overflow-y-auto rounded-lg border border-slate-200 p-2.5 bg-slate-50/60">
+                  {clauses.map((c) => {
+                    const checked = acceptedClauseCodes.has(c.code);
+                    return (
+                      <li
+                        key={c.id}
+                        className={`rounded-md p-2 ${
+                          checked ? "bg-white" : c.isRequired ? "bg-amber-50/40" : "bg-white/60"
+                        }`}
+                      >
+                        <label className="flex items-start gap-2 cursor-pointer text-xs">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={checked}
+                            onChange={() => toggleClause(c.code)}
+                          />
+                          <span className="min-w-0 space-y-0.5">
+                            <span className="flex items-center gap-1.5 font-medium text-slate-800">
+                              {c.title}
+                              {c.isRequired && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 font-normal">
+                                  <ShieldAlert className="w-3 h-3" /> obrigatória
+                                </span>
+                              )}
+                            </span>
+                            <span className="block text-slate-600 leading-relaxed">
+                              {c.body}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {!allRequiredAccepted && (
+                  <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3" />
+                    Marque todas as cláusulas obrigatórias para concluir o aceite.
+                  </p>
+                )}
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="acc-sig">Nome completo (assinatura)</Label>
               <input
@@ -238,7 +320,10 @@ export function AcceptanceBlock({
             <Button variant="ghost" onClick={() => setOpenPresencial(false)} disabled={busy}>
               Cancelar
             </Button>
-            <Button onClick={handlePresencial} disabled={busy || !signature.trim() || !agreed}>
+            <Button
+              onClick={handlePresencial}
+              disabled={busy || !signature.trim() || !agreed || !allRequiredAccepted}
+            >
               {busy && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />} Confirmar aceite
             </Button>
           </div>

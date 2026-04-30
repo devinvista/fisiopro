@@ -7,6 +7,7 @@ export * from "./appointments";
 export * from "./appointment-reschedules";
 export * from "./schedules";
 export * from "./medical-records";
+export * from "./clinic-contract-clauses";
 export * from "./financial";
 export * from "./rbac";
 export * from "./blocked-slots";

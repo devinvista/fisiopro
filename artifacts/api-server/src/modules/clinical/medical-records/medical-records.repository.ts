@@ -223,6 +223,7 @@ export async function acceptTreatmentPlan(
   acceptedBy: number | null,
   frozenPricesJson: string,
   trail: AcceptanceTrail = {},
+  acceptedClausesJson: string | null = null,
 ) {
   const [existing] = await db
     .select()
@@ -240,6 +241,7 @@ export async function acceptTreatmentPlan(
       acceptedDevice: trail.device ? trail.device.slice(0, 500) : null,
       acceptedVia: trail.via ?? "presencial",
       frozenPricesJson,
+      acceptedClausesJson,
       // O aceite promove o plano de "rascunho" para "vigente". Se já estava
       // em outro status (ex.: legado "ativo"), não alteramos para preservar
       // o comportamento esperado pelos consumidores antigos.

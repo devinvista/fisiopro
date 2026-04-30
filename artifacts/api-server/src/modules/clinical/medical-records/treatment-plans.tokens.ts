@@ -22,8 +22,9 @@ import {
   packagesTable,
   treatmentPlanProceduresTable,
   clinicsTable,
+  clinicContractClausesTable,
 } from "@workspace/db";
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { resolveItemKind } from "./treatment-plans.acceptance.js";
 
 const TOKEN_TTL_DAYS = 7;
@@ -181,6 +182,20 @@ export interface PublicPlanSnapshotAcceptance {
   acceptedVia: string;
 }
 
+/**
+ * Sprint Financeiro 11 (P5) — cláusulas contratuais vigentes da clínica
+ * (subset suficiente para que o paciente possa marcar/ler antes de assinar).
+ */
+export interface PublicPlanSnapshotClause {
+  id: number;
+  code: string;
+  version: number;
+  title: string;
+  body: string;
+  isRequired: boolean;
+  sortOrder: number;
+}
+
 export interface PublicPlanSnapshot {
   planId: number;
   patient: PublicPlanSnapshotPatient;
@@ -198,6 +213,13 @@ export interface PublicPlanSnapshot {
   totalEstimatedRevenue: string;
   expiresAt: string;
   clinic: PublicPlanSnapshotClinic | null;
+  /**
+   * Sprint Financeiro 11 (P5): cláusulas vigentes a serem aceitas/listadas.
+   * Quando o plano já foi aceito (`acceptance != null`), as cláusulas
+   * congeladas no momento do aceite vivem em `acceptedClauses`.
+   */
+  contractClauses: PublicPlanSnapshotClause[];
+  acceptedClauses: PublicPlanSnapshotClause[] | null;
 }
 
 /**
@@ -227,10 +249,55 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       cpf: patientsTable.cpf,
       phone: patientsTable.phone,
       birthDate: patientsTable.birthDate,
+      clinicId: patientsTable.clinicId,
     })
     .from(patientsTable)
     .where(eq(patientsTable.id, plan.patientId))
     .limit(1);
+
+  // Sprint Financeiro 11 (P5): cláusulas vigentes da clínica do paciente.
+  const clinicIdForClauses = patient?.clinicId ?? null;
+  const clausesRows = clinicIdForClauses
+    ? await db
+        .select({
+          id: clinicContractClausesTable.id,
+          code: clinicContractClausesTable.code,
+          version: clinicContractClausesTable.version,
+          title: clinicContractClausesTable.title,
+          body: clinicContractClausesTable.body,
+          isRequired: clinicContractClausesTable.isRequired,
+          sortOrder: clinicContractClausesTable.sortOrder,
+        })
+        .from(clinicContractClausesTable)
+        .where(
+          and(
+            eq(clinicContractClausesTable.clinicId, clinicIdForClauses),
+            eq(clinicContractClausesTable.isActive, true),
+          ),
+        )
+        .orderBy(asc(clinicContractClausesTable.sortOrder), asc(clinicContractClausesTable.code))
+    : [];
+
+  // Cláusulas congeladas no aceite (se houver) — vivem no JSON do plano.
+  let acceptedClauses: PublicPlanSnapshotClause[] | null = null;
+  if (plan.acceptedClausesJson) {
+    try {
+      const parsed = JSON.parse(plan.acceptedClausesJson) as { items?: unknown };
+      if (parsed && Array.isArray(parsed.items)) {
+        acceptedClauses = parsed.items.map((it: any) => ({
+          id: Number(it.id ?? 0),
+          code: String(it.code ?? ""),
+          version: Number(it.version ?? 1),
+          title: String(it.title ?? ""),
+          body: String(it.body ?? ""),
+          isRequired: !!it.isRequired,
+          sortOrder: 0,
+        }));
+      }
+    } catch {
+      acceptedClauses = null;
+    }
+  }
 
   const [clinicRow] = await db
     .select({
@@ -362,6 +429,8 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
           noShowFeeAmount: clinicRow.noShowFeeAmount ?? null,
         }
       : null,
+    contractClauses: clausesRows.map((c) => ({ ...c, isRequired: !!c.isRequired })),
+    acceptedClauses,
   };
 }
 

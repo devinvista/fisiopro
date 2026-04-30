@@ -65,10 +65,14 @@ vi.mock("@workspace/db", async () => {
   return { ...actual, db: dbMock.db };
 });
 
-const postReceivableRevenueMock = vi.hoisted(() => vi.fn(async () => ({ id: 9999 })));
-const postWalletUsageMock = vi.hoisted(() => vi.fn(async () => ({ id: 8888 })));
+const postReceivableRevenueMock = vi.hoisted(() =>
+  vi.fn(async (..._args: any[]) => ({ id: 9999 }))
+);
+const postWalletUsageMock = vi.hoisted(() =>
+  vi.fn(async (..._args: any[]) => ({ id: 8888 }))
+);
 const resolveAccountCodeByIdMock = vi.hoisted(() =>
-  vi.fn(async (_id: any, fallback: string) => fallback)
+  vi.fn(async (..._args: any[]) => (_args[1] as string) ?? "4.1.2")
 );
 vi.mock("../../shared/accounting/accounting.service.js", () => ({
   postReceivableRevenue: postReceivableRevenueMock,

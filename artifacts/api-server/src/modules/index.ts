@@ -29,6 +29,7 @@ import treatmentPlansMaterializeRouter from "./clinical/medical-records/treatmen
 import financialRouter from "./financial/financial.routes.js";
 import recurringExpensesRouter from "./financial/recurring-expenses/recurring-expenses.routes.js";
 import clinicFinancialSettingsRouter from "./financial/settings/clinic-financial-settings.routes.js";
+import contractClausesRouter from "./clinical/contract-clauses/contract-clauses.routes.js";
 import patientWalletRouter, { walletListRouter } from "./financial/patient-wallet/patient-wallet.routes.js";
 import monthlyPlanBillingRouter from "./financial/billing/monthly-plan-billing.routes.js";
 import reportsRouter from "./financial/reports/reports.routes.js";
@@ -95,6 +96,7 @@ router.use("/treatment-plans/:planId", treatmentPlansMaterializeRouter);
 router.use("/financial", financialRouter);
 router.use("/recurring-expenses", recurringExpensesRouter);
 router.use("/clinics/current/financial-settings", clinicFinancialSettingsRouter);
+router.use("/clinics/current/contract-clauses", contractClausesRouter);
 router.use("/treatment-plans/billing", monthlyPlanBillingRouter);
 router.use("/reports", reportsRouter);
 

@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
 import { API_BASE } from "@/lib/api";
-import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, Printer } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, Printer, ShieldAlert } from "lucide-react";
 import {
   generateContractHTML,
   CONTRACT_PRINT_CSS,
@@ -73,6 +73,23 @@ interface PublicPlanAcceptance {
   acceptedVia: string;
 }
 
+interface PublicContractClause {
+  id: number;
+  code: string;
+  title: string;
+  body: string;
+  version: number;
+  isRequired: boolean;
+  sortOrder: number;
+}
+
+interface PublicAcceptedClause {
+  code: string;
+  title: string;
+  body: string;
+  version: number;
+}
+
 interface PublicPlanSnapshot {
   planId: number;
   patient: PublicPlanPatient;
@@ -90,6 +107,8 @@ interface PublicPlanSnapshot {
   totalEstimatedRevenue: string;
   expiresAt: string;
   clinic: PublicPlanClinic | null;
+  contractClauses: PublicContractClause[];
+  acceptedClauses: PublicAcceptedClause[];
 }
 
 type LoadState =
@@ -179,6 +198,16 @@ export default function AceitePage() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [acceptedClauseCodes, setAcceptedClauseCodes] = useState<Set<string>>(new Set());
+
+  function toggleClause(code: string) {
+    setAcceptedClauseCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
 
   async function loadSnapshot() {
     try {
@@ -218,8 +247,14 @@ export default function AceitePage() {
     return generateContractHTML(patient, plan, items, clinic, snapshot.acceptance);
   }, [snapshot]);
 
+  const requiredClauseCodes = useMemo(
+    () => (snapshot?.contractClauses ?? []).filter((c) => c.isRequired).map((c) => c.code),
+    [snapshot],
+  );
+  const allRequiredAccepted = requiredClauseCodes.every((c) => acceptedClauseCodes.has(c));
+
   async function handleSubmit() {
-    if (!signature.trim() || !agreed || submitting) return;
+    if (!signature.trim() || !agreed || !allRequiredAccepted || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -229,7 +264,10 @@ export default function AceitePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "omit",
-          body: JSON.stringify({ signature: signature.trim() }),
+          body: JSON.stringify({
+            signature: signature.trim(),
+            acceptedClauseCodes: Array.from(acceptedClauseCodes),
+          }),
         },
       );
       const body = await res.json().catch(() => ({}));
@@ -332,6 +370,28 @@ export default function AceitePage() {
         dangerouslySetInnerHTML={{ __html: contractHtml }}
       />
 
+      {/* Snapshot imutável de cláusulas aceitas (após assinatura) */}
+      {isAccepted && snap.acceptedClauses.length > 0 && (
+        <section className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/40 p-5">
+          <h2 className="text-base font-semibold text-emerald-900 mb-3">
+            Cláusulas aceitas no momento da assinatura
+          </h2>
+          <ul className="space-y-3">
+            {snap.acceptedClauses.map((c) => (
+              <li key={c.code} className="rounded-lg bg-white p-3 border border-emerald-100">
+                <p className="text-sm font-medium text-slate-800">
+                  {c.title}
+                  <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
+                    v{c.version}
+                  </span>
+                </p>
+                <p className="text-xs text-slate-600 mt-1 leading-relaxed">{c.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Painel de assinatura — só aparece se ainda não assinado */}
       {!isAccepted && (
         <section className="mt-6 space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5">
@@ -345,6 +405,60 @@ export default function AceitePage() {
               as faturas iniciais correspondentes.
             </p>
           </div>
+
+          {snap.contractClauses.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-700">
+                Cláusulas contratuais
+              </h3>
+              <ul className="space-y-2">
+                {snap.contractClauses.map((c) => {
+                  const checked = acceptedClauseCodes.has(c.code);
+                  return (
+                    <li
+                      key={c.id}
+                      className={`rounded-lg p-3 border ${
+                        checked
+                          ? "border-emerald-200 bg-white"
+                          : c.isRequired
+                            ? "border-amber-200 bg-amber-50/40"
+                            : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-1 w-4 h-4"
+                          checked={checked}
+                          onChange={() => toggleClause(c.code)}
+                        />
+                        <span className="min-w-0 flex-1 space-y-1">
+                          <span className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                            {c.title}
+                            {c.isRequired && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 font-normal">
+                                <ShieldAlert className="w-3 h-3" /> obrigatória
+                              </span>
+                            )}
+                          </span>
+                          <span className="block text-xs text-slate-600 leading-relaxed">
+                            {c.body}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              {!allRequiredAccepted && (
+                <p className="text-xs text-amber-700 flex items-center gap-1">
+                  <ShieldAlert className="w-3 h-3" />
+                  Marque todas as cláusulas obrigatórias para concluir o aceite.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700" htmlFor="sig">
               Nome completo (assinatura)
@@ -378,7 +492,7 @@ export default function AceitePage() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!signature.trim() || !agreed || submitting}
+            disabled={!signature.trim() || !agreed || !allRequiredAccepted || submitting}
             className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

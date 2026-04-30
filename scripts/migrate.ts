@@ -23,7 +23,7 @@ const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const MIGRATIONS_DIR = path.resolve(__dirname, "..", "lib", "db", "migrations");
+const MIGRATIONS_DIR = path.resolve(__dirname, "..", "db", "migrations");
 
 if (!process.env.DATABASE_URL) {
   console.error("[migrate] DATABASE_URL não definido.");

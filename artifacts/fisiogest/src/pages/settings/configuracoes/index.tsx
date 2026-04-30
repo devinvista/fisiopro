@@ -1,7 +1,7 @@
 import { Section, getHashSection } from "./helpers";
 import { BASE, API_BASE, ROLE_COLORS, DAYS_OF_WEEK, PRESET_COLORS, DEFAULT_SCHEDULE_FORM, EMPTY_USER_FORM, parseDays, formatDaysBadges, SECTIONS } from "./constants";
 import { Clinic, SystemUser, Professional, Schedule, ScheduleFormState, SectionConfig } from "./types";
-import { AgendasSection, ClinicaSection, FinanceiroSection, ScheduleCard, UsuariosSection } from "./components";
+import { AgendasSection, ClausulasSection, ClinicaSection, FinanceiroSection, ScheduleCard, UsuariosSection } from "./components";
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 import { maskCpf, maskPhone, maskCnpj, displayCpf } from "@/utils/masks";
@@ -213,6 +213,7 @@ export default function Configuracoes() {
             {currentSection?.id === "usuarios" && <UsuariosSection />}
             {currentSection?.id === "agendas" && <AgendasSection />}
             {currentSection?.id === "financeiro" && <FinanceiroSection />}
+            {currentSection?.id === "clausulas" && <ClausulasSection />}
             {currentSection?.id === "plano" && <PlanoSection />}
           </div>
         </div>
