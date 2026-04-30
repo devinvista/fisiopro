@@ -17,6 +17,10 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 
 ## Recent Changes
 
+**30/04/2026 — Documentação financeira consolidada**
+- **Novo doc canônico:** `docs/FINANCEIRO.md` reúne em 18 seções todo o módulo financeiro/contábil — modelo de dados, plano de contas (partidas dobradas), 13 fluxos canônicos com débito/crédito, endpoints REST, schedulers, SaaS billing Asaas, roadmap de gateways de pagamento ao paciente, auditoria de bugs B1–B15, sprints 1–8, riscos sistêmicos, governança, otimizações, conciliação e testes (351/351 verdes).
+- **Documentos antigos virados em redirecionadores:** `docs/financial.md`, `docs/auditoria-financeira.md`, `docs/sprints/SPRINTS-FINANCEIRO.md` agora apontam para o consolidado. Specs em `docs/superpowers/specs/` preservados como ADR (decisão histórica).
+
 **30/04/2026 — Manutenção pós-auditoria financeira (Sprint 8)**
 - **Bug TypeScript corrigido:** `TreatmentPlanTab.tsx` (`StepItens`) não declarava a prop `isAccepted`, quebrando o typecheck. Prop adicionada à assinatura e à chamada (TS2304 resolvido).
 - **Resiliência do scheduler:** `tryAcquireAdvisoryLock` agora aplica retry com backoff (3 tentativas, 200/400ms) para tolerar erros transitórios do Postgres serverless ("Control plane request failed" do Neon durante cold-start). Falha residual é logada como `warn` (não-fatal: a próxima janela do cron tenta novamente).

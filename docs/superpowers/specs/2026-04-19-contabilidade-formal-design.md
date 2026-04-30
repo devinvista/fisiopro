@@ -1,5 +1,7 @@
 # Migração para contabilidade formal por partidas dobradas
 
+> **ADR preservado.** Este documento é o registro histórico da decisão de design (19/04/2026). A documentação viva e atualizada do módulo está em **[`docs/FINANCEIRO.md`](../../FINANCEIRO.md)**.
+
 ## Objetivo
 
 Migrar o financeiro do FisioGest Pro para um modelo contábil formal, auditável e baseado em partidas dobradas, separando de forma explícita:

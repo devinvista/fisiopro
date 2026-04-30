@@ -1,5 +1,7 @@
 # Sprint 7 (escopo SaaS) — Cobrança automática via Asaas + Painel de inadimplência
 
+> **ADR preservado.** Este documento é o registro histórico da decisão de design (26/04/2026). A documentação viva e atualizada do SaaS billing está em **[`docs/FINANCEIRO.md#9-saas-billing--asaas-clínica--plataforma`](../../FINANCEIRO.md#9-saas-billing--asaas-clínica--plataforma)**.
+
 **Data:** 26/04/2026
 **Sprint:** 7 (itens 7.2 e 7.4 — escopo SaaS, paciente fica para Sprint 7B)
 **Gateway escolhido:** Asaas
