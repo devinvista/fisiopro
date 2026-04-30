@@ -160,14 +160,21 @@ export function AcceptanceScheduleEditor({
   planItems,
   planItemsKey,
   isMaterialized,
-  isAccepted,
+  // F3 (v2): a prop continua na interface por compat retro com chamadores
+  // do v1, mas internamente o gate foi removido (parent já oculta o editor
+  // antes do aceite quando precisa, e v2 monta o editor antes do aceite).
+  isAccepted: _isAccepted,
 }: Props) {
   const allItems = useMemo(() => planItems ?? [], [planItems]);
 
+  // F3 (v2): a query de agendas roda sempre que o editor está montado.
+  // No fluxo legado (v1), o pai já oculta o editor antes do aceite, então
+  // remover o `enabled: isAccepted` não muda nada na prática para v1; já no
+  // fluxo v2 o editor aparece ANTES do aceite e precisa carregar as agendas
+  // para o paciente escolher dias e horários.
   const { data: allSchedules = [], isLoading: schedulesLoading } = useQuery<Schedule[]>({
     queryKey: ["/api/schedules"],
     queryFn: () => apiFetchJson<Schedule[]>("/api/schedules"),
-    enabled: isAccepted,
   });
   const schedules = useMemo(
     () => allSchedules.filter((s) => s.isActive),

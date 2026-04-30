@@ -9,7 +9,7 @@ import {
 import {
   Loader2, ClipboardList, History, Plus, Pencil, Trash2, ScrollText, Printer,
   BadgeCheck, Lock, ArrowRight, ChevronDown, ChevronUp, Stethoscope, UserCheck,
-  Activity, Sparkles, CalendarRange,
+  Activity, Sparkles, CalendarRange, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
@@ -36,12 +36,14 @@ import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
 import { AcceptanceScheduleEditor } from "./treatment-plan/AcceptanceScheduleEditor";
 import { AvulsoMonthlyEstimate } from "./treatment-plan/AvulsoMonthlyEstimate";
 import { AcceptanceBlock } from "./treatment-plan/AcceptanceBlock";
+import { ContractAcceptanceBlock } from "./treatment-plan/ContractAcceptanceBlock";
 import { MaterializeBlock } from "./treatment-plan/MaterializeBlock";
 import { BillingSettingsBlock } from "./treatment-plan/BillingSettingsBlock";
 import { CloseMonthBlock } from "./treatment-plan/CloseMonthBlock";
 import { CreditsStatementBlock } from "./treatment-plan/CreditsStatementBlock";
 import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
+import { useV2AcceptanceFlow } from "@/hooks/use-clinic-settings";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Plano de Tratamento — orquestrador slim do wizard de 3 etapas.
@@ -82,11 +84,19 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     enabled: !!patientId,
   });
 
+  // Sprint 15 (F3) — feature flag por clínica para o novo fluxo de aceite
+  // (4 etapas: itens → cobranca → agenda → contrato). Quando false, mantém
+  // o fluxo legado em 3 etapas.
+  const v2 = useV2AcceptanceFlow();
+
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [activeStep, setActiveStep] = useState<PlanStepKey>("itens");
   const [creatingNew, setCreatingNew] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clinicalOpen, setClinicalOpen] = useState(false);
+  // v2: marca quando o usuário salvou as configs de cobrança (libera Agenda).
+  // Não persistido no servidor — heurística local para guiar o stepper.
+  const [billingConfigured, setBillingConfigured] = useState(false);
 
   useEffect(() => {
     if (allPlans.length > 0 && selectedPlanId === null) {
@@ -338,9 +348,28 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   // Auto-avança visualmente se etapa atual ficou inválida
   useEffect(() => {
-    if (activeStep === "aceite" && !hasItems) setActiveStep("itens");
-    if (activeStep === "cobranca" && !isAccepted) setActiveStep("aceite");
-  }, [activeStep, hasItems, isAccepted]);
+    if (v2) {
+      if ((activeStep === "cobranca" || activeStep === "agenda" || activeStep === "contrato") && !hasItems) {
+        setActiveStep("itens");
+      }
+      if (activeStep === "aceite") {
+        // chave do v1 — se a flag mudou no meio da sessão, redireciona.
+        setActiveStep("itens");
+      }
+    } else {
+      if (activeStep === "aceite" && !hasItems) setActiveStep("itens");
+      if (activeStep === "cobranca" && !isAccepted) setActiveStep("aceite");
+      if (activeStep === "agenda" || activeStep === "contrato") {
+        // chaves do v2 — se a flag desligou no meio, volta pro itens.
+        setActiveStep("itens");
+      }
+    }
+  }, [activeStep, hasItems, isAccepted, v2]);
+
+  // v2: quando o plano já foi iniciado (materializedAt), considera tudo done.
+  useEffect(() => {
+    if (v2 && isStarted) setBillingConfigured(true);
+  }, [v2, isStarted]);
 
   if (plansLoading) {
     return (
@@ -424,14 +453,16 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         selectedPlanId={selectedPlanId}
       />
 
-      {/* Stepper das 3 etapas */}
+      {/* Stepper — 3 etapas (v1) ou 4 etapas (v2) */}
       <PlanStepper
         current={activeStep}
         hasItems={hasItems}
         isAccepted={isAccepted}
         isStarted={isStarted}
+        v2={v2}
         aceiteStats={aceiteStats}
         monthlyMissingCount={monthlyMissingCount}
+        billingConfigured={billingConfigured}
         onSelect={setActiveStep}
       />
 
@@ -453,11 +484,13 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               handleSave={handleSave}
               hasItems={hasItems}
               isAccepted={isAccepted}
-              onAdvance={() => setActiveStep("aceite")}
+              advanceLabel={v2 ? "Avançar para Cobrança" : "Avançar para Aceite"}
+              onAdvance={() => setActiveStep(v2 ? "cobranca" : "aceite")}
             />
           )}
 
-          {activeStep === "aceite" && (
+          {/* v1 only */}
+          {!v2 && activeStep === "aceite" && (
             <StepAceite
               patientId={patientId}
               selectedPlanId={selectedPlanId}
@@ -482,7 +515,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             />
           )}
 
-          {activeStep === "cobranca" && (
+          {/* v1 only */}
+          {!v2 && activeStep === "cobranca" && (
             <StepCobranca
               patientId={patientId}
               selectedPlanId={selectedPlanId}
@@ -506,6 +540,66 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
                 });
                 queryClient.invalidateQueries({
                   queryKey: [`/api/patients/${patientId}/financial-records`],
+                });
+              }}
+            />
+          )}
+
+          {/* v2: Cobrança ANTES do aceite */}
+          {v2 && activeStep === "cobranca" && (
+            <StepCobrancaV2
+              form={form}
+              setForm={setForm}
+              isAccepted={isAccepted}
+              isStarted={isStarted}
+              saving={saving}
+              handleSave={async () => {
+                await handleSave();
+                setBillingConfigured(true);
+              }}
+              onAdvance={() => setActiveStep("agenda")}
+            />
+          )}
+
+          {/* v2: Agenda — agora liberada antes do aceite */}
+          {v2 && activeStep === "agenda" && (
+            <StepAgendaV2
+              selectedPlanId={selectedPlanId}
+              planItems={planItems}
+              planItemsKey={planItemsKey}
+              isAccepted={isAccepted}
+              isStarted={isStarted}
+              monthlyMissingCount={monthlyMissingCount}
+              onAdvance={() => setActiveStep("contrato")}
+            />
+          )}
+
+          {/* v2: Contrato — assina e materializa em uma transação */}
+          {v2 && activeStep === "contrato" && (
+            <StepContratoV2
+              patientId={patientId}
+              selectedPlanId={selectedPlanId}
+              selectedPlan={selectedPlan}
+              planItems={planItems}
+              patient={patient}
+              clinic={clinic}
+              form={form}
+              isStarted={isStarted}
+              monthlyMissingCount={monthlyMissingCount}
+              onChanged={() => {
+                queryClient.invalidateQueries({ queryKey: plansKey });
+                queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/patients/${patientId}/appointments`],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/patients/${patientId}/financial-records`],
+                });
+                queryClient.invalidateQueries({
+                  queryKey: [`/api/patients/${patientId}/credits`],
                 });
               }}
             />
@@ -760,7 +854,8 @@ function Metric({
 // ─── Etapa 1 — Itens ───────────────────────────────────────────────────────
 function StepItens({
   patientId, selectedPlanId, planItems, planItemsKey, form, setForm, professionals,
-  clinicalOpen, setClinicalOpen, saving, handleSave, hasItems, isAccepted, onAdvance,
+  clinicalOpen, setClinicalOpen, saving, handleSave, hasItems, isAccepted,
+  advanceLabel = "Avançar para Aceite", onAdvance,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -775,6 +870,7 @@ function StepItens({
   handleSave: () => void;
   hasItems: boolean;
   isAccepted: boolean;
+  advanceLabel?: string;
   onAdvance: () => void;
 }) {
   const updateForm = (patch: any) =>
@@ -984,7 +1080,7 @@ function StepItens({
           title={!hasItems ? "Adicione ao menos 1 item para avançar" : undefined}
         >
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-          Avançar para Aceite <ArrowRight className="w-4 h-4" />
+          {advanceLabel} <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>
@@ -1176,6 +1272,212 @@ function StepCobranca({
       )}
 
       <CreditsStatementBlock patientId={patientId} />
+    </div>
+  );
+}
+
+// ─── v2: Etapa 2 — Cobrança (ANTES do aceite) ─────────────────────────────
+function StepCobrancaV2({
+  form, setForm, isAccepted, isStarted, saving, handleSave, onAdvance,
+}: {
+  form: any;
+  setForm: (fn: any) => void;
+  isAccepted: boolean;
+  isStarted: boolean;
+  saving: boolean;
+  handleSave: () => void | Promise<void>;
+  onAdvance: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-xs text-blue-900 leading-relaxed">
+        <strong>Antes da assinatura:</strong> definir como o paciente vai pagar
+        permite que o contrato gerado já inclua valores, vencimentos e validade
+        dos créditos — sem revisões depois.
+      </div>
+
+      <BillingSettingsBlock form={form} setForm={setForm} isAccepted={isAccepted} />
+
+      {isStarted && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-800 flex items-center gap-2">
+          <BadgeCheck className="w-4 h-4" />
+          Plano já iniciado — alterações de cobrança só por renegociação.
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-2">
+        <Button
+          variant="outline"
+          onClick={handleSave}
+          className="h-11 px-6 rounded-xl gap-1.5 order-2 sm:order-1"
+          disabled={saving || isStarted}
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Salvar configurações
+        </Button>
+        <Button
+          onClick={async () => { if (!isStarted) await handleSave(); onAdvance(); }}
+          className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5 order-1 sm:order-2"
+          disabled={saving}
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          Avançar para Agenda <ArrowRight className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── v2: Etapa 3 — Agenda (ANTES do aceite) ───────────────────────────────
+function StepAgendaV2({
+  selectedPlanId, planItems, planItemsKey, isAccepted, isStarted,
+  monthlyMissingCount, onAdvance,
+}: {
+  selectedPlanId: number;
+  planItems: PlanProcedureItem[];
+  planItemsKey: any;
+  isAccepted: boolean;
+  isStarted: boolean;
+  monthlyMissingCount: number;
+  onAdvance: () => void;
+}) {
+  const allMonthlyConfigured = monthlyMissingCount === 0;
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4 text-xs text-blue-900 leading-relaxed">
+        Defina <strong>agora</strong> a agenda, os dias da semana e os horários de
+        cada item. Nada é gravado na agenda do paciente até a etapa Contrato —
+        aqui é só o desenho.
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 rounded-xl bg-blue-100 flex items-center justify-center">
+            <CalendarRange className="w-4 h-4 text-blue-700" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800">Agenda do paciente</h4>
+            <p className="text-[11px] text-slate-500">
+              Escolha a agenda, os dias e os horários — sugerimos só slots realmente livres
+            </p>
+          </div>
+        </div>
+
+        <AcceptanceScheduleEditor
+          planId={selectedPlanId}
+          planItems={planItems as any}
+          planItemsKey={planItemsKey}
+          isMaterialized={isStarted}
+          isAccepted={isAccepted}
+        />
+      </div>
+
+      {!allMonthlyConfigured && !isStarted && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {monthlyMissingCount === 1
+              ? "1 item recorrente ainda está sem dia ou horário. Defina antes de avançar."
+              : `${monthlyMissingCount} itens recorrentes ainda estão sem dia ou horário. Defina antes de avançar.`}
+          </span>
+        </div>
+      )}
+
+      <div className="flex justify-end pt-2">
+        <Button
+          onClick={onAdvance}
+          disabled={!allMonthlyConfigured && !isStarted}
+          className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5"
+          title={
+            !allMonthlyConfigured && !isStarted
+              ? "Configure todos os itens recorrentes antes de avançar"
+              : undefined
+          }
+        >
+          Avançar para Contrato <ArrowRight className="w-4 h-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── v2: Etapa 4 — Contrato (assinar e iniciar em 1 transação) ────────────
+function StepContratoV2({
+  patientId, selectedPlanId, selectedPlan, planItems,
+  patient, clinic, form, isStarted, monthlyMissingCount, onChanged,
+}: {
+  patientId: number;
+  selectedPlanId: number;
+  selectedPlan: any;
+  planItems: PlanProcedureItem[];
+  patient: PatientBasic | undefined;
+  clinic: ClinicInfo | null | undefined;
+  form: any;
+  isStarted: boolean;
+  monthlyMissingCount: number;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <ContractAcceptanceBlock
+        patientId={patientId}
+        planId={selectedPlanId}
+        plan={selectedPlan}
+        patientName={patient?.name ?? ""}
+        patientPhone={patient?.phone ?? null}
+        patientEmail={(patient as any)?.email ?? null}
+        clinicName={clinic?.name ?? null}
+        onChanged={onChanged}
+      />
+
+      {/* Após iniciado: mostra parcelas + estimativa + opções avançadas */}
+      {isStarted && (
+        <>
+          <PlanInstallmentsPanel
+            patientId={patientId}
+            planId={selectedPlanId}
+            isAccepted={true}
+            isMaterialized={true}
+          />
+
+          <AvulsoMonthlyEstimate
+            planItems={planItems as any}
+            durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+          />
+
+          {form.avulsoBillingMode === "mensalConsolidado" && (
+            <CloseMonthBlock
+              patientId={patientId}
+              planId={selectedPlanId}
+              onClosed={onChanged}
+            />
+          )}
+
+          <CreditsStatementBlock patientId={patientId} />
+
+          {/* Opção de reverter (compensatório) — escondida por trás de UI legada */}
+          <MaterializeBlock
+            planId={selectedPlanId}
+            patientId={patientId}
+            materializedAt={selectedPlan?.materializedAt ?? null}
+            planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+            planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+            planItems={planItems}
+            onChanged={onChanged}
+          />
+        </>
+      )}
+
+      {!isStarted && monthlyMissingCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            Existem itens recorrentes sem agenda definida. Volte para a etapa
+            Agenda antes de coletar a assinatura.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
