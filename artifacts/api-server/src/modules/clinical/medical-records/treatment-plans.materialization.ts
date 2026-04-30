@@ -99,6 +99,7 @@ interface PlanItem {
   totalSessions: number | null;
   weekDays: string | null;
   defaultStartTime: string | null;
+  startTimesByDay: string | null;
   defaultProfessionalId: number | null;
   scheduleId: number | null;
   sessionDurationMinutes: number | null;
@@ -170,6 +171,48 @@ function addMinutesToTime(time: string, mins: number): string {
   return `${hh}:${mm}`;
 }
 
+const WEEK_DAY_KEY: Record<number, string> = {
+  0: "sunday", 1: "monday", 2: "tuesday", 3: "wednesday",
+  4: "thursday", 5: "friday", 6: "saturday",
+};
+
+/**
+ * Faz parse seguro do mapa "dia da semana → horário" persistido em
+ * `start_times_by_day` (JSON). Retorna {} se nulo/inválido.
+ */
+function parseStartTimesByDay(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === "string" && /^\d{2}:\d{2}$/.test(v)) {
+          out[String(k).toLowerCase()] = v;
+        }
+      }
+      return out;
+    }
+  } catch { /* noop */ }
+  return {};
+}
+
+/**
+ * Resolve o horário (HH:MM) que deve ser usado para uma data específica.
+ * Hierarquia: `startTimesByDay[weekday]` → `defaultStartTime`. Retorna
+ * null quando nem o mapa nem o fallback estão definidos.
+ */
+function resolveStartTimeForDate(
+  dateStr: string,
+  startTimesByDay: Record<string, string>,
+  defaultStartTime: string | null,
+): string | null {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const key = WEEK_DAY_KEY[dow];
+  return startTimesByDay[key] ?? defaultStartTime ?? null;
+}
+
 /**
  * Enumera todas as datas (YYYY-MM-DD) entre `startDate` (inclusivo) e
  * `endDate` (exclusivo) que caem em algum dos `weekDayIndexes` (0=domingo).
@@ -208,6 +251,7 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
       totalSessions: treatmentPlanProceduresTable.totalSessions,
       weekDays: treatmentPlanProceduresTable.weekDays,
       defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
+      startTimesByDay: treatmentPlanProceduresTable.startTimesByDay,
       defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
       scheduleId: treatmentPlanProceduresTable.scheduleId,
       sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
@@ -330,8 +374,20 @@ export async function materializeTreatmentPlan(
           `Configure week_days antes de materializar.`,
       );
     }
-    if (!it.defaultStartTime) {
-      throw new Error(`Item #${it.id} (pacote mensal) sem horário padrão.`);
+    // Cada dia da semana precisa ter um horário definido — seja via mapa
+    // por dia (`startTimesByDay`) ou via `defaultStartTime` legado.
+    const stMap = parseStartTimesByDay(it.startTimesByDay);
+    const wdKeys = (() => {
+      try {
+        const arr = it.weekDays ? JSON.parse(it.weekDays) : [];
+        return Array.isArray(arr) ? arr.map((s: any) => String(s).toLowerCase()) : [];
+      } catch { return []; }
+    })();
+    const missingDays = wdKeys.filter((k: string) => !stMap[k] && !it.defaultStartTime);
+    if (missingDays.length > 0) {
+      throw new Error(
+        `Item #${it.id} (pacote mensal) sem horário definido para: ${missingDays.join(", ")}.`,
+      );
     }
     // Regra de aceite: a quantidade de dias da semana selecionados não pode
     // exceder a frequência contratada (sessions_per_week). Como a recorrência
@@ -486,32 +542,48 @@ export async function materializeTreatmentPlan(
         // 2) Cria os appointments do mês, vinculados à fatura.
         // Estratégia em lote (1 SELECT + 1 UPDATE em massa + 1 INSERT em
         // massa) para evitar latência por data:
-        //   a) Busca todos os appointments existentes nesses slots
-        //      (mesmo paciente, data, horário, status ativo).
+        //   a) Busca todos os appointments existentes nesses slots — usa
+        //      o conjunto de horários efetivos do item (mapa por dia +
+        //      fallback) para cobrir todas as combinações possíveis.
         //   b) Vincula os existentes ao item/fatura preservando histórico.
-        //   c) Insere em massa as datas restantes.
+        //   c) Insere em massa as datas restantes, com horário resolvido
+        //      por dia da semana.
         if (dates.length === 0) continue;
 
-        const existingRows = await tx
+        const startTimesMap = parseStartTimesByDay(item.startTimesByDay);
+        // Conjunto de horários candidatos para o lookup de existentes.
+        const candidateStartTimes = new Set<string>();
+        for (const t of Object.values(startTimesMap)) candidateStartTimes.add(t);
+        if (item.defaultStartTime) candidateStartTimes.add(item.defaultStartTime);
+        const candidateStartTimesArr = Array.from(candidateStartTimes);
+
+        const existingRows = candidateStartTimesArr.length === 0 ? [] : await tx
           .select({
             id: appointmentsTable.id,
             date: appointmentsTable.date,
+            startTime: appointmentsTable.startTime,
           })
           .from(appointmentsTable)
           .where(
             and(
               eq(appointmentsTable.patientId, plan.patientId),
               inArray(appointmentsTable.date, dates),
-              eq(appointmentsTable.startTime, item.defaultStartTime!),
+              inArray(appointmentsTable.startTime, candidateStartTimesArr),
               sql`${appointmentsTable.status} NOT IN ('cancelado','faltou','remarcado')`,
             ),
           );
 
+        // Só vincula um existente se o horário dele bate com o horário
+        // resolvido para aquela data específica (evita "sequestrar" um
+        // appointment de outro horário do mesmo dia).
         const existingDates = new Set<string>();
         const existingIds: number[] = [];
         for (const row of existingRows) {
-          existingDates.add(row.date);
-          existingIds.push(row.id);
+          const expected = resolveStartTimeForDate(row.date, startTimesMap, item.defaultStartTime);
+          if (expected && row.startTime === expected) {
+            existingDates.add(row.date);
+            existingIds.push(row.id);
+          }
         }
 
         if (existingIds.length > 0) {
@@ -527,21 +599,29 @@ export async function materializeTreatmentPlan(
 
         const datesToInsert = dates.filter((d) => !existingDates.has(d));
         if (datesToInsert.length > 0) {
-          const endTime = addMinutesToTime(item.defaultStartTime!, duration);
-          const rows = datesToInsert.map((date) => ({
-            patientId: plan.patientId,
-            procedureId,
-            professionalId: item.defaultProfessionalId,
-            date,
-            startTime: item.defaultStartTime!,
-            endTime,
-            status: "agendado" as const,
-            clinicId: plan.clinicId,
-            scheduleId: item.scheduleId ?? fallbackScheduleId,
-            treatmentPlanProcedureId: item.id,
-            monthlyInvoiceId: invoice.id,
-            source: "presencial" as const,
-          }));
+          const rows = datesToInsert.map((date) => {
+            const startTime = resolveStartTimeForDate(date, startTimesMap, item.defaultStartTime);
+            if (!startTime) {
+              throw new Error(
+                `Item #${item.id}: sem horário definido para a data ${date}. ` +
+                  `Configure startTimesByDay ou defaultStartTime.`,
+              );
+            }
+            return {
+              patientId: plan.patientId,
+              procedureId,
+              professionalId: item.defaultProfessionalId,
+              date,
+              startTime,
+              endTime: addMinutesToTime(startTime, duration),
+              status: "agendado" as const,
+              clinicId: plan.clinicId,
+              scheduleId: item.scheduleId ?? fallbackScheduleId,
+              treatmentPlanProcedureId: item.id,
+              monthlyInvoiceId: invoice.id,
+              source: "presencial" as const,
+            };
+          });
           await tx.insert(appointmentsTable).values(rows);
           appointmentsCreated += datesToInsert.length;
         }
@@ -668,18 +748,26 @@ export async function materializeTreatmentPlan(
       // Idempotência: vincula appointments já existentes nesses slots ao item
       // (mesmo paciente, datas, horário, status ativo). Evita duplicar quando
       // a materialização é re-executada com `{ force: true }` ou quando o
-      // usuário já marcou consultas manualmente.
-      const existingRows = await tx
+      // usuário já marcou consultas manualmente. Usa o conjunto de horários
+      // efetivos (mapa por dia + fallback) para cobrir agenda heterogênea.
+      const startTimesMap = parseStartTimesByDay(item.startTimesByDay);
+      const candidateStartTimes = new Set<string>();
+      for (const t of Object.values(startTimesMap)) candidateStartTimes.add(t);
+      if (item.defaultStartTime) candidateStartTimes.add(item.defaultStartTime);
+      const candidateStartTimesArr = Array.from(candidateStartTimes);
+
+      const existingRows = candidateStartTimesArr.length === 0 ? [] : await tx
         .select({
           id: appointmentsTable.id,
           date: appointmentsTable.date,
+          startTime: appointmentsTable.startTime,
         })
         .from(appointmentsTable)
         .where(
           and(
             eq(appointmentsTable.patientId, plan.patientId),
             inArray(appointmentsTable.date, dates),
-            eq(appointmentsTable.startTime, item.defaultStartTime),
+            inArray(appointmentsTable.startTime, candidateStartTimesArr),
             sql`${appointmentsTable.status} NOT IN ('cancelado','faltou','remarcado')`,
           ),
         );
@@ -687,8 +775,11 @@ export async function materializeTreatmentPlan(
       const existingDates = new Set<string>();
       const existingIds: number[] = [];
       for (const row of existingRows) {
-        existingDates.add(row.date);
-        existingIds.push(row.id);
+        const expected = resolveStartTimeForDate(row.date, startTimesMap, item.defaultStartTime);
+        if (expected && row.startTime === expected) {
+          existingDates.add(row.date);
+          existingIds.push(row.id);
+        }
       }
 
       if (existingIds.length > 0) {
@@ -701,23 +792,31 @@ export async function materializeTreatmentPlan(
 
       const datesToInsert = dates.filter((d) => !existingDates.has(d));
       if (datesToInsert.length > 0) {
-        const endTime = addMinutesToTime(item.defaultStartTime, duration);
-        const rows = datesToInsert.map((date) => ({
-          patientId: plan.patientId,
-          procedureId,
-          professionalId: item.defaultProfessionalId,
-          date,
-          startTime: item.defaultStartTime!,
-          endTime,
-          status: "agendado" as const,
-          clinicId: plan.clinicId,
-          scheduleId: item.scheduleId ?? fallbackScheduleId,
-          treatmentPlanProcedureId: item.id,
-          // Pacotes consomem do pool de créditos (criado no aceite).
-          // Avulsos seguem o fluxo padrão de cobrança por sessão.
-          monthlyInvoiceId: null,
-          source: "presencial" as const,
-        }));
+        const rows = datesToInsert.map((date) => {
+          const startTime = resolveStartTimeForDate(date, startTimesMap, item.defaultStartTime);
+          if (!startTime) {
+            throw new Error(
+              `Item #${item.id}: sem horário definido para a data ${date}. ` +
+                `Configure startTimesByDay ou defaultStartTime.`,
+            );
+          }
+          return {
+            patientId: plan.patientId,
+            procedureId,
+            professionalId: item.defaultProfessionalId,
+            date,
+            startTime,
+            endTime: addMinutesToTime(startTime, duration),
+            status: "agendado" as const,
+            clinicId: plan.clinicId,
+            scheduleId: item.scheduleId ?? fallbackScheduleId,
+            treatmentPlanProcedureId: item.id,
+            // Pacotes consomem do pool de créditos (criado no aceite).
+            // Avulsos seguem o fluxo padrão de cobrança por sessão.
+            monthlyInvoiceId: null,
+            source: "presencial" as const,
+          };
+        });
         await tx.insert(appointmentsTable).values(rows);
         appointmentsCreated += datesToInsert.length;
       }

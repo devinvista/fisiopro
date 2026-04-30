@@ -66,6 +66,8 @@ export interface PlanProcedureItem {
   usedSessions?: number;
   weekDays?: string | string[] | null;
   defaultStartTime?: string | null;
+  /** Mapa opcional dia→horário (suporta horário diferente por dia da semana). */
+  startTimesByDay?: string | Record<string, string> | null;
   defaultProfessionalId?: number | null;
   defaultProfessionalName?: string | null;
 }

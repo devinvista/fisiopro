@@ -11,10 +11,26 @@ type PlanItem = {
   packageType?: string | null;
   weekDays?: string | string[] | null;
   defaultStartTime?: string | null;
+  /** Mapa opcional dia→horário (suporta horário diferente por dia). */
+  startTimesByDay?: string | Record<string, string> | null;
   defaultProfessionalName?: string | null;
   defaultProfessionalId?: number | null;
   sessionDurationMinutes?: number | null;
 };
+
+/** Lê o horário de um dia específico, com fallback para `defaultStartTime`. */
+function timeForDay(item: PlanItem, dayKey: string): string | null {
+  const raw = item.startTimesByDay;
+  let map: any = raw;
+  if (typeof raw === "string") {
+    try { map = JSON.parse(raw); } catch { map = null; }
+  }
+  if (map && typeof map === "object" && !Array.isArray(map)) {
+    const v = map[dayKey];
+    if (typeof v === "string" && /^\d{2}:\d{2}$/.test(v)) return v;
+  }
+  return item.defaultStartTime ?? null;
+}
 
 interface Props {
   planItems: PlanItem[];
@@ -180,7 +196,7 @@ export function WeeklyAgendaPreview({ planItems, startDate, durationMonths }: Pr
             .map((i) => ({
               id: i.id,
               label: i.procedureName ?? i.packageName ?? "Sessão",
-              time: i.defaultStartTime ?? "—",
+              time: timeForDay(i, key) ?? "—",
               prof: i.defaultProfessionalName ?? null,
             }))
             .sort((a, b) => (a.time > b.time ? 1 : -1));

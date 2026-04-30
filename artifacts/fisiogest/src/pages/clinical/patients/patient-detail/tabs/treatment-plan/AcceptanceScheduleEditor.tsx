@@ -60,6 +60,8 @@ type PlanItem = {
   totalSessions?: number | null;
   weekDays?: string | string[] | null;
   defaultStartTime?: string | null;
+  /** Mapa opcional dia→horário (suporte a horários diferentes por dia). */
+  startTimesByDay?: string | Record<string, string> | null;
   defaultProfessionalId?: number | null;
   defaultProfessionalName?: string | null;
   scheduleId?: number | null;
@@ -250,28 +252,83 @@ function ItemRow({
 
   const meta = KIND_META[kind];
 
+  // Parse seguro do mapa "dia → horário" persistido. Aceita objeto OU string
+  // JSON e descarta entradas inválidas (chaves desconhecidas ou tempos não-HH:MM).
+  function parseStartTimesByDay(
+    raw: string | Record<string, string> | null | undefined,
+  ): Record<WeekDayKey, string> {
+    const out = {} as Record<WeekDayKey, string>;
+    if (!raw) return out;
+    let obj: any = raw;
+    if (typeof raw === "string") {
+      try { obj = JSON.parse(raw); } catch { return out; }
+    }
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return out;
+    for (const [k, v] of Object.entries(obj)) {
+      const key = String(k).toLowerCase() as WeekDayKey;
+      if (
+        WEEK_DAYS.some((w) => w.key === key) &&
+        typeof v === "string" &&
+        /^\d{2}:\d{2}$/.test(v)
+      ) {
+        out[key] = v;
+      }
+    }
+    return out;
+  }
+
   const initialWeekDays = parseWeekDays(item.weekDays);
+  // Inicializa o mapa por dia: usa `startTimesByDay` quando disponível e,
+  // como fallback (compat com itens antigos), aplica o `defaultStartTime`
+  // a todos os dias selecionados.
+  const buildInitialStartTimes = (): Record<WeekDayKey, string> => {
+    const map = parseStartTimesByDay(item.startTimesByDay);
+    if (item.defaultStartTime) {
+      for (const k of initialWeekDays) {
+        if (!map[k]) map[k] = item.defaultStartTime;
+      }
+    }
+    return map;
+  };
+
   const [scheduleId, setScheduleId] = useState<number | null>(item.scheduleId ?? null);
   const [weekDays, setWeekDays] = useState<WeekDayKey[]>(initialWeekDays);
-  const [startTime, setStartTime] = useState<string>(item.defaultStartTime ?? "");
+  const [startTimes, setStartTimes] = useState<Record<WeekDayKey, string>>(
+    buildInitialStartTimes(),
+  );
+
+  // Snapshot do estado salvo (para detectar dirty). Serializa o mapa de
+  // horários de forma estável ordenando por dia da semana.
+  const serializeTimes = (m: Record<WeekDayKey, string>): string =>
+    WEEK_DAYS.map((w) => `${w.key}:${m[w.key] ?? ""}`).join("|");
 
   const [savedSnap, setSavedSnap] = useState({
     scheduleId: item.scheduleId ?? null,
     weekDays: initialWeekDays.join(","),
-    startTime: item.defaultStartTime ?? "",
+    startTimes: serializeTimes(buildInitialStartTimes()),
   });
 
   useEffect(() => {
     const wd = parseWeekDays(item.weekDays);
+    const times = (() => {
+      const map = parseStartTimesByDay(item.startTimesByDay);
+      if (item.defaultStartTime) {
+        for (const k of wd) {
+          if (!map[k]) map[k] = item.defaultStartTime;
+        }
+      }
+      return map;
+    })();
     setScheduleId(item.scheduleId ?? null);
     setWeekDays(wd);
-    setStartTime(item.defaultStartTime ?? "");
+    setStartTimes(times);
     setSavedSnap({
       scheduleId: item.scheduleId ?? null,
       weekDays: wd.join(","),
-      startTime: item.defaultStartTime ?? "",
+      startTimes: serializeTimes(times),
     });
-  }, [item.id, item.weekDays, item.defaultStartTime, item.scheduleId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, item.weekDays, item.defaultStartTime, item.startTimesByDay, item.scheduleId]);
 
   const selectedSchedule = useMemo(
     () => schedules.find((s) => s.id === scheduleId) ?? null,
@@ -300,20 +357,24 @@ function ItemRow({
   // Procedimento usado para checar disponibilidade
   const procedureId = item.packageProcedureId ?? item.procedureId ?? null;
 
-  // Para cada dia escolhido, busca a próxima ocorrência real e seus slots
+  // Para cada dia escolhido, busca a próxima ocorrência real e seus slots.
   const probeDates = useMemo(() => {
-    return weekDays
-      .map((k) => WEEK_DAYS.find((w) => w.key === k)!.dow)
-      .map((dow) => ({ dow, date: nextDateForDow(dow) }));
+    return weekDays.map((key) => {
+      const dow = WEEK_DAYS.find((w) => w.key === key)!.dow;
+      return { key, dow, date: nextDateForDow(dow) };
+    });
   }, [weekDays]);
 
-  // Busca os slots disponíveis em cada data (1 query por data)
-  const availabilityQueries = useQuery({
+  // Busca slots livres em cada dia. Sem mais intersecção: cada dia tem seu
+  // próprio conjunto de slots e o usuário escolhe um horário INDEPENDENTE
+  // por dia (suporta seg 08:00 + qua 10:00, por exemplo).
+  type DaySlots = { key: WeekDayKey; date: string; slots: { time: string; spotsLeft: number }[] };
+  const availabilityQueries = useQuery<DaySlots[]>({
     queryKey: [
-      "available-slots-batch",
+      "available-slots-per-day",
       scheduleId,
       procedureId,
-      probeDates.map((p) => p.date).join(","),
+      probeDates.map((p) => `${p.key}:${p.date}`).join(","),
     ],
     queryFn: async () => {
       if (!scheduleId || !procedureId || probeDates.length === 0) return [];
@@ -322,7 +383,16 @@ function ItemRow({
           const data = await apiFetchJson<any>(
             `/api/appointments/available-slots?date=${p.date}&procedureId=${procedureId}&scheduleId=${scheduleId}`,
           );
-          return { date: p.date, dow: p.dow, ...data };
+          const slots: { time: string; available: boolean; spotsLeft: number }[] =
+            data?.slots ?? [];
+          return {
+            key: p.key,
+            date: p.date,
+            slots: slots
+              .filter((s) => s.available)
+              .map((s) => ({ time: s.time, spotsLeft: s.spotsLeft }))
+              .sort((a, b) => a.time.localeCompare(b.time)),
+          };
         }),
       );
       return results;
@@ -330,36 +400,33 @@ function ItemRow({
     enabled: !!scheduleId && !!procedureId && probeDates.length > 0,
   });
 
-  // Intersecção: horários disponíveis em TODOS os dias selecionados
-  const intersectedSlots = useMemo(() => {
-    const data = availabilityQueries.data;
-    if (!data || data.length === 0) return [];
-    let common: { time: string; spotsLeft: number }[] | null = null;
-    for (const day of data) {
-      const slots: { time: string; available: boolean; spotsLeft: number }[] = day.slots ?? [];
-      const availableTimes = slots.filter((s) => s.available);
-      if (common === null) {
-        common = availableTimes.map((s) => ({ time: s.time, spotsLeft: s.spotsLeft }));
-      } else {
-        const set = new Set(availableTimes.map((s) => s.time));
-        common = common.filter((c) => set.has(c.time));
-      }
-    }
-    return (common ?? []).sort((a, b) => a.time.localeCompare(b.time));
+  // Mapa key → slots livres (para lookup rápido na renderização)
+  const slotsByDay = useMemo(() => {
+    const out = {} as Record<WeekDayKey, { time: string; spotsLeft: number }[]>;
+    for (const d of availabilityQueries.data ?? []) out[d.key] = d.slots;
+    return out;
   }, [availabilityQueries.data]);
 
-  // Se o startTime atual deixou de estar livre, marca para o usuário ver
-  const startTimeNoLongerAvailable = useMemo(() => {
-    if (!startTime || !availabilityQueries.data || availabilityQueries.data.length === 0) return false;
-    return !intersectedSlots.some((s) => s.time === startTime);
-  }, [startTime, intersectedSlots, availabilityQueries.data]);
+  // Para cada dia, indica se o horário atual deixou de estar disponível
+  const unavailableDays = useMemo(() => {
+    const out = new Set<WeekDayKey>();
+    if (!availabilityQueries.data) return out;
+    for (const d of availabilityQueries.data) {
+      const t = startTimes[d.key];
+      if (t && !d.slots.some((s) => s.time === t)) out.add(d.key);
+    }
+    return out;
+  }, [startTimes, availabilityQueries.data]);
 
   const dirty =
     (scheduleId ?? null) !== savedSnap.scheduleId ||
     weekDays.join(",") !== savedSnap.weekDays ||
-    startTime !== savedSnap.startTime;
+    serializeTimes(startTimes) !== savedSnap.startTimes;
 
-  const isValid = !!scheduleId && weekDays.length > 0 && !!startTime;
+  // Item válido = agenda + ≥1 dia + cada dia escolhido tem horário definido
+  const allDaysHaveTime =
+    weekDays.length > 0 && weekDays.every((k) => !!startTimes[k]);
+  const isValid = !!scheduleId && allDaysHaveTime;
   const slotsPerWeek = weekDays.length;
   const totalSessions = item.totalSessions ?? null;
 
@@ -386,7 +453,7 @@ function ItemRow({
       setSavedSnap({
         scheduleId: scheduleId ?? null,
         weekDays: weekDays.join(","),
-        startTime,
+        startTimes: serializeTimes(startTimes),
       });
       queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
       toast({
@@ -398,27 +465,38 @@ function ItemRow({
       toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" }),
   });
 
-  // Auto-save: assim que o item fica válido (agenda + dia + horário) e há
-  // alterações pendentes, persistimos automaticamente após um pequeno
-  // debounce. Evita o pitfall do usuário escolher tudo, navegar para a
-  // próxima etapa sem clicar em "Salvar" e ver o aviso "item recorrente sem
-  // agenda definida" em Iniciar Plano.
+  // Constrói o payload que vai para o servidor: mapa por dia + um
+  // `defaultStartTime` legacy (usa o horário do PRIMEIRO dia selecionado
+  // como fallback para clientes/processos que ainda leem só esse campo).
+  const buildSavePayload = () => {
+    const map: Record<string, string> = {};
+    for (const k of weekDays) {
+      if (startTimes[k]) map[k] = startTimes[k];
+    }
+    const fallback = weekDays.length > 0 ? startTimes[weekDays[0]] ?? "" : "";
+    return {
+      scheduleId,
+      weekDays: JSON.stringify(weekDays),
+      defaultStartTime: fallback,
+      startTimesByDay: JSON.stringify(map),
+      defaultProfessionalId: selectedSchedule?.professionalId ?? null,
+    };
+  };
+
+  // Auto-save: assim que o item fica válido (agenda + cada dia com horário)
+  // e há alterações pendentes, persistimos após um pequeno debounce. Evita
+  // o pitfall do usuário escolher tudo, navegar para a próxima etapa sem
+  // clicar em "Salvar" e ver o aviso "item recorrente sem agenda definida"
+  // em Iniciar Plano.
   useEffect(() => {
     if (disabled) return;
     if (!dirty) return;
-    if (!scheduleId || weekDays.length === 0 || !startTime) return;
+    if (!isValid) return;
     if (mutation.isPending) return;
-    const t = setTimeout(() => {
-      mutation.mutate({
-        scheduleId,
-        weekDays: JSON.stringify(weekDays),
-        defaultStartTime: startTime,
-        defaultProfessionalId: selectedSchedule?.professionalId ?? null,
-      });
-    }, 500);
+    const t = setTimeout(() => mutation.mutate(buildSavePayload()), 500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dirty, scheduleId, weekDays, startTime, disabled]);
+  }, [dirty, scheduleId, weekDays, startTimes, isValid, disabled]);
 
   // Limite contratado: o número de dias da semana selecionados não pode
   // ultrapassar `sessionsPerWeek` (frequência aprovada no plano). Como a
@@ -448,7 +526,18 @@ function ItemRow({
     setWeekDays((prev) =>
       isSelected ? prev.filter((d) => d !== key) : [...prev, key],
     );
-    setStartTime(""); // muda o conjunto de slots disponíveis
+    if (isSelected) {
+      // Removeu o dia → limpa o horário registrado para ele.
+      setStartTimes((prev) => {
+        const { [key]: _drop, ...rest } = prev;
+        return rest as Record<WeekDayKey, string>;
+      });
+    }
+  }
+
+  function setTimeForDay(key: WeekDayKey, time: string) {
+    if (disabled) return;
+    setStartTimes((prev) => ({ ...prev, [key]: time }));
   }
 
   function handleSave() {
@@ -469,20 +558,19 @@ function ItemRow({
       });
       return;
     }
-    if (!startTime) {
+    if (!allDaysHaveTime) {
+      const faltantes = weekDays
+        .filter((k) => !startTimes[k])
+        .map((k) => WEEK_DAYS.find((w) => w.key === k)?.long)
+        .join(", ");
       toast({
-        title: "Escolha um horário",
-        description: "O horário é obrigatório para gerar a agenda.",
+        title: "Defina um horário para cada dia",
+        description: `Falta o horário em: ${faltantes}.`,
         variant: "destructive",
       });
       return;
     }
-    mutation.mutate({
-      scheduleId,
-      weekDays: JSON.stringify(weekDays),
-      defaultStartTime: startTime,
-      defaultProfessionalId: selectedSchedule?.professionalId ?? null,
-    });
+    mutation.mutate(buildSavePayload());
   }
 
   // Estados visuais
@@ -569,7 +657,7 @@ function ItemRow({
           value={scheduleId != null ? String(scheduleId) : ""}
           onValueChange={(v) => {
             setScheduleId(Number(v));
-            setStartTime(""); // muda totalmente o conjunto de slots
+            setStartTimes({} as Record<WeekDayKey, string>); // muda totalmente o conjunto de slots
           }}
           disabled={disabled || schedulesLoading}
         >
@@ -684,11 +772,15 @@ function ItemRow({
         )}
       </div>
 
-      {/* Etapa 3 — Horário (sugestões reais) */}
+      {/* Etapa 3 — Horário POR DIA (cada dia escolhe seu próprio slot) */}
       <div className="space-y-1.5">
         <Label className="text-[11px] text-slate-500 uppercase font-semibold tracking-wide flex items-center">
-          {stepBadge(3, weekDays.length > 0 && !startTime, !!startTime && !startTimeNoLongerAvailable)}
-          <Clock className="w-3 h-3 mr-1" /> Horário sugerido
+          {stepBadge(
+            3,
+            weekDays.length > 0 && !allDaysHaveTime,
+            allDaysHaveTime && unavailableDays.size === 0,
+          )}
+          <Clock className="w-3 h-3 mr-1" /> Horário por dia
           {availabilityQueries.isFetching && (
             <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-1" />
           )}
@@ -702,49 +794,75 @@ function ItemRow({
           <div className="flex items-center gap-2 text-[11px] text-slate-400">
             <Loader2 className="w-3 h-3 animate-spin" /> Buscando horários disponíveis…
           </div>
-        ) : intersectedSlots.length === 0 ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-            <span>
-              Não encontramos horários livres em comum nos dias escolhidos.
-              Tente reduzir os dias ou escolher outra agenda.
-            </span>
-          </div>
         ) : (
-          <>
-            <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto p-0.5">
-              {intersectedSlots.map((s) => {
-                const active = startTime === s.time;
-                return (
-                  <button
-                    key={s.time}
-                    type="button"
-                    onClick={() => setStartTime(s.time)}
-                    disabled={disabled}
-                    className={`h-8 px-2.5 rounded-md border text-xs font-mono font-medium transition flex items-center gap-1 ${
-                      active
-                        ? "bg-primary text-white border-primary shadow-sm"
-                        : "bg-white text-slate-700 border-slate-200 hover:border-primary/40 hover:bg-primary/5"
-                    }`}
-                  >
-                    <CalendarCheck className={`w-3 h-3 ${active ? "" : "text-emerald-500"}`} />
-                    {s.time}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-slate-400">
-              {intersectedSlots.length} horário(s) livre(s) em comum nos dias selecionados.
-              Considera bloqueios e consultas já marcadas para a próxima ocorrência de cada dia.
-            </p>
-          </>
-        )}
+          <div className="space-y-2">
+            {weekDays.map((key) => {
+              const dayMeta = WEEK_DAYS.find((w) => w.key === key)!;
+              const slots = slotsByDay[key] ?? [];
+              const chosen = startTimes[key] ?? "";
+              const noLonger = !!chosen && !slots.some((s) => s.time === chosen);
+              return (
+                <div
+                  key={key}
+                  className="rounded-lg border border-slate-200 bg-slate-50/40 p-2.5"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-semibold text-slate-700">
+                      {dayMeta.long}
+                    </span>
+                    {chosen && !noLonger && (
+                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                        {chosen}
+                      </span>
+                    )}
+                  </div>
 
-        {startTimeNoLongerAvailable && startTime && (
-          <p className="text-[11px] text-rose-600 flex items-center gap-1 mt-1">
-            <AlertTriangle className="w-3 h-3" />
-            O horário {startTime} deixou de estar livre. Escolha outro acima.
-          </p>
+                  {slots.length === 0 ? (
+                    <div className="text-[11px] text-amber-800 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Sem horários livres na próxima {dayMeta.long.toLowerCase()}.
+                        Tente outra agenda ou outro dia.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-0.5">
+                      {slots.map((s) => {
+                        const active = chosen === s.time;
+                        return (
+                          <button
+                            key={s.time}
+                            type="button"
+                            onClick={() => setTimeForDay(key, s.time)}
+                            disabled={disabled}
+                            className={`h-7 px-2 rounded-md border text-[11px] font-mono font-medium transition flex items-center gap-1 ${
+                              active
+                                ? "bg-primary text-white border-primary shadow-sm"
+                                : "bg-white text-slate-700 border-slate-200 hover:border-primary/40 hover:bg-primary/5"
+                            }`}
+                          >
+                            <CalendarCheck className={`w-3 h-3 ${active ? "" : "text-emerald-500"}`} />
+                            {s.time}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {noLonger && (
+                    <p className="text-[11px] text-rose-600 flex items-center gap-1 mt-1.5">
+                      <AlertTriangle className="w-3 h-3" />
+                      O horário {chosen} deixou de estar livre. Escolha outro acima.
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+            <p className="text-[10px] text-slate-400">
+              Cada dia tem seu próprio horário. Considera bloqueios e consultas
+              já marcadas para a próxima ocorrência de cada dia.
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -51,14 +51,29 @@ export function MaterializeBlock({
   const hasMonthly = monthlyItems.length > 0;
   const isMaterialized = !!materializedAt;
 
-  // Detecta itens recorrentes sem dias/horários configurados.
-  const itemsMissingSchedule = monthlyItems.filter((i) => {
-    let weekDaysCount = 0;
+  // Detecta itens recorrentes sem dias/horários configurados. Considera o
+  // mapa `startTimesByDay` (horário por dia) — cada dia escolhido precisa
+  // ter um horário; o `defaultStartTime` serve apenas como fallback legacy.
+  const itemsMissingSchedule = monthlyItems.filter((i: any) => {
+    let weekDaysArr: string[] = [];
     try {
       const wd = i.weekDays ? (typeof i.weekDays === "string" ? JSON.parse(i.weekDays) : i.weekDays) : [];
-      weekDaysCount = Array.isArray(wd) ? wd.length : 0;
-    } catch { weekDaysCount = 0; }
-    return weekDaysCount === 0 || !i.defaultStartTime;
+      weekDaysArr = Array.isArray(wd) ? wd : [];
+    } catch { weekDaysArr = []; }
+    if (weekDaysArr.length === 0) return true;
+
+    let timesMap: Record<string, string> = {};
+    try {
+      const raw = i.startTimesByDay;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) timesMap = parsed;
+    } catch { timesMap = {}; }
+
+    return weekDaysArr.some((d) => {
+      const t = timesMap[String(d).toLowerCase()];
+      const valid = typeof t === "string" && /^\d{2}:\d{2}$/.test(t);
+      return !valid && !i.defaultStartTime;
+    });
   });
   const hasMissingSchedule = itemsMissingSchedule.length > 0;
 

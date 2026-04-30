@@ -241,7 +241,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
     const {
       procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
       unitPrice, unitMonthlyPrice, discount,
-      weekDays, defaultStartTime, defaultProfessionalId, scheduleId,
+      weekDays, defaultStartTime, startTimesByDay, defaultProfessionalId, scheduleId,
     } = req.body;
 
     if (!procedureId && !packageId) {
@@ -312,7 +312,7 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     const {
       procedureId, packageId, sessionsPerWeek, totalSessions, priority, notes,
       unitPrice, unitMonthlyPrice, discount,
-      weekDays, defaultStartTime, defaultProfessionalId, scheduleId,
+      weekDays, defaultStartTime, startTimesByDay, defaultProfessionalId, scheduleId,
     } = req.body;
 
     if (!(await verifyItemOwnership(id, req))) {
@@ -436,6 +436,52 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
       updateData.weekDays = weekDays;
     }
     if (defaultStartTime !== undefined) updateData.defaultStartTime = defaultStartTime;
+    if (startTimesByDay !== undefined) {
+      // Mapa "dia da semana → horário" para suportar agenda heterogênea
+      // (ex.: seg 08:00 + qua 10:00). Aceita objeto JS ou string JSON e
+      // persiste sempre como string JSON. Valida que cada chave é um dia
+      // válido (lowercase) e cada valor está no formato HH:MM.
+      const validDayKeys = new Set([
+        "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+      ]);
+      let parsedMap: Record<string, string> | null = null;
+      if (startTimesByDay === null) {
+        parsedMap = null;
+      } else {
+        let raw: any = startTimesByDay;
+        if (typeof raw === "string") {
+          try { raw = JSON.parse(raw); } catch { raw = null; }
+        }
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+          res.status(400).json({
+            error: "invalid_start_times_by_day",
+            message: "startTimesByDay deve ser um objeto { dia: 'HH:MM' }.",
+          });
+          return;
+        }
+        const cleaned: Record<string, string> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          const key = String(k).toLowerCase();
+          if (!validDayKeys.has(key)) {
+            res.status(400).json({
+              error: "invalid_start_times_by_day",
+              message: `Dia da semana inválido em startTimesByDay: "${k}".`,
+            });
+            return;
+          }
+          if (typeof v !== "string" || !/^\d{2}:\d{2}$/.test(v)) {
+            res.status(400).json({
+              error: "invalid_start_times_by_day",
+              message: `Horário inválido para ${key}: deve estar no formato HH:MM.`,
+            });
+            return;
+          }
+          cleaned[key] = v;
+        }
+        parsedMap = cleaned;
+      }
+      updateData.startTimesByDay = parsedMap === null ? null : JSON.stringify(parsedMap);
+    }
     if (defaultProfessionalId !== undefined) updateData.defaultProfessionalId = defaultProfessionalId != null ? Number(defaultProfessionalId) : null;
     if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;
     // Duração da consulta vem SEMPRE do procedimento vinculado — sem

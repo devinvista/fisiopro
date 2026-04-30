@@ -209,8 +209,14 @@ export const treatmentPlanProceduresTable = pgTable("treatment_plan_procedures",
   // Date.toLocaleString): monday|tuesday|wednesday|thursday|friday|saturday|sunday.
   // Persistido como JSON simples para flexibilidade — array vazio = não materializado.
   weekDays: text("week_days"),
-  // Horário padrão das consultas materializadas ("HH:MM").
+  // Horário padrão das consultas materializadas ("HH:MM"). Usado quando não
+  // há entrada específica em `startTimesByDay` para o dia (compat e fallback).
   defaultStartTime: text("default_start_time"),
+  // Mapa opcional de horários por dia da semana para suportar agenda
+  // heterogênea (ex.: seg 08:00 + qua 10:00). JSON: {"monday":"08:00",...}.
+  // Quando definido, sobrescreve `defaultStartTime` para os dias listados.
+  // NULL = comportamento legado (todos os dias usam `defaultStartTime`).
+  startTimesByDay: text("start_times_by_day"),
   // Profissional padrão das consultas materializadas (FK lógica para users.id).
   defaultProfessionalId: integer("default_professional_id"),
   // Agenda (calendário/sala/profissional) onde as consultas materializadas
