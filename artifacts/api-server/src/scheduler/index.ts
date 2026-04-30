@@ -15,6 +15,7 @@ import { monthlyPlanBillingJob } from "./jobs/monthly-plan-billing.job.js";
 import { autoConfirmJob, endOfDayJob } from "./jobs/policies.job.js";
 import { subscriptionCheckJob } from "./jobs/subscription.job.js";
 import { endOfMonthRevenueClosureJob } from "./jobs/end-of-month-closure.job.js";
+import { slotHoldsCleanupJob } from "./jobs/slot-holds-cleanup.job.js";
 
 export function startScheduler(): void {
   registerJob(billingJob);
@@ -23,4 +24,5 @@ export function startScheduler(): void {
   registerJob(endOfDayJob);
   registerJob(subscriptionCheckJob);
   registerJob(endOfMonthRevenueClosureJob);
+  registerJob(slotHoldsCleanupJob);
 }

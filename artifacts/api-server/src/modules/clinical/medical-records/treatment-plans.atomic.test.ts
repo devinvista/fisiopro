@@ -107,6 +107,15 @@ vi.mock("./treatment-plans.materialization.js", () => ({
   dematerializeTreatmentPlan: dematerializeMock,
 }));
 
+// Sprint 15 (F5) — slot holds são módulo separado; o orchestrator chama
+// `findConflictsForPlanMaterialization` ANTES do materialize e `releaseHolds`
+// DEPOIS. Para os testes do orchestrator, mockamos como no-op (sem conflito,
+// release silencioso) — testes específicos do hold vivem em slot-holds.test.ts.
+vi.mock("./slot-holds.service.js", () => ({
+  findConflictsForPlanMaterialization: vi.fn(async () => []),
+  releaseHolds: vi.fn(async () => {}),
+}));
+
 vi.mock("./treatment-plans.acceptance.js", () => ({
   resolveItemKind: (item: { kind: string | null; packageId: number | null; packageType: string | null }) => {
     if (item.kind === "recorrenteMensal") return "recorrenteMensal";

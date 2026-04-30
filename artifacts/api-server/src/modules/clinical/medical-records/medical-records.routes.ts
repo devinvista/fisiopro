@@ -273,6 +273,66 @@ router.get(
   }),
 );
 
+// Sprint 15 (F5) — Slot holds (TTL 15min). Reserva os horários escolhidos
+// pelo paciente/operador no editor de agenda enquanto ele caminha para o
+// aceite, impedindo que outro plano roube o slot.
+//
+// POST: cria/renova hold. Body `{ slots: [{itemId,date,startTime,endTime,scheduleId,procedureId}], ttlMinutes? }`.
+//   - 200 com `{ ok, slots, expiresAt, ttlSecondsRemaining }`.
+//   - 409 com `{ code:"slot_conflict", conflicts: [...] }` se algum slot
+//     já está ocupado por appointment ou hold de outro plano.
+//   - 400 se algum slot é mal-formado ou item não pertence ao plano.
+//
+// DELETE: libera o hold. Idempotente.
+//
+// GET: status atual `{ slots, expiresAt, ttlSecondsRemaining }`. Slots
+//   vazios quando inexistente OU expirado.
+router.post(
+  "/treatment-plans/:planId/holds",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    if (!Number.isFinite(planId) || planId <= 0) {
+      throw HttpError.badRequest("planId inválido");
+    }
+    const body = (req.body ?? {}) as { slots?: unknown; ttlMinutes?: unknown };
+    const { createOrRenewHolds } = await import("./slot-holds.service.js");
+    const result = await createOrRenewHolds(
+      planId,
+      Array.isArray(body.slots) ? body.slots : [],
+      Number(body.ttlMinutes) || undefined,
+    );
+    res.json(result);
+  }),
+);
+
+router.delete(
+  "/treatment-plans/:planId/holds",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    if (!Number.isFinite(planId) || planId <= 0) {
+      throw HttpError.badRequest("planId inválido");
+    }
+    const { releaseHolds } = await import("./slot-holds.service.js");
+    await releaseHolds(planId);
+    res.status(204).end();
+  }),
+);
+
+router.get(
+  "/treatment-plans/:planId/holds",
+  requirePermission("medical.read"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    if (!Number.isFinite(planId) || planId <= 0) {
+      throw HttpError.badRequest("planId inválido");
+    }
+    const { getHolds } = await import("./slot-holds.service.js");
+    res.json(await getHolds(planId));
+  }),
+);
+
 // Sprint 2 — gera (ou reaproveita) um link público de aceite, válido por 7 dias.
 // Retorna a URL absoluta (montada com APP_PUBLIC_URL ou Origin do request).
 router.post(

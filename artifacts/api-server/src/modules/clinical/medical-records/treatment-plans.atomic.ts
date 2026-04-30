@@ -306,6 +306,23 @@ export async function acceptAndMaterializePlan(
     );
   }
 
+  // 1b) Sprint 15 (F5) — Conflitos com holds vivos de OUTROS planos.
+  //
+  // Detectamos ANTES de aceitar/materializar para falhar com 409 sem ter
+  // que rodar o rollback caro do `dematerializeTreatmentPlan`. Holds de
+  // appointments existentes não precisam ser checados aqui — o
+  // `materializeTreatmentPlan` já tem sua própria detecção de conflito.
+  const { findConflictsForPlanMaterialization, releaseHolds } =
+    await import("./slot-holds.service.js");
+  const holdConflicts = await findConflictsForPlanMaterialization(planId);
+  if (holdConflicts.length > 0) {
+    throw new HttpError(
+      409,
+      "Alguns horários do seu plano foram reservados por outro paciente. Escolha outros horários e tente de novo.",
+      { issues: { code: "slot_conflict", conflicts: holdConflicts } },
+    );
+  }
+
   // 2) Carrega estado atual para detectar idempotência.
   const [planBefore] = await db
     .select({
@@ -397,6 +414,15 @@ export async function acceptAndMaterializePlan(
     .from(treatmentPlansTable)
     .where(eq(treatmentPlansTable.id, planId))
     .limit(1);
+
+  // 6) Limpa holds do plano corrente — appointments reais existem agora,
+  //    o hold já cumpriu seu papel. Best-effort: falha aqui não invalida
+  //    o aceite (apenas deixa lixo que o job de cleanup vai resgatar).
+  try {
+    await releaseHolds(planId);
+  } catch {
+    /* não bloqueia */
+  }
 
   return {
     ok: true,

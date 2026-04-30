@@ -34,6 +34,7 @@ import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSe
 import { ObjectivesField } from "./treatment-plan/ObjectivesField";
 import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
 import { PlanScheduleEditor } from "./treatment-plan/PlanScheduleEditor";
+import type { PlanItemForHold } from "./treatment-plan/usePlanSlotHolds";
 import { AvulsoMonthlyEstimate } from "./treatment-plan/AvulsoMonthlyEstimate";
 import { ContractAcceptanceBlock } from "./treatment-plan/ContractAcceptanceBlock";
 import { MaterializeBlock } from "./treatment-plan/MaterializeBlock";
@@ -479,6 +480,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           {/* Etapa 3 — Agenda (libera o contrato quando todos os mensais têm horário) */}
           {activeStep === "agenda" && (
             <StepAgenda
+              patientId={patientId}
               selectedPlanId={selectedPlanId}
               planItems={planItems}
               planItemsKey={planItemsKey}
@@ -1055,9 +1057,10 @@ function StepCobranca({
 
 // ─── Etapa 3 — Agenda (antes do aceite) ───────────────────────────────────
 function StepAgenda({
-  selectedPlanId, planItems, planItemsKey, isStarted,
+  patientId, selectedPlanId, planItems, planItemsKey, isStarted,
   monthlyMissingCount, onAdvance,
 }: {
+  patientId: number;
   selectedPlanId: number;
   planItems: PlanProcedureItem[];
   planItemsKey: any;
@@ -1066,6 +1069,54 @@ function StepAgenda({
   onAdvance: () => void;
 }) {
   const allMonthlyConfigured = monthlyMissingCount === 0;
+  const { toast } = useToast();
+  const [reserving, setReserving] = useState(false);
+
+  // Sprint 15 (F5) — Ao avançar para Contrato, reservamos os slots por
+  // 15min via POST /holds. Isso impede que outro plano roube horário
+  // enquanto o paciente assina. Em conflito (409), abortamos o avanço e
+  // mostramos toast com a lista de conflitos para o usuário ajustar.
+  async function handleAdvance() {
+    if (isStarted) {
+      // Plano já materializado — appointments existem; pular hold.
+      onAdvance();
+      return;
+    }
+    setReserving(true);
+    try {
+      const { reservePlanSlots } = await import("./treatment-plan/usePlanSlotHolds");
+      const result = await reservePlanSlots(
+        patientId,
+        selectedPlanId,
+        planItems as PlanItemForHold[],
+      );
+      if (!result.ok) {
+        const conflicts = result.conflicts ?? [];
+        const previewMsg = conflicts.slice(0, 3)
+          .map((c) => `• ${c.message}`)
+          .join("\n");
+        const more = conflicts.length > 3 ? `\n…e mais ${conflicts.length - 3}` : "";
+        toast({
+          title: "Horários indisponíveis",
+          description:
+            (previewMsg || "Alguns horários foram reservados por outro paciente.") +
+            more +
+            "\nVolte para Agenda e escolha outros horários.",
+          variant: "destructive",
+        });
+        return;
+      }
+      onAdvance();
+    } catch (err) {
+      toast({
+        title: "Erro ao reservar horários",
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setReserving(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -1109,16 +1160,19 @@ function StepAgenda({
 
       <div className="flex justify-end pt-2">
         <Button
-          onClick={onAdvance}
-          disabled={!allMonthlyConfigured && !isStarted}
+          onClick={handleAdvance}
+          disabled={(!allMonthlyConfigured && !isStarted) || reserving}
           className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5"
           title={
             !allMonthlyConfigured && !isStarted
               ? "Configure todos os itens recorrentes antes de avançar"
+              : reserving
+              ? "Reservando horários…"
               : undefined
           }
         >
-          Avançar para Contrato <ArrowRight className="w-4 h-4" />
+          {reserving ? "Reservando…" : "Avançar para Contrato"}
+          <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>

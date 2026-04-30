@@ -189,6 +189,14 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   cancelledAt: timestamp("cancelled_at"),
   // ID do usuário (clínica) que executou o cancelamento.
   cancelledBy: integer("cancelled_by"),
+  // ── Sprint 15 (F5) — Slot holds (TTL 15min) ────────────────────────────
+  // JSON array de {itemId, date, startTime, endTime, scheduleId, procedureId}
+  // congelando os horários escolhidos no editor de agenda. Evita que outro
+  // paciente roube o slot entre a escolha e o aceite atômico.
+  slotHoldsJson: text("slot_holds_json"),
+  // Expiração do hold. Queries de conflito filtram por > now(); holds
+  // mortos não bloqueiam e são limpos pelo job `slotHoldsCleanup`.
+  slotHoldsExpiresAt: timestamp("slot_holds_expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
