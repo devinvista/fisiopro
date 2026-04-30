@@ -22,7 +22,9 @@ export function registerJob({ name, cronExpr, run, silentSuccess }: JobOpts): vo
     async () => {
       const startedAt = Date.now();
       const lock = await tryAcquireAdvisoryLock(name).catch((err) => {
-        logger.error({ job: name, err }, `[scheduler] falha ao adquirir lock de ${name}`);
+        // Não-fatal: pulamos esta execução e a próxima janela do cron tenta novamente.
+        // Geralmente erros transitórios do Postgres serverless (Neon control plane).
+        logger.warn({ job: name, err }, `[scheduler] falha ao adquirir lock de ${name} — pulando execução`);
         return null;
       });
 

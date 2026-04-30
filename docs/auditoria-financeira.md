@@ -267,3 +267,14 @@ Próximos passos:
 - **Sprint 9** (B9 + cascata `faturaPlano`): sub-ledger via `payment_allocations` com migração e backfill controlado; cascata de estorno também para `faturaPlano` (após decisão operacional sobre semântica de mês inteiro); job cron noturno consumindo o endpoint `/reports/reconciliation` e gravando em `discrepancy_log` para alerta diário; testes de integração com Postgres real cobrindo o lock de carteira (`wallet-race.test.ts`).
 
 O caminho feliz já estava consistente; o caminho de **edição/estorno/exceção** agora também — o sistema atingiu o nível mínimo "auditável" exigido para onboarding de clientes com auditoria contábil formal (CFC/CRC, escritório contador externo). **Status atual: 351/351 testes verdes, todos os bugs de severidade média/alta resolvidos, restando apenas evolução arquitetural (sub-ledger explícito) para Sprint 9.**
+
+---
+
+## 9. Manutenção pós-Sprint 8 (30/04/2026)
+
+Pequenas correções fora do escopo dos 15 bugs financeiros, identificadas em análise de saúde do projeto:
+
+- **TS2304 em `TreatmentPlanTab.tsx`** (frontend): a prop `isAccepted` era usada no JSX do `StepItens` mas não estava declarada na assinatura nem propagada da página-pai. Adicionada à `props` e ao callsite. Não afeta dados financeiros — apenas UI do plano.
+- **Lock advisory do scheduler resiliente**: `tryAcquireAdvisoryLock` (`artifacts/api-server/src/scheduler/lock.ts`) agora faz retry curto (3 tentativas, 200/400ms backoff) para absorver erros transitórios do Postgres serverless (Neon: "Control plane request failed" durante cold-start). O log do `registerJob.ts` foi degradado de `error` para `warn` quando o lock falha, refletindo que é não-fatal — a próxima execução cron resolve. Sem mudança de semântica: continua usando `pg_try_advisory_lock` (não bloqueante) e mantém invariante de "1 réplica executa por vez".
+
+Estado validado: `pnpm typecheck` verde, `pnpm test` 351/351 verde.

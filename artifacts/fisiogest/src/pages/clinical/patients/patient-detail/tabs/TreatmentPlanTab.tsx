@@ -447,6 +447,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               saving={saving}
               handleSave={handleSave}
               hasItems={hasItems}
+              isAccepted={isAccepted}
               onAdvance={() => setActiveStep("aceite")}
             />
           )}
@@ -754,7 +755,7 @@ function Metric({
 // ─── Etapa 1 — Itens ───────────────────────────────────────────────────────
 function StepItens({
   patientId, selectedPlanId, planItems, planItemsKey, form, setForm, professionals,
-  clinicalOpen, setClinicalOpen, saving, handleSave, hasItems, onAdvance,
+  clinicalOpen, setClinicalOpen, saving, handleSave, hasItems, isAccepted, onAdvance,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -768,6 +769,7 @@ function StepItens({
   saving: boolean;
   handleSave: () => void;
   hasItems: boolean;
+  isAccepted: boolean;
   onAdvance: () => void;
 }) {
   const updateForm = (patch: any) =>

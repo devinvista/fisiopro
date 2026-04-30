@@ -15,6 +15,13 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 **Thousands Separator**: dot (e.g., 1.250)
 **Default Time Zone**: America/Sao_Paulo (UTC-3 / UTC-2 during daylight saving)
 
+## Recent Changes
+
+**30/04/2026 — Manutenção pós-auditoria financeira (Sprint 8)**
+- **Bug TypeScript corrigido:** `TreatmentPlanTab.tsx` (`StepItens`) não declarava a prop `isAccepted`, quebrando o typecheck. Prop adicionada à assinatura e à chamada (TS2304 resolvido).
+- **Resiliência do scheduler:** `tryAcquireAdvisoryLock` agora aplica retry com backoff (3 tentativas, 200/400ms) para tolerar erros transitórios do Postgres serverless ("Control plane request failed" do Neon durante cold-start). Falha residual é logada como `warn` (não-fatal: a próxima janela do cron tenta novamente).
+- **Estado validado:** `pnpm typecheck` verde, `pnpm test` 351/351 verde.
+
 ## User Preferences
 
 Always import `useAuth` from `@/hooks/use-auth`. The `auth-context.tsx` exports only `AuthProvider` and `AuthContext`. The `useAuth` hook now exposes `refreshUser()` to refetch `/api/auth/me` and update the user in context (e.g., after LGPD policy acceptance, so the modal doesn't reappear on every page navigation).
