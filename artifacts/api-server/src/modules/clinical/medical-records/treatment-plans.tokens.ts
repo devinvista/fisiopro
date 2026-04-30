@@ -238,16 +238,9 @@ export interface PublicPlanSnapshot {
   contractClauses: PublicPlanSnapshotClause[];
   acceptedClauses: PublicPlanSnapshotClause[] | null;
   /**
-   * Sprint 15 (F4) — flag da clínica que controla o fluxo de aceite. Quando
-   * `true`, a UI pública renderiza a agenda completa e usa o endpoint
-   * `/accept-and-materialize` (atômico). Quando `false`, mantém o fluxo
-   * legado (`/accept`).
-   */
-  useV2AcceptanceFlow: boolean;
-  /**
    * Sprint 15 (F4) — consultas que serão criadas ao materializar o plano.
    * Vazio quando a clínica ainda não configurou agenda em nenhum item; a UI
-   * exibe aviso "aguardando configuração da agenda" e bloqueia o aceite v2.
+   * exibe aviso "aguardando configuração da agenda" e bloqueia o aceite.
    */
   appointmentsPreview: PublicPlanAppointmentPreview[];
   /**
@@ -351,7 +344,6 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       cancellationPolicyHours: clinicsTable.cancellationPolicyHours,
       noShowFeeEnabled: clinicsTable.noShowFeeEnabled,
       noShowFeeAmount: clinicsTable.noShowFeeAmount,
-      useV2AcceptanceFlow: clinicsTable.useV2AcceptanceFlow,
     })
     .from(clinicsTable)
     .where(eq(clinicsTable.isActive, true))
@@ -495,7 +487,6 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       : null,
     contractClauses: clausesRows.map((c) => ({ ...c, isRequired: !!c.isRequired })),
     acceptedClauses,
-    useV2AcceptanceFlow: !!clinicRow?.useV2AcceptanceFlow,
     appointmentsPreview: previewAppointments,
     itemsWithoutSchedule,
   };

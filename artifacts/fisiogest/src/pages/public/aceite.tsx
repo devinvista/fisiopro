@@ -123,8 +123,7 @@ interface PublicPlanSnapshot {
   clinic: PublicPlanClinic | null;
   contractClauses: PublicContractClause[];
   acceptedClauses: PublicAcceptedClause[];
-  // Sprint 15 (F4) — fluxo v2 com agenda real antes do aceite.
-  useV2AcceptanceFlow?: boolean;
+  // Sprint 15 — agenda real exibida antes do aceite atômico.
   appointmentsPreview?: PublicAppointmentPreview[];
   itemsWithoutSchedule?: number[];
 }
@@ -289,12 +288,10 @@ export default function AceitePage() {
   );
   const allRequiredAccepted = requiredClauseCodes.every((c) => acceptedClauseCodes.has(c));
 
-  // Sprint 15 (F4) — fluxo v2: requer agenda preview não-vazia para liberar
-  // o aceite. Quando a clínica não migrou para v2, mantém comportamento legado
-  // (snapshot omite o campo ou vem com `useV2AcceptanceFlow=false`).
-  const isV2Flow = !!snapshot?.useV2AcceptanceFlow;
+  // Sprint 15 — aceite atômico: requer agenda preview não-vazia para liberar
+  // o botão. A clínica precisa configurar dias/horários antes do paciente assinar.
   const previewAppointments = snapshot?.appointmentsPreview ?? [];
-  const v2NeedsSchedule = isV2Flow && previewAppointments.length === 0;
+  const needsSchedule = previewAppointments.length === 0;
 
   // Agrupa o preview por mês (YYYY-MM-01) preservando a ordem do backend.
   const previewByMonth = useMemo(() => {
@@ -309,15 +306,13 @@ export default function AceitePage() {
 
   async function handleSubmit() {
     if (!signature.trim() || !agreed || !allRequiredAccepted || submitting) return;
-    if (v2NeedsSchedule) return; // proteção extra além do disabled do botão.
+    if (needsSchedule) return; // proteção extra além do disabled do botão.
     setSubmitting(true);
     setSubmitError(null);
-    // Em v2, dispara o fluxo atômico (assina + materializa numa só transação).
-    // Em v1 (legado), mantém o /accept antigo.
-    const path = isV2Flow ? "accept-and-materialize" : "accept";
+    // Aceite atômico: assina + materializa numa única transação.
     try {
       const res = await fetch(
-        `${API_BASE}/api/public/treatment-plans/by-token/${token}/${path}`,
+        `${API_BASE}/api/public/treatment-plans/by-token/${token}/accept-and-materialize`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -450,9 +445,9 @@ export default function AceitePage() {
         </section>
       )}
 
-      {/* Sprint 15 (F4) — Sua agenda (preview real das consultas).
-          Renderizado apenas no fluxo v2 e antes da assinatura. */}
-      {!isAccepted && isV2Flow && (
+      {/* Sprint 15 — Sua agenda (preview real das consultas).
+          Renderizado antes da assinatura para o paciente conferir. */}
+      {!isAccepted && (
         <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50/40 p-5">
           <div className="flex items-center gap-2 mb-3">
             <CalendarDays className="w-5 h-5 text-blue-700" />
@@ -628,7 +623,7 @@ export default function AceitePage() {
               {submitError}
             </p>
           )}
-          {v2NeedsSchedule && (
+          {needsSchedule && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-start gap-1.5">
               <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               A clínica precisa configurar a agenda das suas consultas antes
@@ -643,13 +638,13 @@ export default function AceitePage() {
               !agreed ||
               !allRequiredAccepted ||
               submitting ||
-              v2NeedsSchedule
+              needsSchedule
             }
-            title={v2NeedsSchedule ? "Aguardando configuração de agenda pela clínica" : undefined}
+            title={needsSchedule ? "Aguardando configuração de agenda pela clínica" : undefined}
             className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
           >
             {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {isV2Flow ? "Assinar e iniciar plano" : "Assinar e aceitar contrato"}
+            Assinar e iniciar plano
           </button>
           {snap.expiresAt && (
             <p className="text-[11px] text-slate-400 text-center">

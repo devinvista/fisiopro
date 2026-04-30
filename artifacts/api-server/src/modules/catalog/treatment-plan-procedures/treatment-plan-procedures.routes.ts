@@ -327,7 +327,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
     }
 
     // Validação opcional do mapa "dia → horário". O frontend envia tanto na
-    // criação rápida quanto via `AcceptanceScheduleEditor`, então persistir
+    // criação rápida quanto via `PlanScheduleEditor`, então persistir
     // já no POST evita perder a configuração silenciosamente.
     let startTimesByDayValue: string | null = null;
     if (startTimesByDay !== undefined) {

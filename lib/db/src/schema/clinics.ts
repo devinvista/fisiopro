@@ -33,15 +33,9 @@ export const clinicsTable = pgTable("clinics", {
   //   - "semCredito"   : não gera crédito (paciente perde a sessão).
   //   - "taxa"         : cobra taxa de no-show configurada na clínica.
   lateCancellationPolicy: text("late_cancellation_policy").notNull().default("creditoNormal"),
-  // ── Sprint 15 (F3) — Feature flag do novo fluxo de aceite (v2) ───────────
-  // `false` (default): wizard legado de 3 etapas (itens/aceite/cobrança).
-  // `true`           : wizard v2 de 4 etapas (itens/cobrança/agenda/contrato)
-  //                    + aceite atômico via `POST /accept-and-materialize`.
-  // Coexistência durante rollout — ver migration 0017.
-  // Sprint 15 (F6) — default TRUE: clínicas novas nascem no fluxo v2 (aceite
-  // atômico com calendário). Clínicas existentes pré-F6 mantêm o valor que
-  // já tinham (a migration 0018 trocou só o DEFAULT, não tocou linhas).
-  useV2AcceptanceFlow: boolean("use_v2_acceptance_flow").notNull().default(true),
+  // ── Sprint 15 (F7) — Fluxo de aceite v2 100% migrado ─────────────────────
+  // A coluna `use_v2_acceptance_flow` foi removida pela migration 0019
+  // (todas as clínicas operam no fluxo atômico de 4 etapas).
 });
 
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ id: true, createdAt: true });

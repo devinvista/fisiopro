@@ -166,52 +166,13 @@ router.delete("/treatment-plans/:planId", requirePermission("medical.write"), as
   res.status(204).send();
 }));
 
-// Sprint 2 — aceite formal do plano (vira "venda"):
-// snapshot dos preços vigentes + bloqueio de edição de valores comerciais.
+// Sprint 15 (F7) — Aceite + materialização ATÔMICA (único fluxo suportado).
 //
-// @deprecated Sprint 15 (F6) — substituído por
-// `POST /treatment-plans/:planId/accept-and-materialize` (logo abaixo),
-// que aceita + materializa atomicamente. Endpoint mantido para compat
-// com clínicas ainda em v1 (`use_v2_acceptance_flow=false`). Remoção
-// planejada após 90 dias com 100% das clínicas migradas para v2.
-router.post(
-  "/treatment-plans/:planId/accept",
-  requirePermission("medical.write"),
-  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
-    const patientId = patientIdParam(req as Request<P>);
-    const planId = parseInt(req.params.planId);
-    // Sprint 2 — captura trilha LGPD: assinatura digitada + IP + user-agent.
-    // Sprint 11 (P5) — também captura os códigos das cláusulas marcadas pelo
-    // paciente. O service valida obrigatoriedade contra `is_required=true`.
-    const body = (req.body ?? {}) as { signature?: string; acceptedClauseCodes?: unknown };
-    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
-    if (!signature) {
-      res.status(400).json({ error: "signature_required", message: "Assinatura (nome completo) é obrigatória." });
-      return;
-    }
-    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
-      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
-      : [];
-    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
-    const ip = ipHeader || req.ip || null;
-    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
-    const plan = await svc.acceptPatientTreatmentPlan(patientId, planId, getCtx(req as AuthRequest), {
-      signature,
-      ip,
-      device: ua,
-      via: "presencial",
-      acceptedClauseCodes,
-    });
-    res.json(plan);
-  }),
-);
-
-// Sprint 15 (F2) — Aceite + materialização ATÔMICA.
-//
-// Novo fluxo: o paciente já configurou agenda + cobrança ANTES de assinar.
-// Este endpoint substitui o par (POST /accept + POST /materialize) por uma
-// única operação com rollback explícito em caso de falha. O legado continua
-// funcionando para compat.
+// O endpoint legado `POST /treatment-plans/:planId/accept` foi removido na
+// Sprint 15 (F7) — todas as clínicas operam no fluxo atômico desde a
+// migration 0019. O paciente já configurou agenda + cobrança ANTES de
+// assinar; este endpoint substitui o par (POST /accept + POST /materialize)
+// por uma única operação com rollback explícito em caso de falha.
 //
 // Body: { signature, acceptedClauseCodes[], materializeOpts? }
 // 400 → validação prévia falhou (faltam horários/agenda em algum item).

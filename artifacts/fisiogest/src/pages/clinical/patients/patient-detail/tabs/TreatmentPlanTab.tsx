@@ -33,9 +33,8 @@ import {
 import { TreatmentPlanItemsSection } from "./treatment-plan/TreatmentPlanItemsSection";
 import { ObjectivesField } from "./treatment-plan/ObjectivesField";
 import { PlanInstallmentsPanel } from "./treatment-plan/PlanInstallmentsPanel";
-import { AcceptanceScheduleEditor } from "./treatment-plan/AcceptanceScheduleEditor";
+import { PlanScheduleEditor } from "./treatment-plan/PlanScheduleEditor";
 import { AvulsoMonthlyEstimate } from "./treatment-plan/AvulsoMonthlyEstimate";
-import { AcceptanceBlock } from "./treatment-plan/AcceptanceBlock";
 import { ContractAcceptanceBlock } from "./treatment-plan/ContractAcceptanceBlock";
 import { MaterializeBlock } from "./treatment-plan/MaterializeBlock";
 import { BillingSettingsBlock } from "./treatment-plan/BillingSettingsBlock";
@@ -43,28 +42,19 @@ import { CloseMonthBlock } from "./treatment-plan/CloseMonthBlock";
 import { CreditsStatementBlock } from "./treatment-plan/CreditsStatementBlock";
 import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
-import { useV2AcceptanceFlow } from "@/hooks/use-clinic-settings";
 
 // ───────────────────────────────────────────────────────────────────────────
-// Plano de Tratamento — orquestrador slim do wizard de 3 etapas.
+// Plano de Tratamento — orquestrador slim do wizard de 4 etapas.
 //
 // Fluxo:
-//   1. ITENS    — define o "o quê" (procedimentos, sessões/sem, valores)
-//   2. ACEITE   — assinatura formal + agenda do paciente liberada após aceite
-//   3. COBRANÇA — modo de cobrança + "Iniciar plano" + parcelas geradas
+//   1. ITENS     — define o "o quê" (procedimentos, sessões/sem, valores)
+//   2. COBRANÇA  — modo de cobrança (prepago/postpago, vencimentos, etc.)
+//   3. AGENDA    — dias e horários de cada item (gera o preview do paciente)
+//   4. CONTRATO  — paciente assina e o plano é materializado na MESMA
+//                   transação (endpoint /accept-and-materialize).
 //
-// Decisões de design (versus a versão anterior em 4 abas):
-//   • Stepper visual no topo, com gates: Aceite trava sem itens, Cobrança trava
-//     sem aceite. Status ("done", "active", "available", "locked") deixa claro
-//     onde o usuário está.
-//   • Removidos do form (eram duplicados): `frequency` (derivado de itens),
-//     `estimatedSessions` (derivado de itens). Backend continua aceitando, mas
-//     o UI não os expõe — agora aparecem como métricas readonly no header.
-//   • A aba "Sessões" virou métrica no header (sem aba dedicada).
-//   • Profissional Responsável e Status do plano vão para "Detalhes clínicos"
-//     colapsável dentro da Etapa 1, para não competir com os campos comerciais.
-//   • Iniciar Agenda e Duração da Agenda usam exclusivamente os valores do plano
-//     (Etapa 1) — sem inputs duplicados na Etapa 3.
+// Sprint 15 (F7): o fluxo legado v1 (3 etapas com aceite separado da
+// materialização) foi removido — todas as clínicas usam o wizard v2.
 // ───────────────────────────────────────────────────────────────────────────
 
 export function TreatmentPlanTab({ patientId, patient }: { patientId: number; patient?: PatientBasic }) {
@@ -84,17 +74,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     enabled: !!patientId,
   });
 
-  // Sprint 15 (F3) — feature flag por clínica para o novo fluxo de aceite
-  // (4 etapas: itens → cobranca → agenda → contrato). Quando false, mantém
-  // o fluxo legado em 3 etapas.
-  const v2 = useV2AcceptanceFlow();
-
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [activeStep, setActiveStep] = useState<PlanStepKey>("itens");
   const [creatingNew, setCreatingNew] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clinicalOpen, setClinicalOpen] = useState(false);
-  // v2: marca quando o usuário salvou as configs de cobrança (libera Agenda).
+  // Marca quando o usuário salvou as configs de cobrança (libera Agenda).
   // Não persistido no servidor — heurística local para guiar o stepper.
   const [billingConfigured, setBillingConfigured] = useState(false);
 
@@ -348,28 +333,15 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   // Auto-avança visualmente se etapa atual ficou inválida
   useEffect(() => {
-    if (v2) {
-      if ((activeStep === "cobranca" || activeStep === "agenda" || activeStep === "contrato") && !hasItems) {
-        setActiveStep("itens");
-      }
-      if (activeStep === "aceite") {
-        // chave do v1 — se a flag mudou no meio da sessão, redireciona.
-        setActiveStep("itens");
-      }
-    } else {
-      if (activeStep === "aceite" && !hasItems) setActiveStep("itens");
-      if (activeStep === "cobranca" && !isAccepted) setActiveStep("aceite");
-      if (activeStep === "agenda" || activeStep === "contrato") {
-        // chaves do v2 — se a flag desligou no meio, volta pro itens.
-        setActiveStep("itens");
-      }
+    if ((activeStep === "cobranca" || activeStep === "agenda" || activeStep === "contrato") && !hasItems) {
+      setActiveStep("itens");
     }
-  }, [activeStep, hasItems, isAccepted, v2]);
+  }, [activeStep, hasItems]);
 
-  // v2: quando o plano já foi iniciado (materializedAt), considera tudo done.
+  // Quando o plano já foi iniciado (materializedAt), considera tudo done.
   useEffect(() => {
-    if (v2 && isStarted) setBillingConfigured(true);
-  }, [v2, isStarted]);
+    if (isStarted) setBillingConfigured(true);
+  }, [isStarted]);
 
   if (plansLoading) {
     return (
@@ -453,13 +425,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         selectedPlanId={selectedPlanId}
       />
 
-      {/* Stepper — 3 etapas (v1) ou 4 etapas (v2) */}
+      {/* Stepper — 4 etapas: itens → cobrança → agenda → contrato */}
       <PlanStepper
         current={activeStep}
         hasItems={hasItems}
         isAccepted={isAccepted}
         isStarted={isStarted}
-        v2={v2}
         aceiteStats={aceiteStats}
         monthlyMissingCount={monthlyMissingCount}
         billingConfigured={billingConfigured}
@@ -484,70 +455,14 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               handleSave={handleSave}
               hasItems={hasItems}
               isAccepted={isAccepted}
-              advanceLabel={v2 ? "Avançar para Cobrança" : "Avançar para Aceite"}
-              onAdvance={() => setActiveStep(v2 ? "cobranca" : "aceite")}
-            />
-          )}
-
-          {/* v1 only */}
-          {!v2 && activeStep === "aceite" && (
-            <StepAceite
-              patientId={patientId}
-              selectedPlanId={selectedPlanId}
-              selectedPlan={selectedPlan}
-              planItems={planItems}
-              planItemsKey={planItemsKey}
-              patient={patient}
-              clinic={clinic}
-              form={form}
-              isAccepted={isAccepted}
-              isStarted={isStarted}
-              onChanged={() => {
-                queryClient.invalidateQueries({ queryKey: plansKey });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/financial-records`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/credits`],
-                });
-              }}
+              advanceLabel="Avançar para Cobrança"
               onAdvance={() => setActiveStep("cobranca")}
             />
           )}
 
-          {/* v1 only */}
-          {!v2 && activeStep === "cobranca" && (
+          {/* Etapa 2 — Cobrança (antes do aceite) */}
+          {activeStep === "cobranca" && (
             <StepCobranca
-              patientId={patientId}
-              selectedPlanId={selectedPlanId}
-              selectedPlan={selectedPlan}
-              planItems={planItems}
-              planItemsKey={planItemsKey}
-              form={form}
-              setForm={setForm}
-              isAccepted={isAccepted}
-              isStarted={isStarted}
-              saving={saving}
-              handleSave={handleSave}
-              onChanged={() => {
-                queryClient.invalidateQueries({ queryKey: plansKey });
-                queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/appointments`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/financial-records`],
-                });
-              }}
-            />
-          )}
-
-          {/* v2: Cobrança ANTES do aceite */}
-          {v2 && activeStep === "cobranca" && (
-            <StepCobrancaV2
               form={form}
               setForm={setForm}
               isAccepted={isAccepted}
@@ -561,22 +476,21 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             />
           )}
 
-          {/* v2: Agenda — agora liberada antes do aceite */}
-          {v2 && activeStep === "agenda" && (
-            <StepAgendaV2
+          {/* Etapa 3 — Agenda (libera o contrato quando todos os mensais têm horário) */}
+          {activeStep === "agenda" && (
+            <StepAgenda
               selectedPlanId={selectedPlanId}
               planItems={planItems}
               planItemsKey={planItemsKey}
-              isAccepted={isAccepted}
               isStarted={isStarted}
               monthlyMissingCount={monthlyMissingCount}
               onAdvance={() => setActiveStep("contrato")}
             />
           )}
 
-          {/* v2: Contrato — assina e materializa em uma transação */}
-          {v2 && activeStep === "contrato" && (
-            <StepContratoV2
+          {/* Etapa 4 — Contrato: assina e materializa em uma transação */}
+          {activeStep === "contrato" && (
+            <StepContrato
               patientId={patientId}
               selectedPlanId={selectedPlanId}
               selectedPlan={selectedPlan}
@@ -1087,197 +1001,8 @@ function StepItens({
   );
 }
 
-// ─── Etapa 2 — Aceite & Agenda ─────────────────────────────────────────────
-function StepAceite({
-  patientId, selectedPlanId, selectedPlan, planItems, planItemsKey,
-  patient, clinic, form, isAccepted, isStarted, onChanged, onAdvance,
-}: {
-  patientId: number;
-  selectedPlanId: number;
-  selectedPlan: any;
-  planItems: PlanProcedureItem[];
-  planItemsKey: any;
-  patient: PatientBasic | undefined;
-  clinic: ClinicInfo | null | undefined;
-  form: any;
-  isAccepted: boolean;
-  isStarted: boolean;
-  onChanged: () => void;
-  onAdvance: () => void;
-}) {
-  return (
-    <div className="space-y-5">
-      <AcceptanceBlock
-        patientId={patientId}
-        planId={selectedPlanId}
-        plan={selectedPlan}
-        patientName={patient?.name ?? ""}
-        patientPhone={patient?.phone ?? null}
-        patientEmail={(patient as any)?.email ?? null}
-        clinicName={clinic?.name ?? null}
-        onChanged={onChanged}
-      />
-
-      {isAccepted ? (
-        <>
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="h-9 w-9 rounded-xl bg-blue-100 flex items-center justify-center">
-                <CalendarRange className="w-4 h-4 text-blue-700" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-800">Agenda do paciente</h4>
-                <p className="text-[11px] text-slate-500">
-                  Escolha a agenda, depois os dias — sugerimos só horários realmente livres
-                </p>
-              </div>
-            </div>
-
-            <AcceptanceScheduleEditor
-              planId={selectedPlanId}
-              planItems={planItems as any}
-              planItemsKey={planItemsKey}
-              isMaterialized={isStarted}
-              isAccepted={isAccepted}
-            />
-          </div>
-
-          {!isStarted && (
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={onAdvance}
-                className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5"
-              >
-                Avançar para Cobrança <ArrowRight className="w-4 h-4" />
-              </Button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-8 text-center space-y-3">
-          <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-            <Lock className="w-5 h-5 text-slate-400" />
-          </div>
-          <p className="text-sm font-semibold text-slate-600">Agenda travada</p>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Após o aceite formal acima, esta seção libera a escolha de
-            <strong> dias e horários </strong>na agenda do paciente, com pré-visualização semanal.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Etapa 3 — Cobrança ────────────────────────────────────────────────────
+// ─── Etapa 2 — Cobrança (antes do aceite) ─────────────────────────────────
 function StepCobranca({
-  patientId, selectedPlanId, selectedPlan, planItems, planItemsKey, form, setForm,
-  isAccepted, isStarted, saving, handleSave, onChanged,
-}: {
-  patientId: number;
-  selectedPlanId: number;
-  selectedPlan: any;
-  planItems: PlanProcedureItem[];
-  planItemsKey: any;
-  form: any;
-  setForm: (fn: any) => void;
-  isAccepted: boolean;
-  isStarted: boolean;
-  saving: boolean;
-  handleSave: () => void;
-  onChanged: () => void;
-}) {
-  if (!isAccepted) {
-    return (
-      <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-8 text-center space-y-3">
-        <div className="mx-auto h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-          <Lock className="w-5 h-5 text-slate-400" />
-        </div>
-        <p className="text-sm font-semibold text-slate-600">Cobrança travada</p>
-        <p className="text-xs text-slate-500 max-w-md mx-auto">
-          A cobrança e o "Iniciar plano" só ficam disponíveis após o aceite formal
-          do paciente na etapa anterior.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <BillingSettingsBlock form={form} setForm={setForm} isAccepted={isAccepted} />
-
-      {/* Botão para salvar mudanças nas configurações de cobrança antes de iniciar */}
-      {!isStarted && (
-        <div className="flex justify-end -mt-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSave}
-            className="h-9 gap-1.5 rounded-xl"
-            disabled={saving}
-          >
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Salvar configurações
-          </Button>
-        </div>
-      )}
-
-      {/* Iniciar plano */}
-      {!isStarted && (
-        <MaterializeBlock
-          planId={selectedPlanId}
-          patientId={patientId}
-          materializedAt={null}
-          planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-          planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-          planItems={planItems}
-          onChanged={onChanged}
-        />
-      )}
-
-      {/* Após iniciado: parcelas, estimativa e reverter */}
-      {isStarted && (
-        <>
-          <PlanInstallmentsPanel
-            patientId={patientId}
-            planId={selectedPlanId}
-            isAccepted={isAccepted}
-            isMaterialized={isStarted}
-          />
-
-          <AvulsoMonthlyEstimate
-            planItems={planItems as any}
-            durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-          />
-
-          <MaterializeBlock
-            planId={selectedPlanId}
-            patientId={patientId}
-            materializedAt={selectedPlan?.materializedAt ?? null}
-            planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-            planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-            planItems={planItems}
-            onChanged={onChanged}
-          />
-        </>
-      )}
-
-      {/* Fechamento mensal — só quando faz sentido */}
-      {isAccepted && form.avulsoBillingMode === "mensalConsolidado" && (
-        <CloseMonthBlock
-          patientId={patientId}
-          planId={selectedPlanId}
-          onClosed={onChanged}
-        />
-      )}
-
-      <CreditsStatementBlock patientId={patientId} />
-    </div>
-  );
-}
-
-// ─── v2: Etapa 2 — Cobrança (ANTES do aceite) ─────────────────────────────
-function StepCobrancaV2({
   form, setForm, isAccepted, isStarted, saving, handleSave, onAdvance,
 }: {
   form: any;
@@ -1328,15 +1053,14 @@ function StepCobrancaV2({
   );
 }
 
-// ─── v2: Etapa 3 — Agenda (ANTES do aceite) ───────────────────────────────
-function StepAgendaV2({
-  selectedPlanId, planItems, planItemsKey, isAccepted, isStarted,
+// ─── Etapa 3 — Agenda (antes do aceite) ───────────────────────────────────
+function StepAgenda({
+  selectedPlanId, planItems, planItemsKey, isStarted,
   monthlyMissingCount, onAdvance,
 }: {
   selectedPlanId: number;
   planItems: PlanProcedureItem[];
   planItemsKey: any;
-  isAccepted: boolean;
   isStarted: boolean;
   monthlyMissingCount: number;
   onAdvance: () => void;
@@ -1364,12 +1088,11 @@ function StepAgendaV2({
           </div>
         </div>
 
-        <AcceptanceScheduleEditor
+        <PlanScheduleEditor
           planId={selectedPlanId}
           planItems={planItems as any}
           planItemsKey={planItemsKey}
           isMaterialized={isStarted}
-          isAccepted={isAccepted}
         />
       </div>
 
@@ -1402,8 +1125,8 @@ function StepAgendaV2({
   );
 }
 
-// ─── v2: Etapa 4 — Contrato (assinar e iniciar em 1 transação) ────────────
-function StepContratoV2({
+// ─── Etapa 4 — Contrato (assinar e iniciar em 1 transação) ────────────────
+function StepContrato({
   patientId, selectedPlanId, selectedPlan, planItems,
   patient, clinic, form, isStarted, monthlyMissingCount, onChanged,
 }: {

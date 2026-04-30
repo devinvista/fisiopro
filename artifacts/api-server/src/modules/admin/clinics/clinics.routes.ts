@@ -120,8 +120,7 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
     }
     const { name, type, cnpj, cpf, crefito, responsibleTechnical, phone, email, address, website, logoUrl,
             cancellationPolicyHours, autoConfirmHours, noShowFeeEnabled, noShowFeeAmount,
-            cancellationWindowHours, lateCancellationPolicy,
-            useV2AcceptanceFlow } = req.body;
+            cancellationWindowHours, lateCancellationPolicy } = req.body;
     const ALLOWED_LATE_POLICIES = ["creditoNormal", "semCredito", "taxa"] as const;
     const normalizedLatePolicy = (() => {
       if (lateCancellationPolicy === undefined) return undefined;
@@ -159,11 +158,6 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
           normalizedLatePolicy !== null && {
             lateCancellationPolicy: normalizedLatePolicy,
           }),
-        // Sprint 15 (F3) — feature flag do novo wizard de aceite. notNull no
-        // schema, então só aceita boolean explícito (ignora null/undefined).
-        ...(typeof useV2AcceptanceFlow === "boolean" && {
-          useV2AcceptanceFlow,
-        }),
       })
       .where(eq(clinicsTable.id, clinicId))
       .returning();

@@ -1,21 +1,15 @@
-import { Check, ClipboardList, PenLine, Wallet, Lock, AlertTriangle, CalendarDays, ScrollText } from "lucide-react";
+import { Check, ClipboardList, Wallet, Lock, AlertTriangle, CalendarDays, ScrollText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ───────────────────────────────────────────────────────────────────────────
-// PlanStepper — suporta dois layouts:
-//   • v1 (legado, 3 etapas): itens → aceite → cobranca
-//   • v2 (Sprint 15): itens → cobranca → agenda → contrato
-//     No v2 o aceite é movido para o final e dispara o materialize na MESMA
-//     transação (endpoint /accept-and-materialize), eliminando o estado
-//     "aceito mas não materializado".
+// PlanStepper — wizard de 4 etapas:
+//   itens → cobranca → agenda → contrato
+// O aceite acontece na última etapa e dispara o materialize na MESMA
+// transação (endpoint /accept-and-materialize), eliminando o estado
+// "aceito mas não materializado".
 // ───────────────────────────────────────────────────────────────────────────
 
-export type PlanStepKey =
-  | "itens"
-  | "aceite"      // v1
-  | "cobranca"
-  | "agenda"      // v2
-  | "contrato";   // v2
+export type PlanStepKey = "itens" | "cobranca" | "agenda" | "contrato";
 
 export type PlanStepStatus = "done" | "active" | "available" | "locked";
 
@@ -26,13 +20,7 @@ interface StepDef {
   Icon: typeof ClipboardList;
 }
 
-const STEPS_V1: StepDef[] = [
-  { key: "itens",    label: "Itens",            hint: "O que será feito",          Icon: ClipboardList },
-  { key: "aceite",   label: "Aceite & Agenda",  hint: "Assinatura e horários",     Icon: PenLine },
-  { key: "cobranca", label: "Cobrança",         hint: "Pagamento e iniciar",       Icon: Wallet },
-];
-
-const STEPS_V2: StepDef[] = [
+const STEPS: StepDef[] = [
   { key: "itens",    label: "Itens",     hint: "O que será feito",          Icon: ClipboardList },
   { key: "cobranca", label: "Cobrança",  hint: "Como o paciente vai pagar", Icon: Wallet },
   { key: "agenda",   label: "Agenda",    hint: "Dias e horários",           Icon: CalendarDays },
@@ -44,44 +32,15 @@ interface Props {
   hasItems: boolean;
   isAccepted: boolean;
   isStarted: boolean;
-  /** Quando true, usa o layout v2 (4 etapas). Default: false (v1). */
-  v2?: boolean;
-  /** v1: stats da etapa "aceite". v2: stats da etapa "agenda". */
+  /** Stats mostrados na etapa "agenda" (configurados/total). */
   aceiteStats?: { configured: number; total: number };
   monthlyMissingCount?: number;
-  /** v2: indica se a etapa "cobrança" foi salva (libera "agenda"). */
+  /** Indica se a etapa "cobrança" foi salva (libera "agenda"). */
   billingConfigured?: boolean;
   onSelect: (step: PlanStepKey) => void;
 }
 
-function statusForV1(
-  step: PlanStepKey,
-  current: PlanStepKey,
-  hasItems: boolean,
-  isAccepted: boolean,
-  isStarted: boolean,
-  monthlyMissingCount: number,
-): PlanStepStatus {
-  if (step === "itens") {
-    if (current === "itens") return "active";
-    if (hasItems) return "done";
-    return "available";
-  }
-  if (step === "aceite") {
-    if (!hasItems) return "locked";
-    if (current === "aceite") return "active";
-    if (isAccepted) return "done";
-    return "available";
-  }
-  // cobranca
-  if (!isAccepted) return "locked";
-  if (!isStarted && monthlyMissingCount > 0) return "locked";
-  if (current === "cobranca") return "active";
-  if (isStarted) return "done";
-  return "available";
-}
-
-function statusForV2(
+function statusFor(
   step: PlanStepKey,
   current: PlanStepKey,
   hasItems: boolean,
@@ -105,7 +64,7 @@ function statusForV2(
     if (!hasItems) return "locked";
     if (current === "agenda") return "active";
     // Considerada concluída quando todos os mensais têm agenda OU quando o
-    // plano já está aceito+materializado (ponto sem volta no fluxo v2).
+    // plano já está aceito+materializado (ponto sem volta no fluxo).
     if (isStarted) return "done";
     if (monthlyMissingCount === 0 && hasItems) return "available";
     return "available";
@@ -146,29 +105,22 @@ export function PlanStepper({
   hasItems,
   isAccepted,
   isStarted,
-  v2 = false,
   aceiteStats,
   monthlyMissingCount = 0,
   billingConfigured = false,
   onSelect,
 }: Props) {
-  const STEPS = v2 ? STEPS_V2 : STEPS_V1;
-
-  // Em v1 o contador aparece na etapa "aceite". Em v2, na etapa "agenda".
-  const counterStepKey: PlanStepKey = v2 ? "agenda" : "aceite";
+  // Contador exibido na etapa "agenda".
+  const counterStepKey: PlanStepKey = "agenda";
   const showCounter =
     !!aceiteStats && aceiteStats.total > 0 && hasItems && !isStarted;
   const allSet =
     showCounter && aceiteStats!.configured === aceiteStats!.total;
   const pending = showCounter ? aceiteStats!.total - aceiteStats!.configured : 0;
 
-  // Etapa que pode ficar bloqueada por agenda pendente:
-  //   v1: "cobranca" (depois do aceite)
-  //   v2: "contrato" (último passo, exige todas as agendas)
-  const scheduleGatedKey: PlanStepKey = v2 ? "contrato" : "cobranca";
-  const scheduleBlocked = v2
-    ? hasItems && !isStarted && monthlyMissingCount > 0
-    : isAccepted && !isStarted && monthlyMissingCount > 0;
+  // Etapa "contrato" pode ficar bloqueada por agenda pendente.
+  const scheduleGatedKey: PlanStepKey = "contrato";
+  const scheduleBlocked = hasItems && !isStarted && monthlyMissingCount > 0;
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -179,9 +131,15 @@ export function PlanStepper({
     >
       <ol className="flex items-stretch gap-1 sm:gap-2">
         {STEPS.map((step, idx) => {
-          const status = v2
-            ? statusForV2(step.key, current, hasItems, isAccepted, isStarted, monthlyMissingCount, billingConfigured)
-            : statusForV1(step.key, current, hasItems, isAccepted, isStarted, monthlyMissingCount);
+          const status = statusFor(
+            step.key,
+            current,
+            hasItems,
+            isAccepted,
+            isStarted,
+            monthlyMissingCount,
+            billingConfigured,
+          );
           const styles = styleByStatus[status];
           const isLast = idx === STEPS.length - 1;
           const Icon = step.Icon;
@@ -297,8 +255,8 @@ export function PlanStepper({
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="bg-amber-600 text-white max-w-xs">
                     {monthlyMissingCount === 1
-                      ? `1 item recorrente está sem agenda definida. Volte para a etapa ${v2 ? "Agenda" : "Aceite & Agenda"} e configure o dia e o horário antes de avançar.`
-                      : `${monthlyMissingCount} itens recorrentes estão sem agenda definida. Volte para a etapa ${v2 ? "Agenda" : "Aceite & Agenda"} e configure os dias e horários antes de avançar.`}
+                      ? `1 item recorrente está sem agenda definida. Volte para a etapa Agenda e configure o dia e o horário antes de avançar.`
+                      : `${monthlyMissingCount} itens recorrentes estão sem agenda definida. Volte para a etapa Agenda e configure os dias e horários antes de avançar.`}
                   </TooltipContent>
                 </Tooltip>
               ) : (

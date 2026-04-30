@@ -120,12 +120,15 @@ router.get(
 
 // ─── Sprint 2 — Aceite público de plano de tratamento via token ──────────────
 //
-// GET  /api/public/treatment-plans/by-token/:token   → snapshot do plano
-// POST /api/public/treatment-plans/by-token/:token/accept → consome o token
+// GET  /api/public/treatment-plans/by-token/:token                          → snapshot do plano
+// POST /api/public/treatment-plans/by-token/:token/accept-and-materialize   → consome o token
 //
 // Sem auth: a posse do token é a credencial. Status do token (`valid|expired|
 // used|not_found`) é refletido em códigos HTTP distintos para a UI exibir
 // mensagens claras.
+//
+// Sprint 15 (F7) — o endpoint legado `POST .../accept` foi removido. Todas
+// as clínicas operam no fluxo atômico desde a migration 0019.
 router.get(
   "/treatment-plans/by-token/:token",
   handle(async (req, res) => {
@@ -151,77 +154,6 @@ router.get(
     // snapshot público é dinâmico (status + agenda) e nunca deve ser cacheado.
     res.setHeader("Cache-Control", "no-store");
     res.json({ ...snapshot, expiresAt: lookup.tokenRow!.expiresAt.toISOString() });
-  }),
-);
-
-// @deprecated Sprint 15 (F6) — substituído por
-// `POST /treatment-plans/by-token/:token/accept-and-materialize` (logo
-// abaixo), que aceita + materializa atomicamente para clínicas em v2.
-// Endpoint mantido para compat com clínicas ainda em v1
-// (`use_v2_acceptance_flow=false`). O frontend `aceite.tsx` escolhe a
-// rota dinamicamente via flag do snapshot. Remoção planejada após 90
-// dias com 100% das clínicas em v2.
-router.post(
-  "/treatment-plans/by-token/:token/accept",
-  handle(async (req, res) => {
-    const token = String(req.params.token);
-    const body = (req.body ?? {}) as { signature?: string; acceptedClauseCodes?: unknown };
-    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
-    if (signature.length < 3) {
-      throw new PublicError(400, "signature_required", "Digite seu nome completo como assinatura.");
-    }
-    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
-      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
-      : [];
-    const { lookupAcceptanceToken, consumeAcceptanceToken } = await import(
-      "../clinical/medical-records/treatment-plans.tokens.js"
-    );
-    const { acceptPatientTreatmentPlan } = await import(
-      "../clinical/medical-records/medical-records.service.js"
-    );
-    const { db, treatmentPlansTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
-
-    const lookup = await lookupAcceptanceToken(token);
-    if (lookup.status === "not_found") {
-      throw new PublicError(404, "not_found", "Link inválido.");
-    }
-    if (lookup.status === "expired") {
-      throw new PublicError(410, "expired", "Este link expirou. Solicite um novo à clínica.");
-    }
-    if (lookup.status === "used") {
-      throw new PublicError(409, "used", "Este link já foi usado.");
-    }
-
-    const planId = lookup.tokenRow!.planId;
-    const [plan] = await db
-      .select({ patientId: treatmentPlansTable.patientId })
-      .from(treatmentPlansTable)
-      .where(eq(treatmentPlansTable.id, planId))
-      .limit(1);
-    if (!plan) {
-      throw new PublicError(404, "not_found", "Plano não encontrado.");
-    }
-
-    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
-    const ip = ipHeader || req.ip || null;
-    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
-
-    const updated = await acceptPatientTreatmentPlan(plan.patientId, planId, {}, {
-      signature,
-      ip,
-      device: ua,
-      via: "link",
-      acceptedClauseCodes,
-    });
-
-    await consumeAcceptanceToken(token);
-
-    res.json({
-      ok: true,
-      planId,
-      acceptedAt: (updated as any)?.acceptedAt ?? null,
-    });
   }),
 );
 

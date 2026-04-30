@@ -1,11 +1,8 @@
 /**
- * @deprecated Sprint 15 (F6) — este editor segue ATIVO no v2 (montado pelo
- * `StepAgendaV2` em `TreatmentPlanTab`), mas a marca de depreciação
- * sinaliza dois pontos: (a) o nome herda a era v1 ("Acceptance" foi
- * pensado como "depois do aceite") e numa próxima revisão será renomeado
- * para `PlanScheduleEditor`; (b) gates internos de "isAccepted" foram
- * relaxados em F3 — a montagem antes do aceite é o caso de uso v2 e
- * dependentes não devem reintroduzir esse acoplamento. Manter funcional.
+ * PlanScheduleEditor — editor de agenda do plano (etapa "Agenda" do wizard).
+ * Sprint 15 (F7): renomeado a partir de `AcceptanceScheduleEditor` quando
+ * o fluxo v1 foi removido. Montado pelo `StepAgenda` em `TreatmentPlanTab`
+ * antes do aceite, e também depois do início do plano para reconfigurar.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -95,7 +92,6 @@ interface Props {
   planItems: PlanItem[];
   planItemsKey: string[] | null;
   isMaterialized: boolean;
-  isAccepted: boolean;
 }
 
 function resolveItemKind(item: PlanItem): ItemKind {
@@ -164,23 +160,14 @@ const KIND_META: Record<ItemKind, {
   },
 };
 
-export function AcceptanceScheduleEditor({
+export function PlanScheduleEditor({
   planId,
   planItems,
   planItemsKey,
   isMaterialized,
-  // F3 (v2): a prop continua na interface por compat retro com chamadores
-  // do v1, mas internamente o gate foi removido (parent já oculta o editor
-  // antes do aceite quando precisa, e v2 monta o editor antes do aceite).
-  isAccepted: _isAccepted,
 }: Props) {
   const allItems = useMemo(() => planItems ?? [], [planItems]);
 
-  // F3 (v2): a query de agendas roda sempre que o editor está montado.
-  // No fluxo legado (v1), o pai já oculta o editor antes do aceite, então
-  // remover o `enabled: isAccepted` não muda nada na prática para v1; já no
-  // fluxo v2 o editor aparece ANTES do aceite e precisa carregar as agendas
-  // para o paciente escolher dias e horários.
   const { data: allSchedules = [], isLoading: schedulesLoading } = useQuery<Schedule[]>({
     queryKey: ["/api/schedules"],
     queryFn: () => apiFetchJson<Schedule[]>("/api/schedules"),
