@@ -17,6 +17,12 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 
 ## Recent Changes
 
+**30/04/2026 — Bugfix: persistência e materialização de horários por dia (planos)**
+- **Bug 1 (POST `/api/treatment-plans/:planId/procedures`):** o campo `startTimesByDay` era desestruturado mas nunca gravado na criação do item — qualquer cliente que enviasse o mapa por dia perdia a configuração silenciosamente. Corrigido: o POST agora valida (formato HH:MM, chaves de dia válidas) e persiste como JSON, espelhando o PUT. Também aplica a mesma validação `weekDays.length ≤ sessionsPerWeek` que já existia no PUT.
+- **Bug 2 (`materializeTreatmentPlan`, ramo `oneShotItems`):** o gate exigia `defaultStartTime`, ignorando `startTimesByDay`. Itens de pacote/avulso configurados *só* com mapa por dia (sem fallback) eram silenciosamente pulados na materialização. Corrigido: agora aceita qualquer fonte de horário (mapa por dia OU `defaultStartTime`).
+- **Refator:** validação de `startTimesByDay` extraída para a helper `normalizeStartTimesByDay` em `treatment-plan-procedures.routes.ts` (fonte única para POST e PUT).
+- **Estado validado:** `pnpm typecheck` verde, `pnpm test` 351/351 verde.
+
 **30/04/2026 — Documentação financeira consolidada**
 - **Novo doc canônico:** `docs/FINANCEIRO.md` reúne em 18 seções todo o módulo financeiro/contábil — modelo de dados, plano de contas (partidas dobradas), 13 fluxos canônicos com débito/crédito, endpoints REST, schedulers, SaaS billing Asaas, roadmap de gateways de pagamento ao paciente, auditoria de bugs B1–B15, sprints 1–8, riscos sistêmicos, governança, otimizações, conciliação e testes (351/351 verdes).
 - **Documentos antigos virados em redirecionadores:** `docs/financial.md`, `docs/auditoria-financeira.md`, `docs/sprints/SPRINTS-FINANCEIRO.md` agora apontam para o consolidado. Specs em `docs/superpowers/specs/` preservados como ADR (decisão histórica).

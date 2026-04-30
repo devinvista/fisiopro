@@ -691,9 +691,14 @@ export async function materializeTreatmentPlan(
     // (o usuário pode estender a vigência e remateralizar com `force: true`).
     for (const item of oneShotItems) {
       const wd = parseWeekDays(item.weekDays);
-      if (wd.length === 0 || !item.defaultStartTime || !item.scheduleId) {
-        // Item sem configuração de agenda — preserva comportamento legado:
-        // o usuário marcará as sessões manualmente. Não falha.
+      // Item é "configurado" se tem dias da semana, agenda e pelo menos um
+      // horário resolvível — seja via mapa por dia (`startTimesByDay`) ou
+      // via fallback legado (`defaultStartTime`). Sem isso, preservamos o
+      // comportamento legado: o usuário marca manualmente.
+      const oneShotStartMap = parseStartTimesByDay(item.startTimesByDay);
+      const hasAnyStartTime =
+        !!item.defaultStartTime || Object.keys(oneShotStartMap).length > 0;
+      if (wd.length === 0 || !hasAnyStartTime || !item.scheduleId) {
         continue;
       }
       // Mesma regra de aceite dos itens mensais: o usuário não pode marcar

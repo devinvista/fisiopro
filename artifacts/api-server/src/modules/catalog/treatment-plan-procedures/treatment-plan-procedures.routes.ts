@@ -31,6 +31,56 @@ async function verifyItemOwnership(itemId: number, req: AuthRequest): Promise<bo
   return row?.clinicId === req.clinicId;
 }
 
+// Valida e normaliza o payload `startTimesByDay` (mapa "dia → HH:MM").
+// Retorna `{ ok: true, value }` com a string JSON pronta para gravar (ou
+// `null` para limpar a coluna), ou `{ ok: false, error }` com payload de
+// erro 400 pronto para `res.status(400).json(error)`.
+function normalizeStartTimesByDay(
+  raw: unknown,
+): { ok: true; value: string | null } | { ok: false; error: { error: string; message: string } } {
+  if (raw === null) return { ok: true, value: null };
+  let obj: any = raw;
+  if (typeof obj === "string") {
+    try { obj = JSON.parse(obj); } catch { obj = undefined; }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return {
+      ok: false,
+      error: {
+        error: "invalid_start_times_by_day",
+        message: "startTimesByDay deve ser um objeto { dia: 'HH:MM' }.",
+      },
+    };
+  }
+  const validDayKeys = new Set([
+    "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+  ]);
+  const cleaned: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = String(k).toLowerCase();
+    if (!validDayKeys.has(key)) {
+      return {
+        ok: false,
+        error: {
+          error: "invalid_start_times_by_day",
+          message: `Dia da semana inválido em startTimesByDay: "${k}".`,
+        },
+      };
+    }
+    if (typeof v !== "string" || !/^\d{2}:\d{2}$/.test(v)) {
+      return {
+        ok: false,
+        error: {
+          error: "invalid_start_times_by_day",
+          message: `Horário inválido para ${key}: deve estar no formato HH:MM.`,
+        },
+      };
+    }
+    cleaned[key] = v;
+  }
+  return { ok: true, value: JSON.stringify(cleaned) };
+}
+
 // Sprint 2 — após o aceite, o "carrinho" do plano vira venda formal e fica
 // imutável em campos comerciais. Itens só podem mudar campos operacionais
 // (agenda/profissional/notas). Adição/remoção de itens fica bloqueada — para
@@ -276,6 +326,45 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
       return;
     }
 
+    // Validação opcional do mapa "dia → horário". O frontend envia tanto na
+    // criação rápida quanto via `AcceptanceScheduleEditor`, então persistir
+    // já no POST evita perder a configuração silenciosamente.
+    let startTimesByDayValue: string | null = null;
+    if (startTimesByDay !== undefined) {
+      const norm = normalizeStartTimesByDay(startTimesByDay);
+      if (!norm.ok) {
+        res.status(400).json(norm.error);
+        return;
+      }
+      startTimesByDayValue = norm.value;
+    }
+
+    // Mesma regra de aceite: dias selecionados ≤ sessões/semana contratadas.
+    const incomingWeekDaysCreate = (() => {
+      if (Array.isArray(weekDays)) return weekDays;
+      if (typeof weekDays === "string") {
+        try {
+          const p = JSON.parse(weekDays);
+          return Array.isArray(p) ? p : [];
+        } catch { return []; }
+      }
+      return [];
+    })();
+    const effectiveSpw = sessionsPerWeek ? parseInt(sessionsPerWeek) : 1;
+    if (
+      effectiveSpw > 0 &&
+      incomingWeekDaysCreate.length > effectiveSpw
+    ) {
+      res.status(400).json({
+        error: "weekdays_exceed_sessions_per_week",
+        message:
+          `Foram marcados ${incomingWeekDaysCreate.length} dias da semana, mas o ` +
+          `plano contratou apenas ${effectiveSpw} sessão(ões) por semana neste ` +
+          `item. Reduza os dias selecionados ou aumente sessionsPerWeek.`,
+      });
+      return;
+    }
+
     const [item] = await db
       .insert(treatmentPlanProceduresTable)
       .values({
@@ -291,6 +380,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
         notes: notes || null,
         weekDays: weekDays ?? null,
         defaultStartTime: defaultStartTime ?? null,
+        startTimesByDay: startTimesByDayValue,
         defaultProfessionalId: defaultProfessionalId != null ? Number(defaultProfessionalId) : null,
         scheduleId: scheduleId != null ? Number(scheduleId) : null,
         // Duração da consulta vem SEMPRE do procedimento vinculado — sem
@@ -439,48 +529,13 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     if (startTimesByDay !== undefined) {
       // Mapa "dia da semana → horário" para suportar agenda heterogênea
       // (ex.: seg 08:00 + qua 10:00). Aceita objeto JS ou string JSON e
-      // persiste sempre como string JSON. Valida que cada chave é um dia
-      // válido (lowercase) e cada valor está no formato HH:MM.
-      const validDayKeys = new Set([
-        "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
-      ]);
-      let parsedMap: Record<string, string> | null = null;
-      if (startTimesByDay === null) {
-        parsedMap = null;
-      } else {
-        let raw: any = startTimesByDay;
-        if (typeof raw === "string") {
-          try { raw = JSON.parse(raw); } catch { raw = null; }
-        }
-        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-          res.status(400).json({
-            error: "invalid_start_times_by_day",
-            message: "startTimesByDay deve ser um objeto { dia: 'HH:MM' }.",
-          });
-          return;
-        }
-        const cleaned: Record<string, string> = {};
-        for (const [k, v] of Object.entries(raw)) {
-          const key = String(k).toLowerCase();
-          if (!validDayKeys.has(key)) {
-            res.status(400).json({
-              error: "invalid_start_times_by_day",
-              message: `Dia da semana inválido em startTimesByDay: "${k}".`,
-            });
-            return;
-          }
-          if (typeof v !== "string" || !/^\d{2}:\d{2}$/.test(v)) {
-            res.status(400).json({
-              error: "invalid_start_times_by_day",
-              message: `Horário inválido para ${key}: deve estar no formato HH:MM.`,
-            });
-            return;
-          }
-          cleaned[key] = v;
-        }
-        parsedMap = cleaned;
+      // persiste sempre como string JSON. Valida via helper compartilhada.
+      const norm = normalizeStartTimesByDay(startTimesByDay);
+      if (!norm.ok) {
+        res.status(400).json(norm.error);
+        return;
       }
-      updateData.startTimesByDay = parsedMap === null ? null : JSON.stringify(parsedMap);
+      updateData.startTimesByDay = norm.value;
     }
     if (defaultProfessionalId !== undefined) updateData.defaultProfessionalId = defaultProfessionalId != null ? Number(defaultProfessionalId) : null;
     if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;
