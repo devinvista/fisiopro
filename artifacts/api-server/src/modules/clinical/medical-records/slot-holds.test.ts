@@ -312,10 +312,10 @@ describe("createOrRenewHolds — caminho feliz", () => {
     expect(result.ttlSecondsRemaining).toBe(30 * 60);
   });
 
-  it("clampa ttl > MAX para 60min", async () => {
+  it("clampa ttl > MAX para 120min", async () => {
     queueHappyPath();
     const result = await createOrRenewHolds(PLAN_ID, [validSlot()], 9999);
-    expect(result.ttlSecondsRemaining).toBe(60 * 60);
+    expect(result.ttlSecondsRemaining).toBe(120 * 60);
   });
 });
 

@@ -9,7 +9,7 @@ import {
 import {
   Loader2, ClipboardList, History, Plus, Pencil, Trash2, ScrollText, Printer,
   BadgeCheck, Lock, ArrowRight, ChevronDown, ChevronUp, Stethoscope, UserCheck,
-  Activity, Sparkles, CalendarRange, AlertTriangle,
+  Activity, Sparkles, CalendarRange, AlertTriangle, Clock, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
@@ -83,6 +83,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   // Marca quando o usuário salvou as configs de cobrança (libera Agenda).
   // Não persistido no servidor — heurística local para guiar o stepper.
   const [billingConfigured, setBillingConfigured] = useState(false);
+  // Sprint 15 (F5) — hold de slots: TTL configurável + expiresAt devolvido pelo POST /holds.
+  const [holdTtlMinutes, setHoldTtlMinutes] = useState(30);
+  const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (allPlans.length > 0 && selectedPlanId === null) {
@@ -486,6 +489,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               planItemsKey={planItemsKey}
               isStarted={isStarted}
               monthlyMissingCount={monthlyMissingCount}
+              holdTtlMinutes={holdTtlMinutes}
+              onHoldTtlChange={setHoldTtlMinutes}
+              onHoldCreated={setHoldExpiresAt}
               onAdvance={() => setActiveStep("contrato")}
             />
           )}
@@ -502,6 +508,9 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               form={form}
               isStarted={isStarted}
               monthlyMissingCount={monthlyMissingCount}
+              holdExpiresAt={holdExpiresAt}
+              holdTtlMinutes={holdTtlMinutes}
+              onHoldRenewed={setHoldExpiresAt}
               onChanged={() => {
                 queryClient.invalidateQueries({ queryKey: plansKey });
                 queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
@@ -1056,9 +1065,18 @@ function StepCobranca({
 }
 
 // ─── Etapa 3 — Agenda (antes do aceite) ───────────────────────────────────
+const HOLD_TTL_OPTIONS = [
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "1 hora" },
+  { value: 90, label: "1h 30min" },
+  { value: 120, label: "2 horas" },
+];
+
 function StepAgenda({
   patientId, selectedPlanId, planItems, planItemsKey, isStarted,
-  monthlyMissingCount, onAdvance,
+  monthlyMissingCount, holdTtlMinutes, onHoldTtlChange, onHoldCreated, onAdvance,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -1066,19 +1084,20 @@ function StepAgenda({
   planItemsKey: any;
   isStarted: boolean;
   monthlyMissingCount: number;
+  holdTtlMinutes: number;
+  onHoldTtlChange: (v: number) => void;
+  onHoldCreated: (expiresAt: string) => void;
   onAdvance: () => void;
 }) {
   const allMonthlyConfigured = monthlyMissingCount === 0;
   const { toast } = useToast();
   const [reserving, setReserving] = useState(false);
 
-  // Sprint 15 (F5) — Ao avançar para Contrato, reservamos os slots por
-  // 15min via POST /holds. Isso impede que outro plano roube horário
-  // enquanto o paciente assina. Em conflito (409), abortamos o avanço e
-  // mostramos toast com a lista de conflitos para o usuário ajustar.
+  // Sprint 15 (F5) — Ao avançar para Contrato, reservamos os slots pelo
+  // TTL configurado via POST /holds. Em conflito (409), abortamos e mostramos
+  // a lista para o usuário ajustar a agenda.
   async function handleAdvance() {
     if (isStarted) {
-      // Plano já materializado — appointments existem; pular hold.
       onAdvance();
       return;
     }
@@ -1089,6 +1108,7 @@ function StepAgenda({
         patientId,
         selectedPlanId,
         planItems as PlanItemForHold[],
+        holdTtlMinutes,
       );
       if (!result.ok) {
         const conflicts = result.conflicts ?? [];
@@ -1106,6 +1126,7 @@ function StepAgenda({
         });
         return;
       }
+      if (result.expiresAt) onHoldCreated(result.expiresAt);
       onAdvance();
     } catch (err) {
       toast({
@@ -1158,31 +1179,82 @@ function StepAgenda({
         </div>
       )}
 
-      <div className="flex justify-end pt-2">
-        <Button
-          onClick={handleAdvance}
-          disabled={(!allMonthlyConfigured && !isStarted) || reserving}
-          className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5"
-          title={
-            !allMonthlyConfigured && !isStarted
-              ? "Configure todos os itens recorrentes antes de avançar"
-              : reserving
-              ? "Reservando horários…"
-              : undefined
-          }
-        >
-          {reserving ? "Reservando…" : "Avançar para Contrato"}
-          <ArrowRight className="w-4 h-4" />
-        </Button>
-      </div>
+      {/* Validade da proposta + botão Avançar */}
+      {!isStarted && (
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 flex flex-col sm:flex-row sm:items-end gap-4 shadow-sm">
+          <div className="flex-1 space-y-1">
+            <Label className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
+              Validade da proposta
+            </Label>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Tempo em que os horários ficarão reservados enquanto o paciente lê e assina o contrato.
+            </p>
+            <Select
+              value={String(holdTtlMinutes)}
+              onValueChange={(v) => onHoldTtlChange(Number(v))}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-44 bg-white border-slate-200 rounded-xl text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HOLD_TTL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={String(o.value)}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            onClick={handleAdvance}
+            disabled={(!allMonthlyConfigured && !isStarted) || reserving}
+            className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5 shrink-0"
+            title={
+              !allMonthlyConfigured && !isStarted
+                ? "Configure todos os itens recorrentes antes de avançar"
+                : reserving
+                ? "Reservando horários…"
+                : undefined
+            }
+          >
+            {reserving ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Reservando…</>
+            ) : (
+              <>Avançar para Contrato <ArrowRight className="w-4 h-4" /></>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* Plano já iniciado — apenas navegar para etapa de contrato */}
+      {isStarted && (
+        <div className="flex justify-end pt-2">
+          <Button
+            onClick={handleAdvance}
+            className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5"
+          >
+            Ver Contrato <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
+}
+
+// ─── Utilitário de formatação do timer ────────────────────────────────────
+function formatCountdown(secs: number): string {
+  if (secs <= 0) return "Expirada";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}min ${String(s).padStart(2, "0")}s`;
 }
 
 // ─── Etapa 4 — Contrato (assinar e iniciar em 1 transação) ────────────────
 function StepContrato({
   patientId, selectedPlanId, selectedPlan, planItems,
-  patient, clinic, form, isStarted, monthlyMissingCount, onChanged,
+  patient, clinic, form, isStarted, monthlyMissingCount,
+  holdExpiresAt, holdTtlMinutes, onHoldRenewed, onChanged,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -1193,10 +1265,119 @@ function StepContrato({
   form: any;
   isStarted: boolean;
   monthlyMissingCount: number;
+  holdExpiresAt: string | null;
+  holdTtlMinutes: number;
+  onHoldRenewed: (expiresAt: string) => void;
   onChanged: () => void;
 }) {
+  const { toast } = useToast();
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [renewing, setRenewing] = useState(false);
+
+  // Contagem regressiva do hold — atualiza a cada segundo
+  useEffect(() => {
+    if (!holdExpiresAt || isStarted) { setRemaining(null); return; }
+    function calcRemaining() {
+      return Math.max(0, Math.floor((new Date(holdExpiresAt!).getTime() - Date.now()) / 1000));
+    }
+    setRemaining(calcRemaining());
+    const interval = setInterval(() => setRemaining(calcRemaining()), 1000);
+    return () => clearInterval(interval);
+  }, [holdExpiresAt, isStarted]);
+
+  async function handleRenew() {
+    setRenewing(true);
+    try {
+      const { reservePlanSlots } = await import("./treatment-plan/usePlanSlotHolds");
+      const result = await reservePlanSlots(
+        patientId,
+        selectedPlanId,
+        planItems as PlanItemForHold[],
+        holdTtlMinutes,
+      );
+      if (result.ok && result.expiresAt) {
+        onHoldRenewed(result.expiresAt);
+        toast({
+          title: "Reserva renovada",
+          description: `Horários reservados por mais ${holdTtlMinutes} minutos.`,
+        });
+      } else if (!result.ok) {
+        const conflicts = result.conflicts ?? [];
+        const preview = conflicts.slice(0, 2).map((c) => `• ${c.message}`).join("\n");
+        toast({
+          title: "Conflito ao renovar",
+          description:
+            (preview || "Alguns horários já foram ocupados.") +
+            "\nVolte para Agenda e escolha outros horários.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      toast({ title: "Erro ao renovar reserva", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setRenewing(false);
+    }
+  }
+
+  const isUrgent = remaining !== null && remaining <= 180 && remaining > 0;
+  const isExpired = remaining !== null && remaining === 0;
+
   return (
     <div className="space-y-5">
+      {/* Painel de contagem regressiva — apenas antes de materializar */}
+      {!isStarted && holdExpiresAt && remaining !== null && (
+        <div className={`rounded-xl border p-3.5 flex items-center gap-3 ${
+          isExpired
+            ? "border-red-200 bg-red-50"
+            : isUrgent
+            ? "border-amber-200 bg-amber-50"
+            : "border-green-200 bg-green-50"
+        }`}>
+          <div className={`p-2 rounded-lg shrink-0 ${
+            isExpired ? "bg-red-100" : isUrgent ? "bg-amber-100" : "bg-green-100"
+          }`}>
+            <Clock className={`w-4 h-4 ${
+              isExpired ? "text-red-600" : isUrgent ? "text-amber-600" : "text-green-600"
+            }`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className={`text-xs font-semibold ${
+              isExpired ? "text-red-800" : isUrgent ? "text-amber-800" : "text-green-800"
+            }`}>
+              {isExpired
+                ? "Reserva expirada — os horários podem ter sido liberados"
+                : isUrgent
+                ? `Reserva expirando em ${formatCountdown(remaining)}`
+                : `Horários reservados · ${formatCountdown(remaining)} restantes`}
+            </p>
+            <p className={`text-[11px] mt-0.5 ${
+              isExpired ? "text-red-600" : isUrgent ? "text-amber-600" : "text-green-600"
+            }`}>
+              {isExpired
+                ? "Renove para garantir a agenda antes de coletar a assinatura."
+                : isUrgent
+                ? "Renove a reserva se precisar de mais tempo."
+                : "Os slots ficarão reservados até expirar ou o plano ser assinado."}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant={isExpired || isUrgent ? "default" : "outline"}
+            onClick={handleRenew}
+            disabled={renewing}
+            className={`shrink-0 h-8 px-3 gap-1.5 rounded-lg text-xs ${
+              isExpired || isUrgent
+                ? "bg-primary text-white shadow-md shadow-primary/20"
+                : "border-green-300 text-green-700 hover:bg-green-50"
+            }`}
+          >
+            {renewing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Renovando…</>
+              : <><RefreshCw className="w-3.5 h-3.5" /> Renovar</>}
+          </Button>
+        </div>
+      )}
+
       <ContractAcceptanceBlock
         patientId={patientId}
         planId={selectedPlanId}

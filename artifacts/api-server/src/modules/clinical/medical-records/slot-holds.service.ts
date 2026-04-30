@@ -35,10 +35,10 @@ import { HttpError } from "../../../utils/httpError.js";
 import { enumeratePlanAppointments } from "./treatment-plans.preview.js";
 
 /** TTL padrão de um hold em minutos — combinado com a UX do wizard. */
-export const DEFAULT_HOLD_TTL_MINUTES = 15;
+export const DEFAULT_HOLD_TTL_MINUTES = 30;
 
 /** Janela máxima permitida (evita holds eternos por bug de cliente). */
-export const MAX_HOLD_TTL_MINUTES = 60;
+export const MAX_HOLD_TTL_MINUTES = 120;
 
 export interface HoldSlot {
   /** ID do `treatment_plan_procedures` ao qual o slot pertence. */
