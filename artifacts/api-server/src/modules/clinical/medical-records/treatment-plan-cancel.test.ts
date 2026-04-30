@@ -1,11 +1,12 @@
 /**
- * Sprint Financeiro 12 (P3) — testes de cancelamento de plano.
+ * Sprint Financeiro 12 (P3) + Sprint 14 (Hardening) — cancelamento de plano.
  *
  * Cobre:
  *  • Estorno de TODAS as faturas mensais não consumidas (pendente/vencido).
  *  • Faturas pagas/parcialmentePago são puladas (ressarcimento manual).
- *  • Faturas com `recognitionCreditsConsumed > 0` viram skip (preserva
- *    receita já reconhecida).
+ *  • Faturas com `recognitionCreditsConsumed > 0` (não pagas) recebem
+ *    estorno PARCIAL pelo saldo restante e entram em
+ *    `partiallyConsumedInvoiceIds` (não em `paidInvoiceIds`).
  *  • Idempotência: 2ª chamada em plano já cancelado é no-op.
  *  • Validação de motivo (mínimo 3 chars).
  */
@@ -61,8 +62,20 @@ vi.mock("@workspace/db", async () => {
 const postReversalMock = vi.hoisted(() =>
   vi.fn(async (_originalEntryId: number, _input: any) => ({ id: 99999 }))
 );
+const postReceivableRevenueMock = vi.hoisted(() =>
+  vi.fn(async (_input: any) => ({ id: 88888 }))
+);
+const postPartialDeferredReversalMock = vi.hoisted(() =>
+  vi.fn(async (_input: any) => ({ id: 77777 }))
+);
+const resolveAccountCodeByIdMock = vi.hoisted(() =>
+  vi.fn(async (_id: any, fallback: string, _clinic: any, _tx?: any) => fallback)
+);
 vi.mock("../../shared/accounting/accounting.service.js", () => ({
   postReversal: postReversalMock,
+  postReceivableRevenue: postReceivableRevenueMock,
+  postPartialDeferredReversal: postPartialDeferredReversalMock,
+  resolveAccountCodeById: resolveAccountCodeByIdMock,
 }));
 
 import { cancelTreatmentPlan } from "./treatment-plans.cancel.js";
@@ -84,6 +97,7 @@ const baseInvoice = (overrides: Partial<any> = {}) => ({
   transactionType: "faturaPlano",
   recognitionCreditsConsumed: 0,
   amount: "800.00",
+  recognizedAmount: "0.00",
   ...overrides,
 });
 
@@ -91,6 +105,9 @@ describe("cancelTreatmentPlan", () => {
   beforeEach(() => {
     dbMock.reset();
     postReversalMock.mockClear();
+    postReceivableRevenueMock.mockClear();
+    postPartialDeferredReversalMock.mockClear();
+    resolveAccountCodeByIdMock.mockClear();
   });
 
   it("rejeita motivo vazio ou muito curto", async () => {
@@ -180,16 +197,39 @@ describe("cancelTreatmentPlan", () => {
     expect(result.paidInvoiceIds).toEqual(expect.arrayContaining([1001, 1003]));
   });
 
-  it("fatura pendente com receita já reconhecida (consumed>0) → pula e adiciona à lista manual", async () => {
+  it("fatura pendente com receita já reconhecida (consumed>0) → estorno PARCIAL e entra em partiallyConsumedInvoiceIds", async () => {
+    // Sprint Financeiro 14 (Hardening) — fix do bug que mislabeled
+    // faturas parcialmente consumidas como `paidInvoiceIds` e pulava o
+    // estorno do saldo restante (deixava recebível/adiantamento fantasma).
     dbMock.enqueue([{ ...basePlan }]);
     dbMock.enqueue([
-      baseInvoice({ id: 1000, status: "pendente", recognitionCreditsConsumed: 0 }),
-      baseInvoice({ id: 1001, status: "pendente", recognitionCreditsConsumed: 2 }),
+      // Fatura 1000: limpa, será estornada integralmente.
+      baseInvoice({
+        id: 1000,
+        status: "pendente",
+        recognitionCreditsConsumed: 0,
+        amount: "800.00",
+        recognizedAmount: "0.00",
+      }),
+      // Fatura 1001: 2 sessões já reconhecidas. amount=800, recognized=200,
+      // residual=600 → postPartialDeferredReversal({amount:600}).
+      baseInvoice({
+        id: 1001,
+        status: "pendente",
+        recognitionCreditsConsumed: 2,
+        amount: "800.00",
+        recognizedAmount: "200.00",
+      }),
     ]);
 
-    // Apenas a 1000 vai para o fluxo de estorno.
+    // Iteração 1 (inv 1000, consumed=0): SELECT deferred → tem → postReversal → UPDATE.
     dbMock.enqueue([{ id: 5000, clinicId: 1 }]);
-    dbMock.enqueue(undefined);
+    dbMock.enqueue(undefined); // UPDATE financial_record
+
+    // Iteração 2 (inv 1001, consumed=2): SELECT deferred → tem → postPartialDeferredReversal → UPDATE.
+    dbMock.enqueue([{ id: 5001, clinicId: 1 }]);
+    dbMock.enqueue(undefined); // UPDATE financial_record
+
     dbMock.enqueue(undefined); // UPDATE plan
 
     const result = await cancelTreatmentPlan({
@@ -197,10 +237,57 @@ describe("cancelTreatmentPlan", () => {
       reason: "Mid-month cancel",
     });
 
-    expect(result.invoicesCancelled).toBe(1);
+    expect(result.invoicesCancelled).toBe(2);
     expect(result.reversalsPosted).toBe(1);
-    expect(result.paidInvoicesSkipped).toBe(1);
-    expect(result.paidInvoiceIds).toContain(1001);
+    expect(result.partialReversalsPosted).toBe(1);
+    expect(result.paidInvoicesSkipped).toBe(0);
+    expect(result.paidInvoiceIds).toEqual([]);
+    expect(result.partiallyConsumedInvoiceIds).toContain(1001);
+    expect(result.partiallyConsumedInvoiceIds).not.toContain(1000);
+
+    // Estorno parcial postado pelo SALDO restante (800 - 200 = 600).
+    expect(postPartialDeferredReversalMock).toHaveBeenCalledTimes(1);
+    expect(postPartialDeferredReversalMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 600,
+        sourceType: "financial_record",
+        sourceId: 1001,
+        financialRecordId: 1001,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("fatura pendente com consumed>0 mas residual=0 (totalmente reconhecida) → marca cancelada SEM estorno parcial", async () => {
+    // Edge case: fatura com todos os créditos já consumidos (recognized==amount).
+    // Não há saldo a estornar, mas a fatura ainda é cancelada e listada.
+    dbMock.enqueue([{ ...basePlan }]);
+    dbMock.enqueue([
+      baseInvoice({
+        id: 1010,
+        status: "pendente",
+        recognitionCreditsConsumed: 4,
+        amount: "800.00",
+        recognizedAmount: "800.00",
+      }),
+    ]);
+
+    // SELECT deferred → tem (mas residual=0, não posta nada).
+    dbMock.enqueue([{ id: 5010, clinicId: 1 }]);
+    dbMock.enqueue(undefined); // UPDATE financial_record
+    dbMock.enqueue(undefined); // UPDATE plan
+
+    const result = await cancelTreatmentPlan({
+      planId: 100,
+      reason: "Fully recognized",
+    });
+
+    expect(result.invoicesCancelled).toBe(1);
+    expect(result.reversalsPosted).toBe(0);
+    expect(result.partialReversalsPosted).toBe(0);
+    expect(result.partiallyConsumedInvoiceIds).toContain(1010);
+    expect(postPartialDeferredReversalMock).not.toHaveBeenCalled();
+    expect(postReversalMock).not.toHaveBeenCalled();
   });
 
   it("fatura pendente SEM deferred_receivable (modelo legado) → marca cancelada sem postReversal", async () => {

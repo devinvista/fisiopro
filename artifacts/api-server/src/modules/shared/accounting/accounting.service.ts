@@ -283,6 +283,39 @@ export async function postCashAdvance(input: Omit<JournalEntryInput, "lines" | "
   }, tx);
 }
 
+/**
+ * Sprint Financeiro 14 (Hardening) — Estorno PARCIAL de um `deferred_receivable`.
+ *
+ * Usado no cancelamento de plano (P3/P4) quando uma fatura mensal já teve
+ * algumas sessões reconhecidas (`recognitionCreditsConsumed > 0`) mas
+ * permanece em aberto (não paga). Posta uma entrada compensatória pelo
+ * SALDO restante (`amount − recognizedAmount`):
+ *
+ *   D 2.1.1 (Adiantamentos)  — devolve a obrigação que o paciente não terá
+ *   C 1.1.2 (Recebíveis)     — anula a expectativa de cobrar o saldo
+ *
+ * As fragmentas já reconhecidas (D 2.1.1 / C 4.1.2 via `postWalletUsage`)
+ * ficam preservadas — receita por serviço prestado é definitiva.
+ *
+ * Diferença de `postReversal`: esta entry NÃO referencia o entry original
+ * via `reversalOfEntryId` (não é um estorno integral) — usa `eventType=
+ * 'deferred_receivable_partial_reversal'` para permitir a contabilização
+ * do residual sem desfazer o histórico do aceite.
+ */
+export async function postPartialDeferredReversal(
+  input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string },
+  tx: Tx = db,
+) {
+  return createJournalEntry({
+    ...input,
+    eventType: input.eventType ?? "deferred_receivable_partial_reversal",
+    lines: [
+      { accountCode: ACCOUNT_CODES.customerAdvances, debit: input.amount },
+      { accountCode: ACCOUNT_CODES.receivables, credit: input.amount },
+    ],
+  }, tx);
+}
+
 export async function postPackageSale(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; paid: boolean }, tx: Tx = db) {
   return createJournalEntry({
     ...input,

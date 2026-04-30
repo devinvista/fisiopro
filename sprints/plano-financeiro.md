@@ -221,3 +221,15 @@
   - Endpoint `POST /api/treatment-plans/:planId/cancel` aceita `{ reason, recalculate? }`; resposta inclui `recalculatedAppointments`, `priceDifferenceTotal`, `recalculateSkippedReason`.
   - `/reconciliation`: operacional `deferredReceivablesOutstanding` agora soma `faturaPlano` **e** `faturaPlanoAvulsoMensal` em aberto com deferred postado. Tabela §10 da doc atualizada.
   - Testes: 10 novos casos (`treatment-plans.acceptance-avulso` × 4, `treatment-plans.cancel-recalc` × 6). Suite total: **405/405 verdes** (395 → 405).
+
+- [x] **Sprint 14 (Hardening)** — concluída em 30/04/2026.
+  - **Bug-fix #1 — `end-of-month-closure.service.ts`:**
+    - Filtro de candidatos ampliado: `inArray(transactionType, ['faturaPlano','faturaPlanoAvulsoMensal'])` — antes ignorava as faturas P4 e elas nunca eram fechadas.
+    - Detecção do modo P3/P4 via `SELECT` em `accountingJournalEntriesTable` (eventType='deferred_receivable', status='posted'): quando existe deferred, força `postWalletUsage` mesmo com fatura `pendente`. Antes, `pendente` caía em `postReceivableRevenue` e criava recebível duplicado em cima do deferred do aceite.
+    - Default `revenueAccountCode` por tipo: `4.1.1` para `faturaPlanoAvulsoMensal` (receita por sessão), `4.1.2` para `faturaPlano` (receita de pacotes/mensalidades).
+  - **Bug-fix #2 — `treatment-plans.cancel.ts`:**
+    - Novo helper `postPartialDeferredReversal` em `accounting.service.ts` (`D 2.1.1 / C 1.1.2` com eventType `deferred_receivable_partial_reversal`).
+    - Caso `recognitionCreditsConsumed > 0` (fatura parcialmente reconhecida, não paga) deixou de ser enganosamente marcado como `paidInvoiceIds` com skip. Agora posta estorno parcial pelo saldo restante (`amount − recognizedAmount`), preservando as fragmentas já reconhecidas (regime de competência), e marca a fatura como `cancelado`.
+    - `CancelTreatmentPlanResult` ganhou `partialReversalsPosted` e `partiallyConsumedInvoiceIds`. `paidInvoiceIds` voltou a significar exatamente "faturas já pagas que requerem ressarcimento manual".
+  - **Testes:** 3 novos casos (`end-of-month-closure` × 2 — modo P3 pendente + P4 com 4.1.1; `treatment-plan-cancel` × 1 — estorno parcial; ajuste de mocks legados). Suite total: **408/408 verdes** (405 → 408). Typecheck e lint sem regressões.
+  - **Pendência conhecida documentada (não bloqueante):** `accDeferredOutstanding` em `/reconciliation` ainda não subtrai settlements quando uma fatura P3 paga consome o adiantamento — gera diff cosmético no relatório e fica para sprint futura.

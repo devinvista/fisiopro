@@ -130,8 +130,11 @@ describe("runEndOfMonthRevenueClosure", () => {
       procedureId: null,
       description: "Mensalidade Pilates — abr/2026",
       recognizedEntryId: 9001,
+      transactionType: "faturaPlano",
     }]);
-    // 3. UPDATE financial_records
+    // 3. SELECT deferred → vazio (legado, sem deferred_receivable) → cai em postReceivableRevenue
+    dbMock.enqueue([]);
+    // 4. UPDATE financial_records
     dbMock.enqueue(undefined);
 
     postReceivableRevenueMock.mockResolvedValueOnce({ id: 9999 });
@@ -179,8 +182,11 @@ describe("runEndOfMonthRevenueClosure", () => {
       procedureId: null,
       description: "Plano",
       recognizedEntryId: 8001,
+      transactionType: "faturaPlano",
     }]);
-    dbMock.enqueue(undefined);
+    // SELECT deferred → [] (irrelevante: status=pago já força postWalletUsage)
+    dbMock.enqueue([]);
+    dbMock.enqueue(undefined); // UPDATE financial_records
 
     postWalletUsageMock.mockResolvedValueOnce({ id: 8889 });
 
@@ -192,6 +198,112 @@ describe("runEndOfMonthRevenueClosure", () => {
     expect(result.closed).toBe(1);
     expect(postWalletUsageMock).toHaveBeenCalledTimes(1);
     expect(postReceivableRevenueMock).not.toHaveBeenCalled();
+  });
+
+  it("Sprint 14 (Hardening) — fatura PENDENTE em modo P3 (deferred existe) → postWalletUsage, NÃO postReceivableRevenue", async () => {
+    // Bug-fix #1: antes do hardening, fatura P3 pendente caía em
+    // postReceivableRevenue → criava recebível duplicado (já havia um
+    // deferred_receivable do aceite). Agora detecta o deferred e usa
+    // postWalletUsage (D 2.1.1 / C 4.1.x — consome do adiantamento).
+    dbMock.enqueue([{
+      id: 250,
+      clinicId: 1,
+      patientId: 11,
+      procedureId: null,
+      description: "Mensalidade P3 — abr/2026",
+      amount: "600.00",
+      recognizedAmount: "150.00",
+      recognitionCreditsTotal: 4,
+      recognitionCreditsConsumed: 1,
+      status: "pendente",
+      planMonthRef: "2026-04-01",
+      transactionType: "faturaPlano",
+    }]);
+    dbMock.enqueue([{
+      id: 250,
+      amount: "600.00",
+      recognizedAmount: "150.00",
+      recognitionCreditsTotal: 4,
+      recognitionCreditsConsumed: 1,
+      status: "pendente",
+      clinicId: 1,
+      patientId: 11,
+      procedureId: null,
+      description: "Mensalidade P3 — abr/2026",
+      recognizedEntryId: null,
+      transactionType: "faturaPlano",
+    }]);
+    // SELECT deferred → [{id}] → P3 mode → postWalletUsage
+    dbMock.enqueue([{ id: 7777 }]);
+    dbMock.enqueue(undefined); // UPDATE financial_records
+
+    postWalletUsageMock.mockResolvedValueOnce({ id: 9100 });
+
+    const result = await runEndOfMonthRevenueClosure({
+      today: "2026-04-30",
+      triggeredBy: "test",
+    });
+
+    expect(result.closed).toBe(1);
+    expect(postWalletUsageMock).toHaveBeenCalledTimes(1);
+    expect(postReceivableRevenueMock).not.toHaveBeenCalled();
+    expect(postWalletUsageMock.mock.calls[0][0]).toMatchObject({
+      amount: 450, // 600 - 150
+      financialRecordId: 250,
+      eventType: "end_of_month_closure",
+    });
+  });
+
+  it("Sprint 14 (Hardening) — faturaPlanoAvulsoMensal (P4) é fechada com default 4.1.1", async () => {
+    // Bug-fix #1: antes, o filtro era apenas transactionType='faturaPlano'
+    // → faturas P4 nunca eram fechadas. Além disso, default revenueAccountCode
+    // para avulso deve ser 4.1.1 (receita por sessão), não 4.1.2.
+    dbMock.enqueue([{
+      id: 350,
+      clinicId: 1,
+      patientId: 12,
+      procedureId: null,
+      description: "Avulso mensal — abr/2026",
+      amount: "300.00",
+      recognizedAmount: "100.00",
+      recognitionCreditsTotal: 3,
+      recognitionCreditsConsumed: 1,
+      status: "pendente",
+      planMonthRef: "2026-04-01",
+      transactionType: "faturaPlanoAvulsoMensal",
+    }]);
+    dbMock.enqueue([{
+      id: 350,
+      amount: "300.00",
+      recognizedAmount: "100.00",
+      recognitionCreditsTotal: 3,
+      recognitionCreditsConsumed: 1,
+      status: "pendente",
+      clinicId: 1,
+      patientId: 12,
+      procedureId: null,
+      description: "Avulso mensal — abr/2026",
+      recognizedEntryId: null,
+      transactionType: "faturaPlanoAvulsoMensal",
+    }]);
+    // SELECT deferred → [{id}] (P4 também tem deferred do aceite) → postWalletUsage
+    dbMock.enqueue([{ id: 8888 }]);
+    dbMock.enqueue(undefined); // UPDATE
+
+    postWalletUsageMock.mockResolvedValueOnce({ id: 9200 });
+
+    const result = await runEndOfMonthRevenueClosure({
+      today: "2026-04-30",
+      triggeredBy: "test",
+    });
+
+    expect(result.closed).toBe(1);
+    expect(postWalletUsageMock).toHaveBeenCalledTimes(1);
+    expect(postWalletUsageMock.mock.calls[0][0]).toMatchObject({
+      amount: 200,
+      revenueAccountCode: "4.1.1", // default para avulso, NÃO 4.1.2
+      financialRecordId: 350,
+    });
   });
 
   it("residual ~0 → skipped sem postar entry (mas marca consumed=total)", async () => {

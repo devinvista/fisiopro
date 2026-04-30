@@ -19,8 +19,12 @@
  * subsequente do reconhecimento fracionado será no-op.
  */
 import { db } from "@workspace/db";
-import { financialRecordsTable, proceduresTable } from "@workspace/db";
-import { and, eq, isNotNull, lt, notInArray, sql } from "drizzle-orm";
+import {
+  financialRecordsTable,
+  proceduresTable,
+  accountingJournalEntriesTable,
+} from "@workspace/db";
+import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { lastDayOfMonth, monthDateRangeBRT, nowBRT } from "../../../utils/dateUtils.js";
 import {
   postReceivableRevenue,
@@ -82,6 +86,8 @@ export async function runEndOfMonthRevenueClosure(
   const { startDate, endDate } = monthDateRangeBRT(year, month);
 
   // Busca faturas no MODELO FRACIONADO com créditos restantes no mês corrente.
+  // Sprint Financeiro 14 (Hardening) — agora inclui também `faturaPlanoAvulsoMensal`
+  // (P4): faturas mensais estimadas de itens avulsos do plano.
   const candidates = await db
     .select({
       id: financialRecordsTable.id,
@@ -95,10 +101,14 @@ export async function runEndOfMonthRevenueClosure(
       recognitionCreditsConsumed: financialRecordsTable.recognitionCreditsConsumed,
       status: financialRecordsTable.status,
       planMonthRef: financialRecordsTable.planMonthRef,
+      transactionType: financialRecordsTable.transactionType,
     })
     .from(financialRecordsTable)
     .where(and(
-      eq(financialRecordsTable.transactionType, "faturaPlano"),
+      inArray(
+        financialRecordsTable.transactionType,
+        ["faturaPlano", "faturaPlanoAvulsoMensal"],
+      ),
       notInArray(financialRecordsTable.status, ["cancelado", "estornado"]),
       isNotNull(financialRecordsTable.recognitionCreditsTotal),
       // consumed < total
@@ -156,8 +166,15 @@ export async function runEndOfMonthRevenueClosure(
           return;
         }
 
-        // Sub-conta de receita pelo procedimento (4.1.2 default).
-        let revenueAccountCode = "4.1.2";
+        // Sub-conta de receita pelo procedimento.
+        // Sprint Financeiro 14 (Hardening) — default depende do tipo:
+        //   - `faturaPlano` (mensalidade) → 4.1.2 (receita de pacotes/mensalidades)
+        //   - `faturaPlanoAvulsoMensal` (avulso do plano) → 4.1.1 (receita por sessão)
+        const defaultRevenueCode =
+          invoice.transactionType === "faturaPlanoAvulsoMensal"
+            ? "4.1.1"
+            : "4.1.2";
+        let revenueAccountCode = defaultRevenueCode;
         if (invoice.procedureId) {
           const [proc] = await tx
             .select({ accountingAccountId: (proceduresTable as any).accountingAccountId })
@@ -166,7 +183,7 @@ export async function runEndOfMonthRevenueClosure(
             .limit(1);
           revenueAccountCode = await resolveAccountCodeById(
             proc?.accountingAccountId ?? null,
-            "4.1.2",
+            defaultRevenueCode,
             invoice.clinicId ?? null,
           );
         }
@@ -188,11 +205,31 @@ export async function runEndOfMonthRevenueClosure(
           eventType: "end_of_month_closure",
         };
 
+        // Sprint Financeiro 14 (Hardening) — Detecção do modo P3/P4.
+        // Em P3/P4 o aceite postou D 1.1.2 / C 2.1.1 (`deferred_receivable`)
+        // pelo total da fatura. Logo o "recebível" e o "adiantamento" já
+        // existem antes do consumo. O resíduo do mês deve consumir do
+        // adiantamento (D 2.1.1 / C 4.1.x), nunca criar um novo recebível
+        // (que seria postReceivableRevenue: D 1.1.2 / C 4.1.x → recebível duplicado).
+        const [hasDeferred] = await tx
+          .select({ id: accountingJournalEntriesTable.id })
+          .from(accountingJournalEntriesTable)
+          .where(and(
+            eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+            eq(accountingJournalEntriesTable.sourceId, invoice.id),
+            eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+            eq(accountingJournalEntriesTable.status, "posted"),
+          ))
+          .limit(1);
+        const isP3Mode = !!hasDeferred;
+
         let entryId: number;
-        if (invoice.status === "pago") {
+        if (isP3Mode || invoice.status === "pago") {
+          // P3/P4 ou paga via legado cash-advance → consome do adiantamento.
           const entry = await postWalletUsage(baseEntry as any, tx as any);
           entryId = entry.id;
         } else {
+          // Legado pendente sem deferred → ainda gera recebível + receita.
           const entry = await postReceivableRevenue(baseEntry as any, tx as any);
           entryId = entry.id;
         }

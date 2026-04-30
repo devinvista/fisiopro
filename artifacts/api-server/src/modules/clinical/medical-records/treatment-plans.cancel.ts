@@ -30,6 +30,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   postReversal,
   postReceivableRevenue,
+  postPartialDeferredReversal,
   resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
@@ -54,12 +55,24 @@ export interface CancelTreatmentPlanResult {
   planId: number;
   invoicesCancelled: number;
   reversalsPosted: number;
+  /** Sprint Financeiro 14 (Hardening) — estornos parciais postados (D 2.1.1 / C 1.1.2). */
+  partialReversalsPosted: number;
   paidInvoicesSkipped: number;
   /**
    * IDs de faturas que ficaram fora do estorno (já pagas/parcialmente
    * pagas). UI deve avisar que requerem operação manual de ressarcimento.
    */
   paidInvoiceIds: number[];
+  /**
+   * Sprint Financeiro 14 (Hardening) — IDs de faturas com sessões
+   * parcialmente reconhecidas (`recognitionCreditsConsumed > 0`) que NÃO
+   * estavam pagas. O sistema postou estorno parcial automaticamente pelo
+   * saldo restante (`amount − recognizedAmount`), preservando as fragmentas
+   * já reconhecidas (regime de competência: serviço prestado fica).
+   * O paciente continua devendo o `recognizedAmount` proporcional aos
+   * serviços já prestados; cobrança manual ou via fluxo padrão de pagamento.
+   */
+  partiallyConsumedInvoiceIds: number[];
   reason: string;
   /**
    * Sprint Financeiro 13 (P4) — totais do recálculo de preço diferenciado.
@@ -98,8 +111,10 @@ export async function cancelTreatmentPlan(
         planId,
         invoicesCancelled: 0,
         reversalsPosted: 0,
+        partialReversalsPosted: 0,
         paidInvoicesSkipped: 0,
         paidInvoiceIds: [],
+        partiallyConsumedInvoiceIds: [],
         reason: plan.cancellationReason ?? reason,
         recalculatedAppointments: 0,
         priceDifferenceTotal: "0.00",
@@ -124,7 +139,9 @@ export async function cancelTreatmentPlan(
 
     let invoicesCancelled = 0;
     let reversalsPosted = 0;
+    let partialReversalsPosted = 0;
     const paidInvoiceIds: number[] = [];
+    const partiallyConsumedInvoiceIds: number[] = [];
 
     for (const inv of allInvoices) {
       const consumed = inv.recognitionCreditsConsumed ?? 0;
@@ -143,22 +160,7 @@ export async function cancelTreatmentPlan(
         continue;
       }
 
-      // Receita já parcialmente reconhecida nesta fatura → ainda cancelamos
-      // o que sobrou do recebível antecipado, mas não estornamos as
-      // fragmentas de receita (regime de competência: serviço prestado fica).
-      // Em P3 puro o consumed=0 é o caso comum; consumed>0 só ocorre se
-      // sessões avulsas foram realizadas (raro no fluxo P3, mas possível).
-      // Estratégia: estorna o `deferred_receivable` apenas se a receita
-      // restante > 0. Como o deferred_receivable é o lançamento ÚNICO do
-      // valor total da fatura, o estorno integral pode "desfazer" algo já
-      // consumido. Para o MVP, se consumed > 0, deixamos passar (será
-      // tratado em ajuste manual + alerta no retorno).
-      if (consumed > 0) {
-        paidInvoiceIds.push(inv.id);
-        continue;
-      }
-
-      // 2) Estorna o `deferred_receivable` ainda vivo (status='posted').
+      // Busca o `deferred_receivable` original (status='posted', não estornado).
       const [deferred] = await tx
         .select({
           id: accountingJournalEntriesTable.id,
@@ -176,6 +178,56 @@ export async function cancelTreatmentPlan(
         )
         .limit(1);
 
+      // Sprint Financeiro 14 (Hardening) — Bifurcação por consumo:
+      //
+      //   • consumed = 0  → fatura intocada → estorno INTEGRAL do deferred
+      //     (postReversal). 1.1.2 e 2.1.1 zeram. Fatura → cancelado.
+      //
+      //   • consumed > 0  → algumas sessões já foram reconhecidas via
+      //     fragmentas (D 2.1.1 / C 4.1.2). Receita por serviço prestado
+      //     fica (regime de competência). Posta-se um estorno PARCIAL
+      //     (D 2.1.1 / C 1.1.2) pelo SALDO restante (`amount − recognized`),
+      //     anulando a expectativa de cobrar e a obrigação de prestar serviço
+      //     futuro. Fatura ainda assim → cancelado (cobrança do recognized
+      //     remanescente é manual e fica como saldo devedor do paciente).
+      if (consumed > 0) {
+        const amount = Number(inv.amount ?? 0);
+        const recognized = Number(inv.recognizedAmount ?? 0);
+        const residual = Math.max(0, Math.round((amount - recognized) * 100) / 100);
+        if (residual > 0 && deferred) {
+          await postPartialDeferredReversal(
+            {
+              clinicId: deferred.clinicId,
+              entryDate: today,
+              amount: residual,
+              description:
+                `Estorno parcial por cancelamento do plano #${planId} — ` +
+                `fatura #${inv.id} (saldo de ${residual.toFixed(2)} não consumido) — ` +
+                `motivo: ${reason}`,
+              sourceType: "financial_record",
+              sourceId: inv.id,
+              patientId: inv.patientId,
+              procedureId: inv.procedureId,
+              financialRecordId: inv.id,
+              createdBy: input.cancelledBy ?? null,
+            } as any,
+            tx as any,
+          );
+          partialReversalsPosted++;
+        }
+        partiallyConsumedInvoiceIds.push(inv.id);
+
+        // Marca a fatura como cancelada (saldo já apropriado fica como
+        // receita reconhecida; cobrança do recognized é manual).
+        await tx
+          .update(financialRecordsTable)
+          .set({ status: "cancelado" })
+          .where(eq(financialRecordsTable.id, inv.id));
+        invoicesCancelled++;
+        continue;
+      }
+
+      // consumed === 0: estorno integral do deferred_receivable.
       if (deferred) {
         await postReversal(
           deferred.id,
@@ -197,7 +249,7 @@ export async function cancelTreatmentPlan(
         reversalsPosted++;
       }
 
-      // 3) Marca a fatura como cancelada (motivo persistido no journal entry
+      // Marca a fatura como cancelada (motivo persistido no journal entry
       // de estorno via `description` em postReversal).
       await tx
         .update(financialRecordsTable)
@@ -383,8 +435,10 @@ export async function cancelTreatmentPlan(
       planId,
       invoicesCancelled,
       reversalsPosted,
+      partialReversalsPosted,
       paidInvoicesSkipped: paidInvoiceIds.length,
       paidInvoiceIds,
+      partiallyConsumedInvoiceIds,
       reason,
       recalculatedAppointments,
       priceDifferenceTotal: priceDifferenceTotal.toFixed(2),
