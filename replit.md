@@ -17,6 +17,13 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 
 ## Recent Changes
 
+**30/04/2026 — Bugfix crítico: duplicidade de fatura mensal no mês 0 do plano (Aceite + Materialização)**
+- **Sintoma:** após aceitar e iniciar o plano, o mês corrente exibia DUAS cobranças com mesmo valor e mesmo vencimento — uma "Aceite de plano #N" (criada no aceite) e outra "Plano #N" (criada na materialização). O total a receber do paciente ficava dobrado naquele mês, divergindo do valor mensal contratado.
+- **Causa:** `acceptPlanFinancials` insere a `faturaPlano` do mês 0 (chave: `treatment_plan_id` + `treatment_plan_procedure_id` + `plan_month_ref` + `transaction_type='faturaPlano'`). Em seguida `materializeTreatmentPlan` (chamado em "Iniciar plano") gerava as faturas para todos os meses **sem checar idempotência** nessa mesma chave — portanto reinseria o mês 0. O job mensal `monthly-plan-billing.service.ts` já fazia esta checagem; só a materialização eager estava sem.
+- **Correção (`treatment-plans.materialization.ts`):** antes de inserir cada fatura mensal o código agora faz `SELECT` pela triple `(treatmentPlanId, treatmentPlanProcedureId, planMonthRef)` com `transactionType='faturaPlano'`. Se já existir, **reaproveita o ID** para vincular appointments e pool de créditos do mês, sem criar nova fatura nem somar duas vezes ao `totalContracted`. `monthsCoveredCount` é incrementado em ambos os ramos (plano coberto independentemente de quem criou a fatura).
+- **Limpeza de dados existentes (`scripts/cleanup-duplicate-plan-invoices.ts`):** script idempotente em **dry-run por padrão** que agrupa `faturaPlano` duplicadas pela mesma triple, mantém a mais antiga (a do aceite), religa `appointments.monthly_invoice_id` para o ID mantido e remove as demais. Pula grupos onde alguma duplicata já está paga/parcialmente paga (caso requer estorno manual). Aceita `--clinic <id>`. Executado em produção: removeu 1 fatura órfã (plano #80, item #48, mês 2026-05-01) e religou 4 appointments.
+- **Estado validado:** `pnpm typecheck` verde, `pnpm test` 351/351 verde.
+
 **30/04/2026 — UX: facilitar localizar dia pendente no editor "Horário por dia" (AcceptanceScheduleEditor)**
 - **Sintoma:** ao salvar uma mensalidade 2x/sem (Seg + Qua) com horário definido apenas para Segunda, o toast "Defina um horário para cada dia. Falta o horário em: Quarta." aparecia, mas o card do segundo dia ficava abaixo do dobra (cada card pode ter dezenas de slots ocupando bastante altura). O usuário não percebia que existia um card de Quarta logo abaixo do de Segunda.
 - **Correção (`AcceptanceScheduleEditor.tsx`):**

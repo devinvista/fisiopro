@@ -502,30 +502,59 @@ export async function materializeTreatmentPlan(
         // `startDate`; demais parcelas seguem mês a mês a partir daí.
         const dueDate = planInstallmentDueDate(startDate, billingDay, m);
 
-        // Cria fatura mensal.
-        const [invoice] = await tx
-          .insert(financialRecordsTable)
-          .values({
-            type: "receita",
-            amount: monthlyAmount.toFixed(2),
-            description: `Plano #${planId} — ${procedure.name} — ${patientName} — ${monthStart.slice(0, 7)}`,
-            category: procedure.category,
-            patientId: plan.patientId,
-            procedureId,
-            transactionType: "faturaPlano",
-            status: "pendente",
-            dueDate,
-            clinicId: plan.clinicId,
-            priceSource: "plano_mensal_proporcional",
-            originalUnitPrice: procedure.price,
-            treatmentPlanId: planId,
-            treatmentPlanProcedureId: item.id,
-            planMonthRef: monthStart,
-          })
-          .returning({ id: financialRecordsTable.id });
-        invoicesCreated++;
-        monthsCoveredCount++;
-        totalContracted += monthlyAmount;
+        // Cria fatura mensal — com idempotência forte na triple
+        // (treatmentPlanId, treatmentPlanProcedureId, planMonthRef) +
+        // transactionType='faturaPlano'. Mesma chave usada por
+        // `acceptPlanFinancials` (mês 0 do plano) e por
+        // `monthly-plan-billing.service.ts` (job mensal). Sem isto, ao
+        // materializar um plano já aceito o mês 0 ganharia 2 faturas
+        // ("Aceite de plano #..." + "Plano #...") com o mesmo vencimento,
+        // dobrando indevidamente o valor a receber daquele mês.
+        const [existingInvoice] = await tx
+          .select({ id: financialRecordsTable.id })
+          .from(financialRecordsTable)
+          .where(
+            and(
+              eq(financialRecordsTable.treatmentPlanId, planId),
+              eq(financialRecordsTable.treatmentPlanProcedureId, item.id),
+              eq(financialRecordsTable.transactionType, "faturaPlano"),
+              eq(financialRecordsTable.planMonthRef, monthStart),
+            ),
+          )
+          .limit(1);
+
+        let invoice: { id: number };
+        if (existingInvoice) {
+          // Já existe (criada no aceite ou por job anterior). Reaproveita
+          // o ID para vincular appointments e pool de créditos do mês,
+          // sem contar como nova fatura nem somar duas vezes ao total.
+          invoice = existingInvoice;
+          monthsCoveredCount++;
+        } else {
+          [invoice] = await tx
+            .insert(financialRecordsTable)
+            .values({
+              type: "receita",
+              amount: monthlyAmount.toFixed(2),
+              description: `Plano #${planId} — ${procedure.name} — ${patientName} — ${monthStart.slice(0, 7)}`,
+              category: procedure.category,
+              patientId: plan.patientId,
+              procedureId,
+              transactionType: "faturaPlano",
+              status: "pendente",
+              dueDate,
+              clinicId: plan.clinicId,
+              priceSource: "plano_mensal_proporcional",
+              originalUnitPrice: procedure.price,
+              treatmentPlanId: planId,
+              treatmentPlanProcedureId: item.id,
+              planMonthRef: monthStart,
+            })
+            .returning({ id: financialRecordsTable.id });
+          invoicesCreated++;
+          monthsCoveredCount++;
+          totalContracted += monthlyAmount;
+        }
 
         // ── Reconhecimento de receita: NÃO ocorre na materialização ────────
         // Conforme regime de competência por entrega:
