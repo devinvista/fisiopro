@@ -215,4 +215,80 @@ router.post(
   }),
 );
 
+// Sprint 15 (F2) — Aceite + materialização ATÔMICA via link público.
+// Mesmo contrato do endpoint presencial mas sem auth: posse do token
+// é a credencial. Em caso de validação prévia falha (faltam horários
+// configurados pela clínica), devolve 400 detalhado para a UI orientar
+// o paciente a contatar a clínica.
+router.post(
+  "/treatment-plans/by-token/:token/accept-and-materialize",
+  handle(async (req, res) => {
+    const token = String(req.params.token);
+    const body = (req.body ?? {}) as { signature?: string; acceptedClauseCodes?: unknown };
+    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+    if (signature.length < 3) {
+      throw new PublicError(400, "signature_required", "Digite seu nome completo como assinatura.");
+    }
+    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
+      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
+      : [];
+    const { lookupAcceptanceToken, consumeAcceptanceToken } = await import(
+      "../clinical/medical-records/treatment-plans.tokens.js"
+    );
+    const { acceptAndMaterializePlan } = await import(
+      "../clinical/medical-records/treatment-plans.atomic.js"
+    );
+    const { db, treatmentPlansTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+
+    const lookup = await lookupAcceptanceToken(token);
+    if (lookup.status === "not_found") {
+      throw new PublicError(404, "not_found", "Link inválido.");
+    }
+    if (lookup.status === "expired") {
+      throw new PublicError(410, "expired", "Este link expirou. Solicite um novo à clínica.");
+    }
+    if (lookup.status === "used") {
+      throw new PublicError(409, "used", "Este link já foi usado.");
+    }
+
+    const planId = lookup.tokenRow!.planId;
+    const [plan] = await db
+      .select({ patientId: treatmentPlansTable.patientId })
+      .from(treatmentPlansTable)
+      .where(eq(treatmentPlansTable.id, planId))
+      .limit(1);
+    if (!plan) {
+      throw new PublicError(404, "not_found", "Plano não encontrado.");
+    }
+
+    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
+    const ip = ipHeader || req.ip || null;
+    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
+
+    try {
+      const result = await acceptAndMaterializePlan({
+        patientId: plan.patientId,
+        planId,
+        ctx: {},
+        trail: { signature, ip, device: ua, via: "link", acceptedClauseCodes },
+      });
+      await consumeAcceptanceToken(token);
+      res.json(result);
+    } catch (err: any) {
+      // HttpError do orquestrador (validação 400 ou rollback) → traduz para
+      // PublicError preservando código.
+      if (err && typeof err === "object" && "status" in err) {
+        const status = (err as { status: number }).status;
+        const code =
+          (err as any).issues?.code ||
+          (err as any).error ||
+          "atomic_failed";
+        throw new PublicError(status, code, (err as Error).message);
+      }
+      throw err;
+    }
+  }),
+);
+
 export default router;

@@ -200,6 +200,68 @@ router.post(
   }),
 );
 
+// Sprint 15 (F2) — Aceite + materialização ATÔMICA.
+//
+// Novo fluxo: o paciente já configurou agenda + cobrança ANTES de assinar.
+// Este endpoint substitui o par (POST /accept + POST /materialize) por uma
+// única operação com rollback explícito em caso de falha. O legado continua
+// funcionando para compat.
+//
+// Body: { signature, acceptedClauseCodes[], materializeOpts? }
+// 400 → validação prévia falhou (faltam horários/agenda em algum item).
+// 409 → plano já aceito E materializado (idempotente: devolve estado atual).
+router.post(
+  "/treatment-plans/:planId/accept-and-materialize",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
+    const planId = parseInt(req.params.planId);
+    const body = (req.body ?? {}) as {
+      signature?: string;
+      acceptedClauseCodes?: unknown;
+      materializeOpts?: { force?: boolean; durationMonths?: number; startDate?: string };
+    };
+    const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+    if (!signature) {
+      res.status(400).json({
+        error: "signature_required",
+        message: "Assinatura (nome completo) é obrigatória.",
+      });
+      return;
+    }
+    const acceptedClauseCodes = Array.isArray(body.acceptedClauseCodes)
+      ? body.acceptedClauseCodes.filter((c): c is string => typeof c === "string")
+      : [];
+    const ipHeader = (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim();
+    const ip = ipHeader || req.ip || null;
+    const ua = (req.headers["user-agent"] as string | undefined) ?? null;
+
+    const { acceptAndMaterializePlan } = await import("./treatment-plans.atomic.js");
+    const result = await acceptAndMaterializePlan({
+      patientId,
+      planId,
+      ctx: getCtx(req as AuthRequest),
+      trail: { signature, ip, device: ua, via: "presencial", acceptedClauseCodes },
+      materializeOpts: body.materializeOpts,
+    });
+    res.json(result);
+  }),
+);
+
+// Sprint 15 (F2) — Validação pré-aceite. UI usa para mostrar checklist do
+// que ainda falta (agenda, horário, cobrança) antes de habilitar o botão
+// "Assinar e iniciar plano".
+router.get(
+  "/treatment-plans/:planId/atomic-validation",
+  requirePermission("medical.read"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const { validatePlanForAtomicAccept } = await import("./treatment-plans.atomic.js");
+    const result = await validatePlanForAtomicAccept(planId);
+    res.json(result);
+  }),
+);
+
 // Sprint 2 — gera (ou reaproveita) um link público de aceite, válido por 7 dias.
 // Retorna a URL absoluta (montada com APP_PUBLIC_URL ou Origin do request).
 router.post(

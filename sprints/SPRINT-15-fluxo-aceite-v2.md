@@ -1,0 +1,296 @@
+# Sprint 15 — Reforma do Fluxo de Aceite (v2)
+
+**Origem:** análise solicitada em 30/04/2026 — paciente assina contrato com base em "visão estimada", e horários reais só são escolhidos depois do aceite.
+**Estado base:** 408/408 testes vitest verdes, P1–P5 financeiros (Sprints 9–14) entregues.
+**Escopo total:** 6 fases (F1–F6).
+
+---
+
+## Diagnóstico — fluxo atual (mapeado)
+
+```
+[1] ITENS         TreatmentPlanItemsSection      → preview financeiro estimado
+[2] ACEITE  ⚠️    AcceptanceBlock                → assina contrato com estimativa
+                  acceptPatientTreatmentPlan
+                  ↳ snapshot frozen_prices_json
+                  ↳ acceptPlanFinancials (tx)
+                      • N financial_records (P3 / P4 / vendaPacote)
+                      • N postDeferredReceivable (D 1.1.2 / C 2.1.1)
+                      • session_credits (pacotes)
+[3] COBRANÇA      AcceptanceScheduleEditor       → escolhe weekDays + horários
+                  PUT /procedures/:id            → enabled=isAccepted
+[4] "Iniciar"     materializeTreatmentPlan       → cria appointments + faturas
+                  (botão dedicado)               → linka monthlyInvoiceId
+```
+
+### Problemas concretos
+
+| # | Problema |
+|---|---|
+| **A** | Contrato assinado SEM horário real anexado. Snapshot não congela quando o paciente vai ser atendido. |
+| **B** | 12 `deferred_receivable` postados antes de qualquer agenda existir. Desistência = estorno em massa. |
+| **C** | `postPartialDeferredReversal` (Sprint 14 Bug-fix #2) só existe porque a contabilidade andou na frente da operação. |
+| **D** | Materialização manual pode ser esquecida → faturas vencem sem appointments. |
+| **E** | Aceite público (`/aceite/:token`) mostra contrato sem datas. Risco probatório (CPC art. 784, III). |
+| **F** | `paymentMode` / `monthlyDueDay` editáveis sem etapa formal — sem etapa "cobrança" no wizard. |
+
+---
+
+## Princípios de Design (v2)
+
+1. **Contrato congela TUDO** — preço, cláusulas, **e calendário completo de consultas**.
+2. **Contabilidade nasce com a operação** — `deferred_receivable` só após agenda confirmada.
+3. **Aceite = ato único e atômico** — aceite + materialização numa única transação (ou rollback total).
+4. **Holds de slots** — entre escolha e aceite, slots ficam "pré-reservados" com TTL 15min.
+5. **Wizard 4 etapas** — Itens → Cobrança → Agenda → Contrato/Aceite.
+6. **Compatibilidade** — feature flag por clínica; planos antigos continuam no fluxo legado.
+
+---
+
+## Fluxo proposto (4 etapas + commit atômico)
+
+```
+[1] ITENS                  (igual hoje)
+[2] COBRANÇA  ◄── NOVA     • paymentMode (pré/pós-pago)
+                           • monthlyDueDay
+                           • avulsoBillingMode/Day
+                           • preview de calendário de faturas
+[3] AGENDA   ◄── HOJE      • por item: weekDays + slots por dia
+              É PÓS-ACEITE • valida com /api/appointments/available-slots
+                           • opcional: pré-reserva (TTL 15min)
+[4] CONTRATO + ACEITE       Contrato agora inclui:
+                           • preço congelado
+                           • cláusulas obrigatórias
+                           • CALENDÁRIO COMPLETO de consultas
+                           • forma de cobrança e vencimentos
+                           POST /accept-and-materialize
+[5] EFEITO ATÔMICO          Em uma única operação:
+    no servidor             • acceptTreatmentPlan (snapshot)
+                            • applyPlanFinancials (faturas + deferred)
+                            • materializeTreatmentPlan (appointments)
+                            • tudo ou nada (rollback em caso de falha)
+```
+
+---
+
+## Fases
+
+### F1 — Orquestrador atômico (BACKEND, baixo risco)
+
+**Estimativa:** 3h · **Risco:** Baixo · **Bloqueia:** F2.
+
+- **Novo serviço** `acceptAndMaterializePlan(patientId, planId, ctx, trail, materializeOpts)` em `medical-records.service.ts`:
+  - Valida pré-condições: itens existem; itens recorrentes/pacotes têm `weekDays` + horário; `startDate` definido; cláusulas obrigatórias aceitas.
+  - Chama `acceptPatientTreatmentPlan(...)` (idempotente).
+  - Chama `materializeTreatmentPlan(planId, materializeOpts)` (idempotente).
+  - **Em caso de falha do segundo passo:** chama `dematerializeTreatmentPlan(planId)` + reverte aceite via novo helper `revertPlanAcceptance(planId)` (apaga `acceptedAt`, snapshot e `deferred_receivable` correspondentes).
+  - Retorna `{ acceptance, materialization, ok: true }`.
+- **Novo helper** `revertPlanAcceptance(planId)` — reverso simétrico de `acceptPlanFinancials` para uso interno. Usa `postPartialDeferredReversal` por fatura.
+- **Validação prévia** `validatePlanForAtomicAccept(planId)`:
+  - Cada item recorrente/pacote tem `weekDays` ≥ 1 e cobertura de horários completa.
+  - Itens avulsos (sem agenda) são permitidos (não geram appointment).
+  - Plano tem `startDate` e `durationMonths`.
+  - Retorna `{ ok, errors[] }`.
+- **Testes** (`treatment-plans.atomic.test.ts`):
+  - feliz: aceite + materialização atômica gera N faturas + N appointments + N deferred.
+  - falha de materialize → rollback total (sem appointments, sem faturas, sem deferred, sem snapshot, sem `acceptedAt`).
+  - idempotente: chamar 2× retorna mesmo resultado.
+
+**Critério de aceite:**
+- 408 + 6 testes verdes.
+- Endpoints legados intactos.
+- `ts-check` sem novos erros.
+
+---
+
+### F2 — Endpoints atômicos (BACKEND, baixo risco)
+
+**Estimativa:** 2h · **Risco:** Baixo · **Depende de:** F1.
+
+- **Nova rota** `POST /api/patients/:patientId/treatment-plans/:planId/accept-and-materialize`
+  - Body: `{ signature, acceptedClauseCodes[], materializeOpts? }`.
+  - Chama `acceptAndMaterializePlan(...)`.
+  - 400 se validação prévia falhar (lista os itens sem agenda).
+  - 409 se plano já aceito **e** materializado.
+- **Nova rota pública** `POST /api/public/treatment-plans/by-token/:token/accept-and-materialize`
+  - Equivalente para aceite via link.
+  - Snapshot público (`GET .../by-token/:token`) ganha campo `appointmentsPreview[]` calculado a partir dos itens + agenda configurada (não persiste nada).
+- **Novo endpoint preview** `GET /api/patients/:patientId/treatment-plans/:planId/preview-appointments`
+  - Retorna lista de `{ date, startTime, endTime, procedureName, professionalName }` sem inserir.
+  - Usado pelo frontend para mostrar calendário no contrato.
+  - Refatora a lógica de enumeração de `materializeTreatmentPlan` em helper compartilhado `enumeratePlanAppointments(plan, items)`.
+- **Endpoints legados** (`/accept` + `/materialize`) continuam existindo. Não marcamos `@deprecated` ainda — F5/F6 fazem isso.
+- **Testes** (`atomic-routes.test.ts`):
+  - 200 fluxo feliz.
+  - 400 sem horário em item recorrente.
+  - 409 já aceito e materializado.
+  - Aceite via link público também atômico.
+
+**Critério de aceite:**
+- 6 + 4 testes verdes.
+- Smoke manual: novo endpoint produz mesmos artefatos contábeis que o fluxo legado quando agenda configurada.
+
+---
+
+### F3 — Reordenação do wizard (FRONTEND, médio risco)
+
+**Estimativa:** 8h · **Risco:** Médio · **Depende de:** F2.
+
+- **Feature flag** `clinics.use_v2_acceptance_flow` (default `false`):
+  - Migration `0014_clinics_use_v2_acceptance_flow.sql` adiciona coluna boolean.
+  - Backend expõe via `/api/clinics/me/settings`.
+  - Frontend lê do contexto `useClinicSettings()`.
+- **Novo `BillingConfigSection.tsx`**:
+  - Extrai os campos de cobrança hoje espalhados em `TreatmentPlanItemsSection.tsx`.
+  - Form único com: `paymentMode`, `monthlyDueDay`, `avulsoBillingMode`, `monthlyCreditValidityDays`.
+  - Preview de calendário de vencimentos baseado em `startDate` + `durationMonths`.
+- **Reorganização de `PlanStepper.tsx`**:
+  - 4 etapas: `itens` → `cobranca` → `agenda` → `contrato`.
+  - Renomeia `aceite` → `contrato`.
+  - Gates por etapa: `cobranca` requer ≥1 item; `agenda` requer cobrança válida; `contrato` requer agenda configurada.
+- **`AcceptanceScheduleEditor.tsx`** (renomear → `PlanScheduleEditor.tsx`):
+  - Remove gate `enabled: isAccepted`.
+  - Habilita ANTES do aceite quando flag v2 ativa.
+  - Usa novo endpoint `/preview-appointments` para mostrar calendário em tempo real.
+- **`AcceptanceBlock.tsx`** (renomear → `ContractAcceptanceBlock.tsx`):
+  - Mostra contrato congelado COM calendário real (lista de N consultas).
+  - Submete `POST /accept-and-materialize` (não mais `/accept`).
+  - Toast atualizado: "Plano aceito e agenda criada. Faturas geradas."
+- **`TreatmentPlanTab.tsx`**:
+  - Lê flag para renderizar wizard v1 ou v2.
+  - V2 reordena props e usa novos componentes.
+- **Testes** (Vitest + Testing Library):
+  - Wizard v2: gates funcionam corretamente.
+  - `BillingConfigSection`: validação de campos.
+  - `ContractAcceptanceBlock`: calendário renderiza.
+
+**Critério de aceite:**
+- Flag desligada → wizard v1 inalterado.
+- Flag ligada → wizard v2 funciona end-to-end.
+- 408 + N testes verdes.
+
+---
+
+### F4 — Aceite público v2 com calendário (FRONTEND, médio risco)
+
+**Estimativa:** 4h · **Risco:** Médio · **Depende de:** F2 + F3.
+
+- **`aceite.tsx` v2**:
+  - Snapshot público inclui `appointmentsPreview[]`.
+  - Renderiza seção "Sua agenda" antes da assinatura.
+  - Cada consulta listada: data, horário, profissional, procedimento.
+  - Sem snapshot de agenda (snap.appointmentsPreview vazio) → aviso "Aguardando configuração de agenda pela clínica" e botão de aceite desabilitado.
+  - Submete `POST /by-token/:token/accept-and-materialize`.
+- **Backend**: `loadPublicPlanSnapshot()` adiciona `appointmentsPreview` quando agenda configurada.
+- **Cache headers**: `Cache-Control: no-store` no snapshot público (evita revalidações divergentes).
+- **Testes**:
+  - Snapshot inclui preview quando agenda configurada.
+  - Aceite público v2 dispara fluxo atômico.
+
+**Critério de aceite:**
+- Paciente vê agenda real antes de assinar.
+- Aceite via link gera tudo atomicamente.
+
+---
+
+### F5 — Sistema de holds (BACKEND + FRONTEND, médio risco)
+
+**Estimativa:** 6h · **Risco:** Médio · **Independente.**
+
+- **Migration** `0015_treatment_plan_slot_holds.sql`:
+  ```sql
+  ALTER TABLE treatment_plans
+    ADD COLUMN slot_holds_json TEXT,
+    ADD COLUMN slot_holds_expires_at TIMESTAMP;
+  ```
+- **Schema:** `slotHoldsJson: text("slot_holds_json")`, `slotHoldsExpiresAt: timestamp("slot_holds_expires_at")`.
+- **Novo endpoint** `POST /api/treatment-plans/:planId/holds`:
+  - Body: `{ slots: [{ itemId, date, startTime }] }`.
+  - Valida disponibilidade via `available-slots` API.
+  - Persiste em `slot_holds_json` com TTL 15min.
+- **Novo endpoint** `DELETE /api/treatment-plans/:planId/holds` — libera hold.
+- **`acceptAndMaterializePlan`** valida holds vivos antes de materializar:
+  - Slot em hold por outro paciente → 409 com lista dos slots conflitantes.
+  - Hold próprio expirado → reabre na resposta para o paciente reescolher.
+- **Frontend**: `PlanScheduleEditor` cria/renova hold a cada mudança.
+- **Job de limpeza** (a cada 1min) — apaga holds expirados.
+- **Testes**:
+  - Hold próprio funciona.
+  - Hold conflitante bloqueia 2º paciente.
+  - Expiração libera slot.
+
+**Critério de aceite:**
+- 2 pacientes não conseguem reservar mesmo slot.
+- Hold expira e libera automaticamente.
+
+---
+
+### F6 — Rollout + deprecação (operacional, baixo risco)
+
+**Estimativa:** 2h · **Risco:** Baixo · **Depende de:** F1–F5.
+
+- **Ativar flag por padrão em clínicas novas:**
+  - Migration `0016_default_v2_for_new_clinics.sql` muda DEFAULT para `true` em clínicas criadas após sprint.
+  - Clínicas existentes recebem aviso na UI: "Novo fluxo de aceite disponível — ativar?".
+- **Marcar `@deprecated`:**
+  - `acceptPatientTreatmentPlan` (manter para compat).
+  - `materializeTreatmentPlan` standalone (manter para reparos).
+  - `POST /accept` legado (manter para compat).
+  - `POST /materialize` legado (manter para reparos).
+  - `AcceptanceBlock`/`AcceptanceScheduleEditor` (manter no bundle até remoção).
+- **Documentação:**
+  - Atualizar `replit.md` com novo fluxo.
+  - Adicionar seção "Migração v1 → v2" em `sprints/`.
+- **Removal scheduled:** após 90 dias com 100% das clínicas migradas.
+
+**Critério de aceite:**
+- Clínicas novas usam v2 por padrão.
+- Nenhum endpoint legado removido.
+- Documentação completa.
+
+---
+
+## Riscos & Mitigações
+
+| Risco | Mitigação |
+|---|---|
+| Slot escolhido fica indisponível entre escolha e aceite | F5 (holds com TTL 15min) |
+| Itens "abertos" (sem totalSessions) | calendário mostra sessões estimadas com asterisco; materializa só meses certos |
+| Itens avulsos sem agenda recorrente | continuam sem appointments; contrato lista "sessões avulsas conforme demanda" |
+| Compatibilidade com 1 plano ativo (#79 do paciente Adailton — agora apagado) | feature flag por clínica |
+| Atomicidade de tx muito grande (50+ appts + 12 faturas) | tx única é viável (Postgres aguenta); rollback explícito em F1 garante consistência |
+| Aceite público pelo celular | F4 — agenda já vem pré-sugerida pela clínica; paciente só confirma |
+
+---
+
+## O que NÃO muda
+
+- Plano contábil (4.1.1, 4.1.2, 1.1.2, 2.1.1).
+- Sprints financeiras 1–14 (P1–P5).
+- Sistema de cláusulas (`clinic_contract_clauses` + `acceptedClausesJson`).
+- Estorno parcial / cancelamento (`treatment-plans.cancel.ts`).
+- Renegociação via `parent_plan_id`.
+- Job de billing mensal (`monthlyPlanBilling.service.ts`).
+
+---
+
+## Outras melhorias menores (oportunistas)
+
+1. `AcceptanceBlock.tsx:111` — usa fetch direto. Padronizar com `lib/api-client-react`.
+2. `aceite.tsx:212-239` — adicionar `Cache-Control: no-store` no snapshot público.
+3. `treatment_plans.status` — consolidar 6 valores em 4 (deprecar `ativo`/`encerrado` em favor de `vigente`/`concluido`).
+4. `treatment_plan_procedures.kind` — backfill `UPDATE ... SET kind = derived_kind WHERE kind IS NULL`.
+5. `materializeTreatmentPlan` ganha modo `dryRun: true` (em vez de função separada `previewMaterialization`).
+
+---
+
+## Estado de implementação (atualizado por sprint)
+
+| Fase | Status | Data | Observações |
+|---|---|---|---|
+| F1 — Orquestrador atômico | ✅ Implementado | 30/04/2026 | `acceptAndMaterializePlan` + `revertPlanAcceptance` + `validatePlanForAtomicAccept` |
+| F2 — Endpoints atômicos | ✅ Implementado | 30/04/2026 | `POST /accept-and-materialize` (presencial + público) + `GET /atomic-validation` (preview de bloqueios) — `GET /preview-appointments` postergado para F3 (wizard usa o materializeTreatmentPlan dry-run existente) |
+| F3 — Wizard reordenado | ⏳ Pendente | — | Aguardando aprovação de mockup |
+| F4 — Aceite público v2 | ⏳ Pendente | — | Depende de F3 |
+| F5 — Sistema de holds | ⏳ Pendente | — | Independente, pode ser priorizado |
+| F6 — Rollout + deprecação | ⏳ Pendente | — | Após F3+F4 estáveis em produção |
