@@ -132,11 +132,20 @@ export function TreatmentPlanItemsSection({
       body.totalSessions = itemSessions ? Number(itemSessions) : (selectedPkg.totalSessions ?? null);
     } else if (addMode === "procedure" && selectedProc) {
       const effectivePrice = Number(itemCustomPrice || selectedProc.price || 0);
-      const sessCount = Number(itemSessions) || 1;
       // Procedimento avulso: desconto é POR SESSÃO. Em reais entra como
       // abatimento direto do preço unitário; em % é aplicado ao preço
       // unitário. Multiplicamos por sessões para armazenar o total em
       // `item.discount` (mantendo a convenção do schema de "desconto total").
+      // Quando "Total de sessões" não é informado, usa a MESMA estimativa
+      // de `plannedSessionsForItem` (vigência × sessões/semana) para que o
+      // desconto total armazenado bata com o display.
+      const explicitSessions = itemSessions ? Number(itemSessions) : null;
+      const estimatedSessions = explicitSessions ?? plannedSessionsForItem(
+        { packageType: null, packageId: null, totalSessions: null, sessionsPerWeek: itemSpw, weekDays: null },
+        planStartDate,
+        planMonths,
+      );
+      const sessCount = Math.max(1, estimatedSessions);
       const unitDisc = resolveDiscountAmount(itemDiscount, itemDiscountType, effectivePrice);
       const discAmt = unitDisc * sessCount;
       body.procedureId = selectedProc.id;
@@ -152,15 +161,21 @@ export function TreatmentPlanItemsSection({
     setEditSessions(String(item.totalSessions ?? ""));
     setEditNotes(item.notes ?? "");
     // Para procedimentos avulsos o desconto é por sessão na UI, mas o banco
-    // armazena o total. Divide por sessões para exibir o valor por unidade.
+    // armazena o total. Divide pela MESMA contagem usada no display
+    // (totalSessions explícito ou estimativa por vigência × sessões/semana).
     const isMensal = item.packageType === "mensal";
     const isPackage = !!item.packageId && !isMensal;
-    const sessCountInit = Number(item.totalSessions) || 1;
+    const isAvulso = !item.packageId && !isMensal;
     const storedDisc = Number(item.discount ?? 0);
-    const initialDisc =
-      !isMensal && !isPackage && sessCountInit > 0
-        ? storedDisc / sessCountInit
-        : storedDisc;
+    let initialDisc = storedDisc;
+    if (isAvulso) {
+      const sessForDiv =
+        item.totalSessions != null
+          ? Number(item.totalSessions)
+          : plannedSessionsForItem(item, planStartDate, planMonths);
+      const safeSess = Math.max(1, sessForDiv);
+      initialDisc = storedDisc / safeSess;
+    }
     setEditDiscount(String(initialDisc));
     setEditDiscountType("reais");
     setEditCustomPrice(String(item.unitPrice ?? item.price ?? ""));
@@ -170,7 +185,6 @@ export function TreatmentPlanItemsSection({
     const isMensal = item.packageType === "mensal";
     const isPackage = !!item.packageId && !isMensal;
     const baseUnitPrice = Number(editCustomPrice || item.unitPrice || item.price || 0);
-    const sessCount = Number(editSessions) || item.totalSessions || 1;
     let discAmt: number;
     if (isMensal || isPackage) {
       // Mensalidade/pacote: desconto incide sobre o preço-bundle (mensal ou
@@ -178,7 +192,15 @@ export function TreatmentPlanItemsSection({
       discAmt = resolveDiscountAmount(editDiscount, editDiscountType, baseUnitPrice);
     } else {
       // Procedimento avulso: desconto entrado é POR SESSÃO. Multiplicamos
-      // por sessões para armazenar o total no schema.
+      // pela MESMA contagem usada no display: totalSessions explícito ou
+      // estimativa por vigência × sessões/semana.
+      const explicitSessions = editSessions ? Number(editSessions) : null;
+      const estimatedSessions = explicitSessions ?? plannedSessionsForItem(
+        { packageType: null, packageId: null, totalSessions: null, sessionsPerWeek: editSpw, weekDays: item.weekDays ?? null },
+        planStartDate,
+        planMonths,
+      );
+      const sessCount = Math.max(1, estimatedSessions);
       const unitDisc = resolveDiscountAmount(editDiscount, editDiscountType, baseUnitPrice);
       discAmt = unitDisc * sessCount;
     }
@@ -423,7 +445,17 @@ export function TreatmentPlanItemsSection({
               : selectedPkg
                 ? isMensal ? Number(selectedPkg.monthlyPrice ?? 0) : Number(selectedPkg.price ?? 0)
                 : Number(selectedProc?.price ?? 0);
-            const sessCount = Number(itemSessions) || (isProcedure ? 1 : selectedPkg?.totalSessions ?? 1);
+            // Procedimento avulso sem total fixo: estima por vigência × spw
+            // (mesma fórmula do display) para que o preview bata com o final.
+            const explicitSessions = itemSessions ? Number(itemSessions) : null;
+            const sessCount = isProcedure
+              ? Math.max(1, explicitSessions ?? plannedSessionsForItem(
+                  { packageType: null, packageId: null, totalSessions: null, sessionsPerWeek: itemSpw, weekDays: null },
+                  planStartDate,
+                  planMonths,
+                ))
+              : (explicitSessions ?? selectedPkg?.totalSessions ?? 1);
+            const isEstimate = isProcedure && explicitSessions == null && itemSpw > 0;
             // Procedimento avulso: desconto é por sessão (preview reflete UX do save).
             // Pacote/mensalidade: desconto incide sobre o preço-bundle.
             const unitDisc = resolveDiscountAmount(itemDiscount, itemDiscountType, baseUnit);
@@ -440,9 +472,14 @@ export function TreatmentPlanItemsSection({
                   {isMensal && <span className="text-slate-500">/mês</span>}
                   {!isMensal && sessCount > 1 && (
                     <span className="text-slate-500 ml-1">
-                      ({sessCount} × {isProcedure && unitDisc > 0
+                      ({sessCount}{isEstimate ? "*" : ""} × {isProcedure && unitDisc > 0
                         ? <>({fmtCur(baseUnit)} − {fmtCur(unitDisc)}) = {fmtCur(Math.max(0, baseUnit - unitDisc))}</>
                         : fmtCur(baseUnit)})
+                    </span>
+                  )}
+                  {isEstimate && (
+                    <span className="text-slate-400 italic ml-1">
+                      *estimativa pela vigência ({planMonths} {planMonths === 1 ? "mês" : "meses"})
                     </span>
                   )}
                 </span>

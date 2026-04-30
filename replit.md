@@ -18,12 +18,13 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 ## Recent Changes
 
 **30/04/2026 — Bugfix: desconto na Previsão Financeira do Plano (procedimentos avulsos)**
-- **Bug:** o campo "Desconto" em procedimentos avulsos era armazenado como abatimento fixo no total — entrar R$ 80 num procedimento de R$ 180 com 17 sessões resultava em `17 × 180 − 80 = R$ 2.980,00`, em vez do esperado `17 × (180 − 80) = R$ 1.700,00`.
+- **Bug 1:** o campo "Desconto" em procedimentos avulsos era armazenado como abatimento fixo no total — entrar R$ 80 num procedimento de R$ 180 com 17 sessões resultava em `17 × 180 − 80 = R$ 2.980,00`, em vez do esperado `17 × (180 − 80) = R$ 1.700,00`.
+- **Bug 2 (subjacente, descoberto em validação):** quando o usuário deixava "Total de sessões" vazio (plano "aberto" — estima-se pelas semanas de vigência × sessões/semana), o `handleAddSubmit` usava `Number(itemSessions) || 1` → multiplicava o desconto-por-sessão por **1**, gravando R$ 80 no banco. No display posterior, o sistema dividia por 104 sessões estimadas → "(-R$ 0,77/sessão)" e total `104 × (180 − 0,77) = R$ 18.640,00`.
 - **Correção (`TreatmentPlanItemsSection.tsx`):** o desconto digitado para procedimento avulso passa a ter semântica **por sessão** (em R$ ou %), e o componente armazena `unitDisc × sessões` no campo `discount` do schema (mantendo a convenção de "desconto total" no banco — sem migração necessária).
-  - `handleAddSubmit` (procedure): `unitDisc = resolveDiscountAmount(input, type, unitPrice)` → `body.discount = unitDisc * sessCount`.
-  - `handleEditSave`: distingue mensalidade/pacote (desconto sobre bundle, comportamento legado) de avulso (per-session × sessões).
-  - `startEdit`: para avulso, divide o desconto armazenado por sessões para exibir o valor por unidade no input.
-  - **Preview** do form, **cabeçalho do item** ("(-R$ X/sessão)") e **linha da Previsão Financeira** atualizados para mostrar a fórmula `N × (preço − desconto/sessão) = total`.
+  - `handleAddSubmit` (procedure): usa **a mesma fórmula** de `plannedSessionsForItem` (totalSessions explícito **ou** estimativa por vigência × spw) para calcular `sessCount` antes de armazenar `unitDisc × sessCount`. Garante consistência entre input e display, inclusive em planos "abertos" sem totalSessions.
+  - `handleEditSave`: idem — usa `plannedSessionsForItem` quando `editSessions` está vazio.
+  - `startEdit`: para avulso, divide o desconto armazenado pela mesma contagem (totalSessions ou estimativa) para exibir o valor por unidade no input.
+  - **Preview** do form, **cabeçalho do item** ("(-R$ X/sessão)") e **linha da Previsão Financeira** atualizados para mostrar a fórmula `N × (preço − desconto/sessão) = total`. Preview ganha indicador "*estimativa pela vigência (N meses)" quando totalSessions está vazio.
   - **Labels** "Desconto (por sessão, opcional)" no add e "(por sessão)" no edit, somente para avulsos.
 - **Pacotes/mensalidades intocados:** desconto continua incidindo sobre o preço-bundle (semântica original).
 - **Estado validado:** `pnpm typecheck` verde, `pnpm test` 351/351 verde.
