@@ -119,6 +119,7 @@ export function plannedSessionsForItem(item: {
   if (real > 0) return real;
 
   // 3. Estimativa inicial pelo período de vigência × frequência semanal.
+  //    Vale para avulsos e para pacotes mensais antes da materialização.
   const sessionsPerWeek = Math.max(0, Number(item.sessionsPerWeek ?? 0));
   if (sessionsPerWeek > 0) {
     const weeks = weeksInValidityPeriod(planStartDate, planDurationMonths);
@@ -131,4 +132,26 @@ export function plannedSessionsForItem(item: {
     return item.packageId ? 0 : 1; // avulso solto = 1 sessão
   }
   return 0;
+}
+
+/**
+ * Indica se a contagem retornada por `plannedSessionsForItem` é uma
+ * **estimativa** (calculada a partir da vigência × sessões/semana) ou um
+ * número **firme** (pacote contratado com totalSessions ou já materializado
+ * com weekDays). Útil para sinalizar visualmente "(estimativa)" na UI.
+ */
+export function isPlannedEstimate(item: {
+  packageType?: string | null;
+  packageId?: number | null;
+  totalSessions?: number | null;
+  sessionsPerWeek?: number | null;
+  weekDays?: string | string[] | null;
+}, planStartDate: string | null | undefined, planDurationMonths: number | null | undefined): boolean {
+  const isMensal = item.packageType === "mensal";
+  const isFixedPackage = !isMensal && !!item.packageId && item.totalSessions != null;
+  if (isFixedPackage) return false;
+  const real = countRecurringSessions(planStartDate, planDurationMonths, item.weekDays);
+  if (real > 0) return false;
+  const sessionsPerWeek = Math.max(0, Number(item.sessionsPerWeek ?? 0));
+  return sessionsPerWeek > 0;
 }

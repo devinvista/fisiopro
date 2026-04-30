@@ -19,7 +19,7 @@ import {
 
 import type { PkgOption, PlanProcedureItem } from "../../types";
 import { fmtCur } from "../../utils/format";
-import { plannedSessionsForItem } from "../../utils/sessionCount";
+import { plannedSessionsForItem, isPlannedEstimate } from "../../utils/sessionCount";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 
 export function TreatmentPlanItemsSection({
@@ -463,10 +463,10 @@ export function TreatmentPlanItemsSection({
                         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
                           {!isMensal && item.sessionsPerWeek > 0 && <span>{item.sessionsPerWeek}x/semana</span>}
                           {isMensal && <span>{item.sessionsPerWeek}x/sem · dia {item.billingDay ?? "—"}</span>}
-                          {!isMensal && planned > 0 && (
+                          {planned > 0 && (
                             <span className="font-medium">
-                              {planned} sessões previstas
-                              {item.totalSessions == null && item.sessionsPerWeek > 0 && (
+                              {planned} sessões previstas{isMensal && <span className="text-slate-400 font-normal"> em {planMonths} {planMonths === 1 ? "mês" : "meses"}</span>}
+                              {isPlannedEstimate(item, planStartDate, planMonths) && (
                                 <span className="text-slate-400 font-normal"> (estimativa)</span>
                               )}
                             </span>
@@ -492,7 +492,6 @@ export function TreatmentPlanItemsSection({
                               <span className="flex items-center gap-1">
                                 <CheckCircle className="h-3 w-3 text-green-500" />
                                 <strong className="text-green-700">{used}</strong> realizadas · <strong>{remaining}</strong> restantes de {planned}
-                                {isMensal && <span className="text-slate-400"> (em {planMonths} {planMonths === 1 ? "mês" : "meses"})</span>}
                               </span>
                               <span className={pct >= 100 ? "text-green-600 font-semibold" : "text-slate-500"}>
                                 {pct >= 100 ? "✓ Concluído" : `${pct.toFixed(0)}%`}
@@ -664,15 +663,19 @@ export function TreatmentPlanItemsSection({
               <p className="text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
                 <RefreshCw className="h-3 w-3" /> Regras dos Planos Mensais
               </p>
-              {planItems.filter(i => i.packageType === "mensal").map(item => (
-                <div key={item.id} className="text-[10px] text-emerald-700 flex items-start gap-1">
-                  <span className="mt-0.5">•</span>
-                  <span>
-                    <strong>{item.packageName ?? item.procedureName}</strong>: {fmtCur(item.monthlyPrice)}/mês, {item.sessionsPerWeek}x/sem (~{item.sessionsPerWeek * 4} sess./mês).
-                    {(item.absenceCreditLimit ?? 0) > 0 ? ` Até ${item.absenceCreditLimit} falta(s) c/ crédito/mês.` : " Sem crédito de faltas."}
-                  </span>
-                </div>
-              ))}
+              {planItems.filter(i => i.packageType === "mensal").map(item => {
+                const totalPlanned = plannedSessionsForItem(item, planStartDate, planMonths);
+                const perMonth = planMonths > 0 ? Math.round(totalPlanned / planMonths) : 0;
+                return (
+                  <div key={item.id} className="text-[10px] text-emerald-700 flex items-start gap-1">
+                    <span className="mt-0.5">•</span>
+                    <span>
+                      <strong>{item.packageName ?? item.procedureName}</strong>: {fmtCur(item.monthlyPrice)}/mês, {item.sessionsPerWeek}x/sem (~{perMonth} sess./mês · {totalPlanned} no total da vigência).
+                      {(item.absenceCreditLimit ?? 0) > 0 ? ` Até ${item.absenceCreditLimit} falta(s) c/ crédito/mês.` : " Sem crédito de faltas."}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
