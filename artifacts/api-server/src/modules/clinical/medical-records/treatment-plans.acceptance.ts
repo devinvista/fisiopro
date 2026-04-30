@@ -63,6 +63,9 @@ interface PlanItem {
   unitMonthlyPrice: string | null;
   discount: string | null;
   totalSessions: number | null;
+  // Sprint Financeiro 13 (P4) — estimativa de sessões mensais para avulsos
+  // do plano. Usa o `sessionsPerWeek` do item (ou 1 default).
+  sessionsPerWeek: number | null;
   packageType: string | null;
   packageBillingDay: number | null;
   packageProcedureId: number | null;
@@ -126,6 +129,7 @@ async function loadAcceptanceItems(planId: number): Promise<PlanItem[]> {
       unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
       discount: treatmentPlanProceduresTable.discount,
       totalSessions: treatmentPlanProceduresTable.totalSessions,
+      sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
       packageType: packagesTable.packageType,
       packageBillingDay: packagesTable.billingDay,
       packageProcedureId: packagesTable.procedureId,
@@ -183,7 +187,144 @@ export async function acceptPlanFinancials(
     for (const item of items) {
       const kind = resolveItemKind(item);
 
+      // ─── Avulso (Sprint Financeiro 13 — P4) ─────────────────────────────
+      // Avulsos vinculados ao plano agora geram aceite contábil antecipado:
+      // estimamos `sessões/mês = sessionsPerWeek × 4` e criamos 1 fatura
+      // mensal estimada por (item, mês de competência) com `transactionType =
+      // 'faturaPlanoAvulsoMensal'`. Cada fatura postа `D 1.1.2 / C 2.1.1`
+      // pelo total mensal (preço × sessões estimadas). A apropriação ocorre
+      // por sessão consumida via `recognizeMonthlyInvoiceRevenuePartial`
+      // (fragmento P3-style → `postWalletUsage`).
+      //
+      // Itens sem `procedureId` ou `unitPrice` ≤ 0 → skip (input incompleto).
       if (kind === "avulso") {
+        const avulsoProcedureId = item.procedureId;
+        if (!avulsoProcedureId) continue;
+
+        const unit = Number(item.unitPrice ?? 0);
+        const discount = Math.max(0, Number(item.discount ?? 0));
+        const unitEffective = Math.max(0, unit - discount);
+        if (unitEffective <= 0) continue;
+
+        const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
+        const sessionsPerMonth = Math.max(1, Math.round(sessionsPerWeek * 4));
+        const monthlyAmount = unitEffective * sessionsPerMonth;
+
+        const [avulsoProcedure] = await tx
+          .select({
+            name: proceduresTable.name,
+            category: proceduresTable.category,
+            price: proceduresTable.price,
+            accountingAccountId: (proceduresTable as any).accountingAccountId,
+          } as any)
+          .from(proceduresTable)
+          .where(eq(proceduresTable.id, avulsoProcedureId))
+          .limit(1);
+        if (!avulsoProcedure) continue;
+
+        const billingDay = resolveMonthlyDueDay({
+          planMonthlyDueDay: plan.monthlyDueDay,
+          packageBillingDay: null,
+        });
+        const planStart = plan.startDate ?? now.iso;
+        const durationMonths = plan.durationMonths ?? 12;
+
+        // Para avulsos usamos a conta de receita por sessão (4.1.1) por
+        // padrão, com fallback se o procedimento tiver sub-conta dedicada.
+        const revenueAccountCode = await resolveAccountCodeById(
+          (avulsoProcedure as any).accountingAccountId ?? null,
+          "4.1.1",
+          plan.clinicId ?? null,
+          tx as any,
+        );
+
+        for (let m = 0; m < durationMonths; m++) {
+          const itemMonthRef = planMonthRefOf(planStart, m);
+          const dueDate = planInstallmentDueDate(planStart, billingDay, m);
+
+          // Idempotência: 1 fatura por (plano, item, mês de competência).
+          const [exists] = await tx
+            .select({ id: financialRecordsTable.id })
+            .from(financialRecordsTable)
+            .where(
+              and(
+                eq(financialRecordsTable.treatmentPlanId, planId),
+                eq(financialRecordsTable.treatmentPlanProcedureId, item.id),
+                eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+                eq(financialRecordsTable.planMonthRef, itemMonthRef),
+              ),
+            )
+            .limit(1);
+
+          let invoiceId: number;
+          if (exists) {
+            invoiceId = exists.id;
+          } else {
+            const [inserted] = await tx
+              .insert(financialRecordsTable)
+              .values({
+                type: "receita",
+                amount: monthlyAmount.toFixed(2),
+                description:
+                  `Avulsos do plano #${planId} — ${avulsoProcedure.name} — ` +
+                  `${patientName} — ${itemMonthRef.slice(0, 7)} ` +
+                  `(${sessionsPerMonth}× R$${unitEffective.toFixed(2)})`,
+                category: avulsoProcedure.category,
+                patientId: plan.patientId,
+                procedureId: avulsoProcedureId,
+                clinicId: plan.clinicId,
+                transactionType: "faturaPlanoAvulsoMensal",
+                status: "pendente",
+                dueDate,
+                treatmentPlanId: planId,
+                treatmentPlanProcedureId: item.id,
+                planMonthRef: itemMonthRef,
+                priceSource: "plano_avulso_estimado",
+                originalUnitPrice: avulsoProcedure.price,
+                recognitionCreditsTotal: sessionsPerMonth,
+                recognitionCreditsConsumed: 0,
+                recognizedAmount: "0",
+              })
+              .returning({ id: financialRecordsTable.id });
+            invoiceId = inserted.id;
+            invoicesCreated++;
+            // Mês 0 entra no totalImmediateCharge — alinhado com mensalidade.
+            if (m === 0) totalImmediateCharge += monthlyAmount;
+          }
+
+          // P4: postagem contábil antecipada (idempotente por sourceId).
+          const [existingDeferred] = await tx
+            .select({ id: accountingJournalEntriesTable.id })
+            .from(accountingJournalEntriesTable)
+            .where(
+              and(
+                eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+                eq(accountingJournalEntriesTable.sourceId, invoiceId),
+                eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+              ),
+            )
+            .limit(1);
+
+          if (!existingDeferred) {
+            await postDeferredReceivable(
+              {
+                clinicId: plan.clinicId ?? null,
+                entryDate: now.iso,
+                amount: monthlyAmount,
+                description:
+                  `Aceite contábil antecipado (avulso) — fatura #${invoiceId} — ` +
+                  `plano #${planId} — ${itemMonthRef.slice(0, 7)}`,
+                sourceType: "financial_record",
+                sourceId: invoiceId,
+                patientId: plan.patientId,
+                procedureId: avulsoProcedureId,
+                financialRecordId: invoiceId,
+                revenueAccountCode,
+              } as any,
+              tx as any,
+            );
+          }
+        }
         continue;
       }
 

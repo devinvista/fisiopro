@@ -320,6 +320,19 @@ Catálogo padronizado: para cada cenário, **Quando** dispara, **Lançamento** D
 - **Cancelamento do plano** (`POST /api/treatment-plans/:planId/cancel`): para cada fatura mensal **NÃO consumida** (`recognitionCreditsConsumed=0` AND status IN `pendente`/`vencido`), posta `postReversal` no `deferred_receivable` correspondente e marca a fatura como `cancelado`. Faturas pagas/parcialmentePago e faturas com receita já reconhecida ficam fora (lista retornada como `paidInvoiceIds` para ressarcimento manual). Validação: `reason` obrigatório (mín. 3 chars). Persiste `cancellation_reason`, `cancelled_at`, `cancelled_by` em `treatment_plans` (migration `0016`).
 - **Job mensal `monthlyPlanBilling`:** continua existindo como rede de segurança para planos legados (sem `deferred_receivable`). Em planos P3, todas as faturas já existem desde o aceite — o job só renova vencimentos, não cria novas linhas.
 
+### 6.10b Avulsos do plano (P4 — Aceite contábil antecipado, Sprint Financeiro 13)
+
+- **Quando:** aceite formal do plano com itens `kind='avulso'` (sessões "soltas" dentro de um plano vigente, sem pacote/mensalidade).
+- **Lançamento (no aceite, para CADA mês × item avulso):** cria um `financial_record` com `transactionType='faturaPlanoAvulsoMensal'` (`status='pendente'`, `priceSource='plano_avulso_estimado'`, `recognitionCreditsTotal = sessionsPerMonth = sessionsPerWeek × 4`, `amount = sessionsPerMonth × effectivePrice`) e posta `D 1.1.2 / C 2.1.1` (`postDeferredReceivable`). Idempotência: `(treatmentPlanId, treatmentPlanProcedureId, transactionType, planMonthRef)` para a fatura e `(sourceType, sourceId, eventType='deferred_receivable')` para o entry contábil.
+- **Resolução lazy do `monthlyInvoiceId`:** o materializer continua criando appointments com `monthlyInvoiceId=null` para itens avulso. Em `appointments.billing.ts`, antes do reconhecimento, fazemos lookup `(treatmentPlanProcedureId, planMonthRef='YYYY-MM-01', transactionType='faturaPlanoAvulsoMensal')` e atualizamos o appointment para apontar para a fatura mensal estimada do mês.
+- **Reconhecimento por sessão consumida:** mesma fragmenta P3 — `recognizeMonthlyInvoiceRevenuePartial` aceita `faturaPlanoAvulsoMensal` e `countAvulsoSessions` recalcula o pool por (item, mês) na primeira chamada.
+- **Rompimento + cobrança da diferença (`recalculate=true`):** quando o plano é cancelado e a cláusula `PRECO_DIFERENCIADO` está aceita em `acceptedClausesJson`, para cada appointment `compareceu/concluido` ligado a um item `kind='avulso'`:
+  - Calcula `diff = procedures.price − effectivePrice (unitPrice − discount)`.
+  - Se `diff > 0`, cria FR `transactionType='priceDifference'` (`priceSource='preco_tabela'`) e posta `D 1.1.2 / C 4.1.1` via `postReceivableRevenue` com `eventType='price_difference'`.
+  - Idempotente por `(appointmentId, eventType='price_difference', reversalOfEntryId IS NULL)`.
+  - Itens `kind='recorrenteMensal'` são pulados (a venda foi o mês, não a sessão).
+- **Endpoint:** `POST /api/treatment-plans/:planId/cancel` aceita `{ reason, recalculate?: boolean }`. Resposta inclui `recalculatedAppointments`, `priceDifferenceTotal`, `recalculateSkippedReason` (`null` ou `'clause_not_accepted'`).
+
 ### 6.11 Fatura consolidada
 
 Modelo mãe-filhos: cada **filho** (sessão atendida) reconhece receita normalmente. A **mãe** (`faturaConsolidada`/`faturaMensalAvulso`) **NÃO posta receita** — apenas agrupa títulos para cobrança.
@@ -425,6 +438,8 @@ Persistido em `financial_records.priceSource` (`tabela`/`override_clinica`/`plan
 **Job EOM `endOfMonthRevenueClosure` (`30 7 * * *` UTC = `04:30 BRT`):** no último dia do mês BRT, para cada `faturaPlano` viva com saldo residual, posta entry "Apropriação de resíduo do mês" pela diferença e marca `recognition_credits_consumed = total`. Garante que residuais por sessões canceladas / mortes do mês sejam apropriados.
 
 **Modo P3 (Sprint Financeiro 12):** quando o plano foi aceito sob P3, o `deferred_receivable` (D 1.1.2 / C 2.1.1) já foi postado por fatura no aceite. Cada fragmenta passa a SEMPRE consumir do adiantamento (`postWalletUsage`), mesmo com fatura `pendente`. Em planos legados (sem deferred), mantém `pago=walletUsage / pendente=receivableRevenue`.
+
+**Modo P4 (Sprint Financeiro 13):** o mesmo modelo P3 vale para `transactionType='faturaPlanoAvulsoMensal'`. O `monthlyInvoiceId` do appointment é resolvido lazy (via `treatmentPlanProcedureId + planMonthRef`) antes do reconhecimento; `countAvulsoSessions` re-bootstrapa o pool quando `recognition_credits_total` ainda é null. A fatura mensal estimada é apropriada conforme as sessões avulso são confirmadas dentro do mês.
 
 ### 7.5 Idempotência do billing (`runBilling`)
 
@@ -548,7 +563,7 @@ Compara em tempo real três pares de saldo + lista órfãos:
 | **Receita** na janela | `revenueSummarySql` | Saldo credor das contas `4.x` |
 | **Recebíveis pendentes** | `status='pendente' AND type='receita' AND transactionType ∈ RECEIVABLE_TYPES` | Saldo devedor de `1.1.2` |
 | **Caixa recebido** | settlements com `paymentDate` na janela | Saldo devedor de `1.1.1` |
-| **Recebíveis mensais antecipados (P3)** | `faturaPlano` em aberto (`pendente`/`vencido`/`parcialmentePago`) com `deferred_receivable` POSTADO e não estornado | Soma dos débitos em `1.1.2` dos `deferred_receivable` POSTADOS (JOIN `journal_lines`/`accounts`) |
+| **Recebíveis mensais antecipados (P3+P4)** | `faturaPlano` **e** `faturaPlanoAvulsoMensal` em aberto (`pendente`/`vencido`/`parcialmentePago`) com `deferred_receivable` POSTADO e não estornado | Soma dos débitos em `1.1.2` dos `deferred_receivable` POSTADOS (JOIN `journal_lines`/`accounts`) |
 | **Órfãos** (até 50) | `financial_records` ativos sem `recognizedEntryId`/`accountingEntryId` | — |
 
 **Resposta exemplo:**

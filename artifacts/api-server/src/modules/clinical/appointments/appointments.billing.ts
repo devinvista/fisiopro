@@ -159,6 +159,31 @@ export async function applyBillingRules(
   // NO-OP para presença/conclusão e gera apenas crédito de sessão para faltas.
   const planProcId: number | null = (details as any).treatmentPlanProcedureId ?? null;
   if (planProcId) {
+    // Sprint Financeiro 13 (P4) — Resolução lazy do `monthlyInvoiceId`
+    // para itens avulso do plano (cuja materialização não vincula a fatura).
+    // Procuramos a `faturaPlanoAvulsoMensal` para o (item, mês de competência)
+    // dessa sessão. Se existir, o reconhecimento segue o mesmo fluxo P3.
+    let resolvedMonthlyInvoiceId: number | null =
+      (details as any).monthlyInvoiceId ?? null;
+    if (resolvedMonthlyInvoiceId == null) {
+      const apptMonthStart = monthRangeFromDate(appointmentDate).startDate;
+      const [avulsoInvoice] = await db
+        .select({ id: financialRecordsTable.id })
+        .from(financialRecordsTable)
+        .where(
+          and(
+            eq(financialRecordsTable.treatmentPlanProcedureId, planProcId),
+            eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+            eq(financialRecordsTable.planMonthRef, apptMonthStart),
+          ),
+        )
+        .orderBy(financialRecordsTable.id)
+        .limit(1);
+      if (avulsoInvoice) {
+        resolvedMonthlyInvoiceId = avulsoInvoice.id;
+      }
+    }
+    (details as any).monthlyInvoiceId = resolvedMonthlyInvoiceId;
     const confirmedSet: string[] = ["compareceu", "concluido"] satisfies AppointmentStatus[];
     const absenceSet: string[] = ["faltou"] satisfies AppointmentStatus[];
 

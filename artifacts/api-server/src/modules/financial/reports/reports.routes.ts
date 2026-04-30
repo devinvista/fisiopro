@@ -340,7 +340,9 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
       )
       .where(and(...[
         clinicFilter,
-        eq(financialRecordsTable.transactionType, "faturaPlano"),
+        // Sprint Financeiro 13 (P4) — inclui também `faturaPlanoAvulsoMensal`
+        // (faturas mensais estimadas de itens avulso do plano).
+        sql`${financialRecordsTable.transactionType} IN ('faturaPlano','faturaPlanoAvulsoMensal')`,
         sql`${financialRecordsTable.status} IN ('pendente','vencido','parcialmentePago')`,
       ].filter(Boolean) as any[]));
 

@@ -41,7 +41,8 @@ router.post(
   requirePermission("medical.write"),
   asyncHandler(async (req: Request<{ planId: string }>, res: Response) => {
     const planId = parseInt(req.params.planId);
-    const { reason } = (req.body ?? {}) as { reason?: string };
+    const body = (req.body ?? {}) as { reason?: string; recalculate?: boolean };
+    const { reason, recalculate } = body;
     if (!reason || typeof reason !== "string" || reason.trim().length < 3) {
       res
         .status(400)
@@ -54,6 +55,8 @@ router.post(
       planId,
       reason: reason.trim(),
       cancelledBy: userId,
+      // Sprint Financeiro 13 (P4): recálculo de diferença de preço.
+      recalculate: recalculate === true,
     });
     res.json(result);
   }),

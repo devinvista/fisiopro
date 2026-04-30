@@ -91,6 +91,34 @@ async function countInvoiceCredits(tx: Tx, monthlyInvoiceId: number): Promise<nu
 }
 
 /**
+ * Sprint Financeiro 13 (P4) — variante de contagem para `faturaPlanoAvulsoMensal`.
+ * Conta sessões avulsas do plano para o mês de competência da fatura, via
+ * `treatmentPlanProcedureId + competência do mês` (não usa `monthlyInvoiceId`
+ * porque o materializer atual não vincula appointments avulsos a fatura
+ * mensal — vínculo é feito lazy pelo billing).
+ */
+async function countAvulsoSessions(
+  tx: Tx,
+  treatmentPlanProcedureId: number,
+  planMonthRef: string,
+): Promise<number> {
+  // planMonthRef no schema vem como YYYY-MM-01 ou YYYY-MM. Normalizamos para
+  // janela [monthStart, nextMonthStart) sobre `appointments.date`.
+  const monthStart = planMonthRef.length >= 10
+    ? planMonthRef.slice(0, 10)
+    : `${planMonthRef.slice(0, 7)}-01`;
+  const [{ total }] = (await tx.execute(
+    sql`SELECT COUNT(*)::int AS total
+        FROM ${appointmentsTable}
+        WHERE ${appointmentsTable.treatmentPlanProcedureId} = ${treatmentPlanProcedureId}
+          AND ${appointmentsTable.date} >= ${monthStart}::date
+          AND ${appointmentsTable.date} <  (${monthStart}::date + INTERVAL '1 month')
+          AND ${appointmentsTable.status} <> 'cancelado'`,
+  )) as unknown as Array<{ total: number }>;
+  return Number(total ?? 0);
+}
+
+/**
  * Busca uma fragmenta de reconhecimento já postada para esta sessão nesta
  * fatura, garantindo idempotência por (fatura, sessão).
  */
@@ -157,8 +185,14 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       return { recognized: false, reason: "Fatura não encontrada" };
     }
 
-    if (invoice.transactionType !== "faturaPlano") {
-      return { recognized: false, reason: "Fatura não é faturaPlano" };
+    // Sprint Financeiro 13 (P4) — aceita também `faturaPlanoAvulsoMensal`
+    // (mesmo modelo de aceite contábil antecipado, mas para itens avulsos
+    // estimados por sessões/semana × 4).
+    if (
+      invoice.transactionType !== "faturaPlano" &&
+      invoice.transactionType !== "faturaPlanoAvulsoMensal"
+    ) {
+      return { recognized: false, reason: "Fatura não é faturaPlano nem faturaPlanoAvulsoMensal" };
     }
 
     if (invoice.status === "cancelado" || invoice.status === "estornado") {
@@ -185,7 +219,21 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     // ── Bootstrap do pool ──────────────────────────────────────────────────
     let creditsTotal = invoice.recognitionCreditsTotal;
     if (creditsTotal == null) {
-      const counted = await countInvoiceCredits(tx as unknown as Tx, invoice.id);
+      let counted = 0;
+      if (
+        invoice.transactionType === "faturaPlanoAvulsoMensal" &&
+        invoice.treatmentPlanProcedureId &&
+        invoice.planMonthRef
+      ) {
+        // P4: avulso → count via (item, mês de competência).
+        counted = await countAvulsoSessions(
+          tx as unknown as Tx,
+          invoice.treatmentPlanProcedureId,
+          invoice.planMonthRef,
+        );
+      } else {
+        counted = await countInvoiceCredits(tx as unknown as Tx, invoice.id);
+      }
       // Mínimo 1: garantimos que esta sessão (que nos chamou) ao menos esteja
       // contada. Cobre cenário de borda em que o COUNT da própria sessão
       // ainda não materializou (race com o INSERT do appointment).
