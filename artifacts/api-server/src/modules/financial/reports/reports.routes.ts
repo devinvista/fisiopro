@@ -7,6 +7,7 @@ import {
   accountingJournalEntriesTable,
   accountingJournalLinesTable,
   accountingAccountsTable,
+  receivableAllocationsTable,
 } from "@workspace/db";
 import { and, eq, sql, gte, lte, isNull, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
@@ -346,12 +347,22 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         sql`${financialRecordsTable.status} IN ('pendente','vencido','parcialmentePago')`,
       ].filter(Boolean) as any[]));
 
-    // Realizados (contábil) = saldo líquido em 1.1.2 (Recebíveis) restrito
-    // aos lançamentos `deferred_receivable` ainda postados (débitos − créditos
-    // já aplicados via settlements/reversals que afetam a mesma 1.1.2).
-    // Atalho prático: soma os DÉBITOS em 1.1.2 dos `deferred_receivable`
-    // POSTADOS (não estornados); essa é a "carteira" antecipada viva.
-    const [accDeferredOutstanding] = await db
+    // Realizados (contábil) = saldo líquido VIVO em 1.1.2 dos
+    // `deferred_receivable`. Sprint Financeiro 14 (Hardening) — agora
+    // verdadeiramente líquido:
+    //
+    //   gross           = SUM(débito em 1.1.2 dos deferred_receivable posted)
+    //   - allocated     = SUM(receivable_allocations.amount cujo
+    //                      receivable_entry_id é um deferred_receivable posted)
+    //                      → pagamentos que liquidaram parte do recebível
+    //   - partialReversed = SUM(crédito em 1.1.2 dos
+    //                       deferred_receivable_partial_reversal posted)
+    //                       → estornos parciais (cancelamento c/ consumo)
+    //
+    // Reversões INTEGRAIS (`postReversal` do deferred) já viram o entry
+    // original com `status='reversed'` → o filtro `status='posted'` no `gross`
+    // já as exclui automaticamente.
+    const [accDeferredGross] = await db
       .select({
         total: sql<number>`COALESCE(SUM(${accountingJournalLinesTable.debitAmount}::numeric), 0)`,
       })
@@ -371,10 +382,59 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         eq(accountingAccountsTable.code, "1.1.2"),
       ].filter(Boolean) as any[]));
 
+    // Allocations contra deferred_receivable posted → reduzem 1.1.2 vivo.
+    const [accDeferredAllocated] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${receivableAllocationsTable.amount}::numeric), 0)`,
+      })
+      .from(receivableAllocationsTable)
+      .innerJoin(
+        accountingJournalEntriesTable,
+        eq(accountingJournalEntriesTable.id, receivableAllocationsTable.receivableEntryId),
+      )
+      .where(and(...[
+        clinicId == null ? null : eq(accountingJournalEntriesTable.clinicId, clinicId),
+        eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+        eq(accountingJournalEntriesTable.status, "posted"),
+      ].filter(Boolean) as any[]));
+
+    // Estornos PARCIAIS (Sprint 14): D 2.1.1 / C 1.1.2 com eventType
+    // `deferred_receivable_partial_reversal` → cancelam o saldo restante
+    // sem desfazer o entry original (que segue posted).
+    const [accDeferredPartialReversed] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${accountingJournalLinesTable.creditAmount}::numeric), 0)`,
+      })
+      .from(accountingJournalLinesTable)
+      .innerJoin(
+        accountingJournalEntriesTable,
+        eq(accountingJournalEntriesTable.id, accountingJournalLinesTable.entryId),
+      )
+      .innerJoin(
+        accountingAccountsTable,
+        eq(accountingAccountsTable.id, accountingJournalLinesTable.accountId),
+      )
+      .where(and(...[
+        clinicId == null ? null : eq(accountingJournalEntriesTable.clinicId, clinicId),
+        eq(accountingJournalEntriesTable.eventType, "deferred_receivable_partial_reversal"),
+        eq(accountingJournalEntriesTable.status, "posted"),
+        eq(accountingAccountsTable.code, "1.1.2"),
+      ].filter(Boolean) as any[]));
+
+    const accDeferredOutstanding = {
+      total:
+        Number(accDeferredGross.total) -
+        Number(accDeferredAllocated.total) -
+        Number(accDeferredPartialReversed.total),
+      gross: Number(accDeferredGross.total),
+      allocated: Number(accDeferredAllocated.total),
+      partialReversed: Number(accDeferredPartialReversed.total),
+    };
+
     // ─── 7. Diffs ─────────────────────────────────────────────────────────
     const diffPendingReceivables = Number(opPendingReceivables.total) - accReceivables;
     const diffDeferredReceivables =
-      Number(opDeferredOutstanding.total) - Number(accDeferredOutstanding.total);
+      Number(opDeferredOutstanding.total) - accDeferredOutstanding.total;
     const ok =
       orphanRecords.length === 0 &&
       Math.abs(diffPendingReceivables) < tolerance &&
@@ -395,7 +455,14 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         revenueAllTime: accRevenueAllTime,
         receivablesBalance: accReceivables,
         cashBalance: accCash,
-        deferredReceivablesOutstanding: Number(accDeferredOutstanding.total),
+        // Sprint Financeiro 14 (Hardening) — saldo líquido vivo:
+        // gross − allocated − partialReversed.
+        deferredReceivablesOutstanding: accDeferredOutstanding.total,
+        deferredReceivablesBreakdown: {
+          gross: accDeferredOutstanding.gross,
+          allocated: accDeferredOutstanding.allocated,
+          partialReversed: accDeferredOutstanding.partialReversed,
+        },
       },
       diffs: {
         pendingReceivables: Number(diffPendingReceivables.toFixed(2)),
