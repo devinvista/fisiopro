@@ -81,29 +81,53 @@ export function BillingSettingsBlock({ form, setForm, isAccepted }: Props) {
         </div>
       </div>
 
-      {/* Grupo 2 — Vencimento */}
-      {form.avulsoBillingMode === "mensalConsolidado" && (
-        <div className="space-y-3 rounded-xl bg-slate-50/60 border border-slate-100 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 flex items-center gap-1.5">
-            <CalendarDays className="w-3 h-3" /> Vencimento
-          </p>
-          <div className="space-y-1.5 max-w-[200px]">
+      {/* Grupo 2 — Vencimentos */}
+      <div className="space-y-3 rounded-xl bg-slate-50/60 border border-slate-100 p-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 flex items-center gap-1.5">
+          <CalendarDays className="w-3 h-3" /> Vencimentos
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Sprint Financeiro 9 (P1) — vencimento da mensalidade SEMPRE visível.
+              Vale para itens recorrentes mensais; tem prioridade sobre o
+              `billingDay` cadastrado no pacote. */}
+          <div className="space-y-1.5">
             <Label className="text-xs text-slate-600">
-              Dia do vencimento da fatura mensal
+              Dia do vencimento da mensalidade
             </Label>
             <Input
               type="number" min="1" max="28"
-              placeholder="Ex: 10"
-              value={form.avulsoBillingDay}
+              placeholder="Padrão do pacote"
+              value={form.monthlyDueDay}
               onChange={(e) =>
-                setForm((p: any) => ({ ...p, avulsoBillingDay: e.target.value }))
+                setForm((p: any) => ({ ...p, monthlyDueDay: e.target.value }))
               }
               className="h-10 bg-white"
             />
-            <p className="text-[11px] text-slate-500">Dia do mês (1 a 28).</p>
+            <p className="text-[11px] text-slate-500">
+              Dia do mês (1 a 28). Vazio = usa o do pacote.
+            </p>
           </div>
+
+          {/* Dia da fatura consolidada de avulsos — só faz sentido nesse modo. */}
+          {form.avulsoBillingMode === "mensalConsolidado" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-slate-600">
+                Dia da fatura mensal de avulsos
+              </Label>
+              <Input
+                type="number" min="1" max="28"
+                placeholder="Ex: 10"
+                value={form.avulsoBillingDay}
+                onChange={(e) =>
+                  setForm((p: any) => ({ ...p, avulsoBillingDay: e.target.value }))
+                }
+                className="h-10 bg-white"
+              />
+              <p className="text-[11px] text-slate-500">Dia do mês (1 a 28).</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Grupo 3 — Validade dos créditos */}
       <div className="space-y-3">

@@ -41,7 +41,10 @@ import {
   postReceivableRevenue,
   resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
-import { planInstallmentDueDate } from "./treatment-plans.billing-dates.js";
+import {
+  planInstallmentDueDate,
+  resolveMonthlyDueDay,
+} from "./treatment-plans.billing-dates.js";
 
 // ─── Sprint 1/2 — Resolução de política de crédito do plano ─────────────────
 //
@@ -452,7 +455,13 @@ export async function materializeTreatmentPlan(
         0,
         effectiveMonthly - Number(item.discount ?? 0),
       );
-      const billingDay = item.packageBillingDay ?? 10;
+      // Sprint Financeiro 9 (P1) — vencimento da mensalidade prioriza o
+      // que o paciente escolheu no plano (`monthlyDueDay`); fallback no
+      // pacote.
+      const billingDay = resolveMonthlyDueDay({
+        planMonthlyDueDay: plan.monthlyDueDay,
+        packageBillingDay: item.packageBillingDay,
+      });
       const weekDays = parseWeekDays(item.weekDays);
       // Duração: SEMPRE a duração cadastrada do procedimento. Não existe
       // mais override por item do plano — a duração da consulta é igual à

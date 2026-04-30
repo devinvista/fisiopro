@@ -139,6 +139,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     replacementCreditValidityDays: "" as string | number,
     avulsoBillingMode: "porSessao" as "porSessao" | "mensalConsolidado",
     avulsoBillingDay: "" as string | number,
+    // Sprint Financeiro 9 (P1) — vencimento da mensalidade escolhido pelo paciente.
+    monthlyDueDay: "" as string | number,
     internalNotes: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -162,6 +164,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         avulsoBillingMode:
           (selectedPlan.avulsoBillingMode as "porSessao" | "mensalConsolidado") || "porSessao",
         avulsoBillingDay: selectedPlan.avulsoBillingDay ?? "",
+        monthlyDueDay: (selectedPlan as any).monthlyDueDay ?? "",
         internalNotes: selectedPlan.internalNotes || "",
       });
     } else {
@@ -226,6 +229,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         avulsoBillingMode: form.avulsoBillingMode || "porSessao",
         avulsoBillingDay:
           form.avulsoBillingDay === "" ? null : Number(form.avulsoBillingDay),
+        monthlyDueDay:
+          form.monthlyDueDay === "" ? null : Number(form.monthlyDueDay),
         internalNotes: form.internalNotes.trim() ? form.internalNotes : null,
       });
       queryClient.invalidateQueries({ queryKey: plansKey });

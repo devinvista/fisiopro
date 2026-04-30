@@ -88,3 +88,41 @@ export function monthOffsetFromStart(
   const offset = (year - sy) * 12 + (month - sm);
   return offset >= 0 ? offset : null;
 }
+
+/**
+ * Sprint Financeiro 9 (P1) — Resolve o dia de vencimento da fatura mensal
+ * do plano. Prioridade:
+ *   1. `planMonthlyDueDay` — escolhido pelo paciente no aceite (override
+ *      por plano, persistido em `treatment_plans.monthly_due_day`).
+ *   2. `packageBillingDay` — cadastro do pacote (`packages.billing_day`).
+ *   3. `clinicDefaultDueDays` — configuração da clínica
+ *      (`clinic_financial_settings.default_due_days`), quando passado.
+ *   4. `10` — constante final (compat histórica).
+ *
+ * Validação: o resultado é clampado para o intervalo [1, 28] para evitar
+ * problemas com meses curtos. Valores inválidos (NaN, ≤0, >28) caem para
+ * o próximo nível da hierarquia.
+ *
+ * Inputs: `null`, `undefined` ou valores fora do range são ignorados.
+ *
+ * Não busca dados do banco — recebe os 3 valores já resolvidos. Helper
+ * puro para facilitar teste e composição.
+ */
+export function resolveMonthlyDueDay(input: {
+  planMonthlyDueDay?: number | null;
+  packageBillingDay?: number | null;
+  clinicDefaultDueDays?: number | null;
+}): number {
+  const candidates = [
+    input.planMonthlyDueDay,
+    input.packageBillingDay,
+    input.clinicDefaultDueDays,
+    10,
+  ];
+  for (const c of candidates) {
+    if (c == null) continue;
+    const n = Math.trunc(Number(c));
+    if (Number.isFinite(n) && n >= 1 && n <= 28) return n;
+  }
+  return 10;
+}

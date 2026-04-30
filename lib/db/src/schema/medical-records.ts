@@ -165,6 +165,12 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // Dia de vencimento da fatura consolidada de avulsos (1..28). Null = usa
   // o dia configurado no pacote ou padrão da clínica.
   avulsoBillingDay: integer("avulso_billing_day"),
+  // ── Sprint Financeiro 9 (P1) — Vencimento da mensalidade ────────────────
+  // Dia do mês (1..28) escolhido pelo paciente para vencimento das faturas
+  // MENSAIS do plano (item `recorrenteMensal`). Tem prioridade sobre o
+  // `billingDay` do pacote. Null = herda do pacote ou padrão da clínica.
+  // Resolvido por `resolveMonthlyDueDay()` em treatment-plans.billing-dates.ts.
+  monthlyDueDay: integer("monthly_due_day"),
   // ── Observações internas da equipe ──────────────────────────────────────
   // Texto livre visível apenas para a equipe da clínica (NUNCA exposto no
   // contrato impresso, no link público de aceite ou em qualquer documento

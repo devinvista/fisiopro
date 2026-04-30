@@ -3,6 +3,7 @@ import {
   planInstallmentDueDate,
   planMonthRefOf,
   monthOffsetFromStart,
+  resolveMonthlyDueDay,
 } from "./treatment-plans.billing-dates.js";
 
 describe("planInstallmentDueDate", () => {
@@ -61,5 +62,95 @@ describe("monthOffsetFromStart", () => {
   it("retorna null para meses anteriores ao startDate", () => {
     expect(monthOffsetFromStart("2026-05-01", 2026, 4)).toBeNull();
     expect(monthOffsetFromStart("2026-05-01", 2025, 12)).toBeNull();
+  });
+});
+
+// ── Sprint Financeiro 9 (P1) — vencimento da mensalidade ───────────────────
+describe("resolveMonthlyDueDay", () => {
+  it("prioriza o dia escolhido pelo paciente no plano", () => {
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: 5,
+        packageBillingDay: 10,
+        clinicDefaultDueDays: 15,
+      }),
+    ).toBe(5);
+  });
+
+  it("cai no billingDay do pacote quando plano não definiu", () => {
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: null,
+        packageBillingDay: 20,
+        clinicDefaultDueDays: 15,
+      }),
+    ).toBe(20);
+    // undefined também é ignorado.
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: undefined,
+        packageBillingDay: 20,
+      }),
+    ).toBe(20);
+  });
+
+  it("cai no defaultDueDays da clínica quando plano e pacote são nulos", () => {
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: null,
+        packageBillingDay: null,
+        clinicDefaultDueDays: 7,
+      }),
+    ).toBe(7);
+  });
+
+  it("cai na constante 10 quando nada foi definido", () => {
+    expect(resolveMonthlyDueDay({})).toBe(10);
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: null,
+        packageBillingDay: null,
+        clinicDefaultDueDays: null,
+      }),
+    ).toBe(10);
+  });
+
+  it("ignora valores fora do intervalo [1, 28] e tenta o próximo nível", () => {
+    // plan inválido (0) → cai no pacote.
+    expect(
+      resolveMonthlyDueDay({ planMonthlyDueDay: 0, packageBillingDay: 12 }),
+    ).toBe(12);
+    // plan inválido (29) → cai no pacote.
+    expect(
+      resolveMonthlyDueDay({ planMonthlyDueDay: 29, packageBillingDay: 15 }),
+    ).toBe(15);
+    // pacote inválido (31) → cai no clinic.
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: null,
+        packageBillingDay: 31,
+        clinicDefaultDueDays: 8,
+      }),
+    ).toBe(8);
+    // todos inválidos → 10.
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: -1,
+        packageBillingDay: 30,
+        clinicDefaultDueDays: 0,
+      }),
+    ).toBe(10);
+  });
+
+  it("aceita strings numéricas (Number coerção) e ignora NaN", () => {
+    expect(
+      resolveMonthlyDueDay({ planMonthlyDueDay: "15" as unknown as number }),
+    ).toBe(15);
+    expect(
+      resolveMonthlyDueDay({
+        planMonthlyDueDay: "abc" as unknown as number,
+        packageBillingDay: 12,
+      }),
+    ).toBe(12);
   });
 });

@@ -321,6 +321,8 @@ export async function updatePatientTreatmentPlanById(
     "replacementCreditValidityDays",
     "avulsoBillingMode",
     "avulsoBillingDay",
+    // Sprint Financeiro 9 (P1) — vencimento configurável da mensalidade.
+    "monthlyDueDay",
   ]);
 
   // Normaliza valores p/ comparação tolerante (Date→ISO date, ""→null,
@@ -350,6 +352,8 @@ export async function updatePatientTreatmentPlanById(
     "replacementCreditValidityDays",
     "avulsoBillingMode",
     "avulsoBillingDay",
+    // Sprint Financeiro 9 (P1) — vencimento configurável da mensalidade.
+    "monthlyDueDay",
   ] as const) {
     if (data[key] !== undefined) {
       // Campos numéricos/string opcionais: undefined → ignora; null/"" → null;

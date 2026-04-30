@@ -46,6 +46,7 @@ import { resolveItemKind } from "../../clinical/medical-records/treatment-plans.
 import {
   planInstallmentDueDate,
   monthOffsetFromStart,
+  resolveMonthlyDueDay,
 } from "../../clinical/medical-records/treatment-plans.billing-dates.js";
 
 export interface MonthlyPlanBillingResult {
@@ -148,6 +149,9 @@ interface PlanItemRow {
   startDate: string | null;
   endDate: string | null;
   durationMonths: number | null;
+  // Sprint Financeiro 9 (P1) — override do dia de vencimento da mensalidade
+  // escolhido pelo paciente no aceite. Tem prioridade sobre `packageBillingDay`.
+  planMonthlyDueDay: number | null;
   itemId: number;
   procedureId: number | null;
   packageId: number | null;
@@ -187,6 +191,7 @@ async function loadEligibleItems(filters: {
       startDate: treatmentPlansTable.startDate,
       endDate: treatmentPlansTable.endDate,
       durationMonths: treatmentPlansTable.durationMonths,
+      planMonthlyDueDay: treatmentPlansTable.monthlyDueDay,
       itemId: treatmentPlanProceduresTable.id,
       procedureId: treatmentPlanProceduresTable.procedureId,
       packageId: treatmentPlanProceduresTable.packageId,
@@ -304,7 +309,12 @@ async function ensureMonthlyInvoice(
   appointmentsLinked: number;
 }> {
   const monthRef = monthRefOf(monthYear, monthMonth);
-  const billingDay = item.packageBillingDay ?? 10;
+  // Sprint Financeiro 9 (P1) — vencimento prioriza o `monthlyDueDay`
+  // escolhido pelo paciente no plano; fallback no `billingDay` do pacote.
+  const billingDay = resolveMonthlyDueDay({
+    planMonthlyDueDay: item.planMonthlyDueDay,
+    packageBillingDay: item.packageBillingDay,
+  });
   // Vencimento respeita o `startDate` do plano: 1ª parcela na próxima
   // ocorrência do `billingDay` em ou após `startDate`. Se o plano não
   // tiver `startDate` (legado), cai no comportamento antigo (billingDay
@@ -525,7 +535,13 @@ export async function runMonthlyPlanBilling(
     // Itera mês a mês de `first` até `max`, criando o que falta.
     for (const m of iterMonths(first.year, first.month, max.year, max.month)) {
       const isCurrent = m.year === today.year && m.month === today.month;
-      const due = isMonthDue(m.year, m.month, today, item.packageBillingDay ?? 10, tolerance);
+      // Sprint Financeiro 9 (P1) — janela de geração também respeita o
+      // `monthlyDueDay` do plano (não só o do pacote).
+      const itemBillingDay = resolveMonthlyDueDay({
+        planMonthlyDueDay: item.planMonthlyDueDay,
+        packageBillingDay: item.packageBillingDay,
+      });
+      const due = isMonthDue(m.year, m.month, today, itemBillingDay, tolerance);
       if (!due) {
         // Mês corrente ainda não atingiu D-tolerance — para a iteração
         // (próximos meses são todos futuros).
@@ -535,7 +551,7 @@ export async function runMonthlyPlanBilling(
           itemId: item.itemId,
           monthRef: m.ref,
           action: "skipped",
-          reason: `Aguardando D-${tolerance} de ${item.packageBillingDay ?? 10}`,
+          reason: `Aguardando D-${tolerance} de ${itemBillingDay}`,
         });
         break;
       }

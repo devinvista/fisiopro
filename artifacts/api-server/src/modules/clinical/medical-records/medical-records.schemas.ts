@@ -104,6 +104,10 @@ export const createTreatmentPlanSchema = z.object({
   // ── Sprint 4 — Modo de cobrança de itens avulsos ────────────────────────
   avulsoBillingMode: z.enum(["porSessao", "mensalConsolidado"]).optional(),
   avulsoBillingDay: z.number().int().min(1).max(28).optional().nullable(),
+  // ── Sprint Financeiro 9 (P1) — vencimento da mensalidade ────────────────
+  // Dia (1..28) escolhido pelo paciente para vencimento das faturas mensais
+  // (item recorrenteMensal). Se null, herda do `billingDay` do pacote.
+  monthlyDueDay: z.number().int().min(1).max(28).optional().nullable(),
   // ── Observações internas (visíveis SOMENTE para a equipe) ───────────────
   // Não saem em contrato impresso nem no link público. Limite de 5000
   // caracteres para evitar abuso (mesmo teto de objectives/techniques).

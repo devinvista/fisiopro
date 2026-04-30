@@ -39,6 +39,7 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   planInstallmentDueDate,
   planMonthRefOf,
+  resolveMonthlyDueDay,
 } from "./treatment-plans.billing-dates.js";
 
 export interface AcceptPlanFinancialsResult {
@@ -292,7 +293,12 @@ export async function acceptPlanFinancials(
         );
         if (monthlyAmount <= 0) continue;
 
-        const billingDay = item.packageBillingDay ?? 10;
+        // Sprint Financeiro 9 (P1) — vencimento prioriza o que o paciente
+        // escolheu no plano (`monthlyDueDay`); se null, herda do pacote.
+        const billingDay = resolveMonthlyDueDay({
+          planMonthlyDueDay: plan.monthlyDueDay,
+          packageBillingDay: item.packageBillingDay,
+        });
         const planStart = plan.startDate ?? now.iso;
         const itemMonthRef = planMonthRefOf(planStart, 0);
         const dueDate = planInstallmentDueDate(planStart, billingDay, 0);
