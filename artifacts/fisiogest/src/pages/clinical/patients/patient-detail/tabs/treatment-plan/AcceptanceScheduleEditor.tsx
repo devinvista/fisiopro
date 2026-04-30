@@ -327,7 +327,7 @@ function ItemRow({
       weekDays: wd.join(","),
       startTimes: serializeTimes(times),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [item.id, item.weekDays, item.defaultStartTime, item.startTimesByDay, item.scheduleId]);
 
   const selectedSchedule = useMemo(

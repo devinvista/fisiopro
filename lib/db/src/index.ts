@@ -10,10 +10,22 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-const connectionString = process.env.DATABASE_URL;
+const rawConnectionString = process.env.DATABASE_URL;
+
+const sslmodeMatch = rawConnectionString.match(/[?&]sslmode=([^&]+)/i);
+const sslmode = sslmodeMatch?.[1]?.toLowerCase();
+const ssl =
+  sslmode && sslmode !== "disable" && sslmode !== "allow"
+    ? { rejectUnauthorized: sslmode === "verify-ca" || sslmode === "verify-full" }
+    : undefined;
+
+const connectionString = rawConnectionString
+  .replace(/([?&])sslmode=[^&]*&?/i, "$1")
+  .replace(/[?&]$/, "");
 
 export const pool = new Pool({
   connectionString,
+  ssl,
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
