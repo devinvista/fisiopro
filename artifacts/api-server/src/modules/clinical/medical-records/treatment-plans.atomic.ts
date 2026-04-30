@@ -28,8 +28,10 @@ import {
   treatmentPlansTable,
   treatmentPlanProceduresTable,
   packagesTable,
+  appointmentsTable,
+  financialRecordsTable,
 } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { HttpError } from "../../../utils/httpError.js";
 import {
   acceptPatientTreatmentPlan,
@@ -159,7 +161,7 @@ export async function validatePlanForAtomicAccept(
       field: "items",
       message: "Adicione ao menos um procedimento ao plano antes de aceitar.",
     });
-    return { ok: items.length > 0 && errors.length === 0, errors };
+    return { ok: false, errors };
   }
 
   for (const item of items) {
@@ -319,8 +321,12 @@ export async function acceptAndMaterializePlan(
   const wasAlreadyAccepted = planBefore.acceptedAt != null;
   const wasAlreadyMaterialized = planBefore.materializedAt != null;
 
-  // Se já está totalmente processado, devolve sem fazer nada.
+  // Se já está totalmente processado, devolve sem fazer nada — mas com
+  // contadores REAIS (não zerados) para que o caller saiba o tamanho do
+  // que já existe (importante para a UI mostrar "X consultas, Y faturas
+  // já criadas anteriormente"). Tudo via SQL agregado, sem N+1.
   if (wasAlreadyAccepted && wasAlreadyMaterialized) {
+    const existing = await getExistingMaterializationSummary(planId);
     return {
       ok: true,
       planId,
@@ -330,10 +336,10 @@ export async function acceptAndMaterializePlan(
       },
       materialization: {
         planId,
-        appointmentsCreated: 0,
-        invoicesCreated: 0,
-        monthsCovered: 0,
-        totalContractedAmount: "0.00",
+        appointmentsCreated: existing.appointmentsCreated,
+        invoicesCreated: existing.invoicesCreated,
+        monthsCovered: existing.monthsCovered,
+        totalContractedAmount: existing.totalContractedAmount,
       },
       wasAlreadyAccepted,
       wasAlreadyMaterialized,
@@ -434,4 +440,76 @@ export async function revertPlanAcceptance(planId: number): Promise<void> {
       acceptedVia: null,
     })
     .where(eq(treatmentPlansTable.id, planId));
+}
+
+interface ExistingMaterializationSummary {
+  appointmentsCreated: number;
+  invoicesCreated: number;
+  monthsCovered: number;
+  totalContractedAmount: string;
+}
+
+/**
+ * Resumo agregado do que já existe no banco para um plano já materializado.
+ * Usado pelo `acceptAndMaterializePlan` no caminho idempotente quando o plano
+ * já está aceito + materializado — evita devolver contadores zerados que
+ * confundiriam o front-end.
+ *
+ * Conta:
+ *  - `appointmentsCreated`: appointments do plano que NÃO estão `cancelado`
+ *    nem `remarcado` (alinhado com o que `materializeTreatmentPlan` cria).
+ *  - `invoicesCreated`: faturas do plano dos tipos `faturaPlano` /
+ *    `faturaPlanoAvulsoMensal` / `vendaPacote` que NÃO foram canceladas.
+ *  - `monthsCovered`: distintos `plan_month_ref` das faturas mensais.
+ *  - `totalContractedAmount`: soma do `amount` dessas faturas (string com 2
+ *    casas, igual ao formato emitido por `materializeTreatmentPlan`).
+ */
+async function getExistingMaterializationSummary(
+  planId: number,
+): Promise<ExistingMaterializationSummary> {
+  // Appointments do plano: ligam via `treatment_plan_procedure_id`, então
+  // filtramos pelos procedures cujo `treatment_plan_id` = planId.
+  const [aptsRow] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(appointmentsTable)
+    .innerJoin(
+      treatmentPlanProceduresTable,
+      eq(
+        appointmentsTable.treatmentPlanProcedureId,
+        treatmentPlanProceduresTable.id,
+      ),
+    )
+    .where(
+      and(
+        eq(treatmentPlanProceduresTable.treatmentPlanId, planId),
+        sql`${appointmentsTable.status} NOT IN ('cancelado','remarcado')`,
+      ),
+    );
+  const [invRow] = await db
+    .select({
+      count: sql<number>`COUNT(*)::int`,
+      total: sql<string>`COALESCE(SUM(${financialRecordsTable.amount}), 0)::text`,
+      months: sql<number>`COUNT(DISTINCT ${financialRecordsTable.planMonthRef})::int`,
+    })
+    .from(financialRecordsTable)
+    .where(
+      and(
+        eq(financialRecordsTable.treatmentPlanId, planId),
+        sql`${financialRecordsTable.transactionType} IN ('faturaPlano','faturaPlanoAvulsoMensal','vendaPacote')`,
+        sql`${financialRecordsTable.status} <> 'cancelado'`,
+      ),
+    );
+  // SUM em NUMERIC volta como string sem padding decimal — normaliza para
+  // 2 casas para casar com o formato do `MaterializeResult.totalContractedAmount`.
+  const totalRaw = invRow?.total ?? "0";
+  const totalNum = Number(totalRaw);
+  const totalContractedAmount = Number.isFinite(totalNum)
+    ? totalNum.toFixed(2)
+    : "0.00";
+  return {
+    appointmentsCreated: Number(aptsRow?.count ?? 0),
+    invoicesCreated: Number(invRow?.count ?? 0),
+    monthsCovered: Number(invRow?.months ?? 0),
+    totalContractedAmount,
+  };
 }

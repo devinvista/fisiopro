@@ -288,9 +288,9 @@
 
 | Fase | Status | Data | Observações |
 |---|---|---|---|
-| F1 — Orquestrador atômico | ✅ Implementado | 30/04/2026 | `acceptAndMaterializePlan` + `revertPlanAcceptance` + `validatePlanForAtomicAccept` |
-| F2 — Endpoints atômicos | ✅ Implementado | 30/04/2026 | `POST /accept-and-materialize` (presencial + público) + `GET /atomic-validation` (preview de bloqueios) — `GET /preview-appointments` postergado para F3 (wizard usa o materializeTreatmentPlan dry-run existente) |
-| F3 — Wizard reordenado | ⏳ Pendente | — | Aguardando aprovação de mockup |
+| F1 — Orquestrador atômico | ✅ Implementado | 30/04/2026 | `acceptAndMaterializePlan` + `revertPlanAcceptance` + `validatePlanForAtomicAccept`. Bug-fix 30/04: caminho idempotente (já aceito+materializado) agora devolve contadores REAIS via `getExistingMaterializationSummary` (appointments via JOIN com `treatment_plan_procedures`; faturas via tipo + status). Antes retornava zeros — front-end mostraria "0 consultas, 0 faturas" mesmo com dezenas existindo. |
+| F2 — Endpoints atômicos | ✅ Implementado | 30/04/2026 | `POST /accept-and-materialize` (presencial + público) + `GET /atomic-validation`. Bug-fix 30/04: `/atomic-validation` agora inclui `clauses[]` (ativas da clínica) na resposta — sem isso, UI não saberia quais cláusulas são obrigatórias e o POST falharia com 400 `clause_required_missing` mesmo a validação de plano passando. `GET /preview-appointments` segue postergado para F3 (wizard usa `materializeTreatmentPlan` dry-run existente). |
+| F3 — Wizard reordenado | 🚧 Em andamento | 30/04/2026 | Iniciando: migration `0014` + schema + endpoint settings → depois UI |
 | F4 — Aceite público v2 | ⏳ Pendente | — | Depende de F3 |
 | F5 — Sistema de holds | ⏳ Pendente | — | Independente, pode ser priorizado |
 | F6 — Rollout + deprecação | ⏳ Pendente | — | Após F3+F4 estáveis em produção |

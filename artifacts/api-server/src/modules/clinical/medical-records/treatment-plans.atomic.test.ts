@@ -24,6 +24,7 @@ const dbMock = vi.hoisted(() => {
     const chain: any = {
       from: () => chain,
       leftJoin: () => chain,
+      innerJoin: () => chain,
       where: () => chain,
       limit: () => Promise.resolve(rows),
       then: (cb: any) => Promise.resolve(rows).then(cb),
@@ -71,11 +72,25 @@ vi.mock("@workspace/db", () => ({
   treatmentPlansTable: { id: "plans.id", acceptedAt: "plans.accepted_at" },
   treatmentPlanProceduresTable: { id: "items.id", treatmentPlanId: "items.plan_id" },
   packagesTable: { id: "packages.id" },
+  appointmentsTable: {
+    treatmentPlanProcedureId: "appts.plan_proc_id",
+    status: "appts.status",
+  },
+  financialRecordsTable: {
+    treatmentPlanId: "fr.plan_id",
+    transactionType: "fr.transaction_type",
+    status: "fr.status",
+    amount: "fr.amount",
+    planMonthRef: "fr.plan_month_ref",
+  },
 }));
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: any[]) => ({ _op: "and", args }),
   eq: (a: any, b: any) => ({ _op: "eq", a, b }),
+  sql: Object.assign((..._args: any[]) => ({ _op: "sql" }), {
+    raw: (s: string) => ({ _op: "sql_raw", s }),
+  }),
 }));
 
 // ─── Mock dos serviços orquestrados ──────────────────────────────────────────
@@ -139,6 +154,7 @@ function makeSelectImpl(nextIdx: () => number) {
     return {
       from: () => ({
         leftJoin: () => ({ where: () => whereResult }),
+        innerJoin: () => ({ where: () => whereResult }),
         where: () => whereResult,
       }),
     };
@@ -173,6 +189,7 @@ beforeEach(() => {
     return {
       from: () => ({
         leftJoin: () => ({ where: () => whereResult }),
+        innerJoin: () => ({ where: () => whereResult }),
         where: () => whereResult,
       }),
     };

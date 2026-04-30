@@ -251,14 +251,42 @@ router.post(
 // Sprint 15 (F2) — Validação pré-aceite. UI usa para mostrar checklist do
 // que ainda falta (agenda, horário, cobrança) antes de habilitar o botão
 // "Assinar e iniciar plano".
+//
+// Resposta inclui também `clauses` (cláusulas ativas da clínica) para a UI
+// renderizar checkboxes — sem isso o front-end não saberia quais cláusulas
+// precisam vir marcadas no `acceptedClauseCodes` do POST e o aceite falharia
+// com 400 `clause_required_missing` mesmo o usuário tendo passado a validação.
 router.get(
   "/treatment-plans/:planId/atomic-validation",
   requirePermission("medical.read"),
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
     const { validatePlanForAtomicAccept } = await import("./treatment-plans.atomic.js");
-    const result = await validatePlanForAtomicAccept(planId);
-    res.json(result);
+    const [validation, clinicId] = await Promise.all([
+      validatePlanForAtomicAccept(planId),
+      // Cláusulas dependem da clínica do paciente; resolvemos em paralelo.
+      (await import("./medical-records.repository.js")).getPatientClinicId(patientId),
+    ]);
+    let clauses: Array<{
+      code: string;
+      version: number;
+      title: string;
+      body: string;
+      isRequired: boolean;
+    }> = [];
+    if (clinicId) {
+      const { listClauses } = await import("../contract-clauses/contract-clauses.service.js");
+      const active = await listClauses(clinicId, { activeOnly: true });
+      clauses = active.map((c) => ({
+        code: c.code,
+        version: c.version,
+        title: c.title,
+        body: c.body,
+        isRequired: c.isRequired,
+      }));
+    }
+    res.json({ ...validation, clauses });
   }),
 );
 

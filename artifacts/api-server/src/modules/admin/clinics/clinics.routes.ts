@@ -120,7 +120,8 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
     }
     const { name, type, cnpj, cpf, crefito, responsibleTechnical, phone, email, address, website, logoUrl,
             cancellationPolicyHours, autoConfirmHours, noShowFeeEnabled, noShowFeeAmount,
-            cancellationWindowHours, lateCancellationPolicy } = req.body;
+            cancellationWindowHours, lateCancellationPolicy,
+            useV2AcceptanceFlow } = req.body;
     const ALLOWED_LATE_POLICIES = ["creditoNormal", "semCredito", "taxa"] as const;
     const normalizedLatePolicy = (() => {
       if (lateCancellationPolicy === undefined) return undefined;
