@@ -26,6 +26,7 @@ import {
 } from "@workspace/db";
 import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { resolveItemKind } from "./treatment-plans.acceptance.js";
+import { enumeratePlanAppointments, type AppointmentPreviewRow } from "./treatment-plans.preview.js";
 
 const TOKEN_TTL_DAYS = 7;
 
@@ -196,6 +197,22 @@ export interface PublicPlanSnapshotClause {
   sortOrder: number;
 }
 
+/**
+ * Sprint 15 (F4) — preview da agenda (consultas que serão criadas pela
+ * materialização). Vazio quando a clínica ainda não configurou agenda nos
+ * itens; a UI usa isso para exibir aviso e bloquear o aceite.
+ */
+export interface PublicPlanAppointmentPreview {
+  date: string;
+  startTime: string;
+  endTime: string;
+  procedureName: string;
+  professionalName: string | null;
+  monthRef: string;
+  itemId: number;
+  itemKind: "recorrenteMensal" | "pacoteSessoes" | "avulso";
+}
+
 export interface PublicPlanSnapshot {
   planId: number;
   patient: PublicPlanSnapshotPatient;
@@ -220,6 +237,25 @@ export interface PublicPlanSnapshot {
    */
   contractClauses: PublicPlanSnapshotClause[];
   acceptedClauses: PublicPlanSnapshotClause[] | null;
+  /**
+   * Sprint 15 (F4) — flag da clínica que controla o fluxo de aceite. Quando
+   * `true`, a UI pública renderiza a agenda completa e usa o endpoint
+   * `/accept-and-materialize` (atômico). Quando `false`, mantém o fluxo
+   * legado (`/accept`).
+   */
+  useV2AcceptanceFlow: boolean;
+  /**
+   * Sprint 15 (F4) — consultas que serão criadas ao materializar o plano.
+   * Vazio quando a clínica ainda não configurou agenda em nenhum item; a UI
+   * exibe aviso "aguardando configuração da agenda" e bloqueia o aceite v2.
+   */
+  appointmentsPreview: PublicPlanAppointmentPreview[];
+  /**
+   * Sprint 15 (F4) — IDs dos itens que ainda não produziram preview por
+   * falta de agenda (dias da semana, horário ou schedule). Usado pela UI
+   * pública para explicar quais itens estão pendentes.
+   */
+  itemsWithoutSchedule: number[];
 }
 
 /**
@@ -315,6 +351,7 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       cancellationPolicyHours: clinicsTable.cancellationPolicyHours,
       noShowFeeEnabled: clinicsTable.noShowFeeEnabled,
       noShowFeeAmount: clinicsTable.noShowFeeAmount,
+      useV2AcceptanceFlow: clinicsTable.useV2AcceptanceFlow,
     })
     .from(clinicsTable)
     .where(eq(clinicsTable.isActive, true))
@@ -380,6 +417,33 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     };
   });
 
+  // Sprint 15 (F4) — preview da agenda (lista de consultas a serem criadas).
+  // Vazio quando a clínica ainda não configurou agenda; a UI usa isso para
+  // exibir aviso e bloquear o aceite v2.
+  let previewAppointments: PublicPlanAppointmentPreview[] = [];
+  let itemsWithoutSchedule: number[] = [];
+  try {
+    const previewResult = await enumeratePlanAppointments(planId);
+    previewAppointments = previewResult.appointments.map<PublicPlanAppointmentPreview>(
+      (a: AppointmentPreviewRow) => ({
+        date: a.date,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        procedureName: a.procedureName,
+        professionalName: a.professionalName,
+        monthRef: a.monthRef,
+        itemId: a.itemId,
+        itemKind: a.itemKind,
+      }),
+    );
+    itemsWithoutSchedule = previewResult.itemsWithoutSchedule;
+  } catch {
+    // Falha de preview não pode quebrar o snapshot inteiro — o paciente
+    // ainda precisa conseguir abrir o contrato.
+    previewAppointments = [];
+    itemsWithoutSchedule = [];
+  }
+
   const acceptance: PublicPlanSnapshotAcceptance | null = plan.acceptedAt
     ? {
         acceptedAt: plan.acceptedAt.toISOString(),
@@ -431,6 +495,9 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       : null,
     contractClauses: clausesRows.map((c) => ({ ...c, isRequired: !!c.isRequired })),
     acceptedClauses,
+    useV2AcceptanceFlow: !!clinicRow?.useV2AcceptanceFlow,
+    appointmentsPreview: previewAppointments,
+    itemsWithoutSchedule,
   };
 }
 

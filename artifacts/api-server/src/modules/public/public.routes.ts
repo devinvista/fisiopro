@@ -147,6 +147,9 @@ router.get(
     if (!snapshot) {
       throw new PublicError(404, "not_found", "Plano não encontrado.");
     }
+    // Sprint 15 (F4) — evita revalidações divergentes em proxies/CDN. O
+    // snapshot público é dinâmico (status + agenda) e nunca deve ser cacheado.
+    res.setHeader("Cache-Control", "no-store");
     res.json({ ...snapshot, expiresAt: lookup.tokenRow!.expiresAt.toISOString() });
   }),
 );

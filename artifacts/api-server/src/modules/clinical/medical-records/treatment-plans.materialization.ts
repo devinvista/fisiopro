@@ -138,7 +138,7 @@ function resolveItemKind(
   return "avulso";
 }
 
-function parseWeekDays(raw: string | null): number[] {
+export function parseWeekDays(raw: string | null): number[] {
   if (!raw) return [];
   let arr: any;
   try {
@@ -152,21 +152,21 @@ function parseWeekDays(raw: string | null): number[] {
     .filter((n): n is number => typeof n === "number");
 }
 
-function addMonths(dateStr: string, months: number): string {
+export function addMonths(dateStr: string, months: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1 + months, d));
   return dt.toISOString().slice(0, 10);
 }
 
-function monthFirstDay(dateStr: string): string {
+export function monthFirstDay(dateStr: string): string {
   return dateStr.slice(0, 8) + "01";
 }
 
-function lastDayOfMonth(year: number, month: number): number {
+export function lastDayOfMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-function addMinutesToTime(time: string, mins: number): string {
+export function addMinutesToTime(time: string, mins: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + mins;
   const hh = String(Math.floor(total / 60) % 24).padStart(2, "0");
@@ -183,7 +183,7 @@ const WEEK_DAY_KEY: Record<number, string> = {
  * Faz parse seguro do mapa "dia da semana → horário" persistido em
  * `start_times_by_day` (JSON). Retorna {} se nulo/inválido.
  */
-function parseStartTimesByDay(raw: string | null): Record<string, string> {
+export function parseStartTimesByDay(raw: string | null): Record<string, string> {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -205,7 +205,7 @@ function parseStartTimesByDay(raw: string | null): Record<string, string> {
  * Hierarquia: `startTimesByDay[weekday]` → `defaultStartTime`. Retorna
  * null quando nem o mapa nem o fallback estão definidos.
  */
-function resolveStartTimeForDate(
+export function resolveStartTimeForDate(
   dateStr: string,
   startTimesByDay: Record<string, string>,
   defaultStartTime: string | null,
@@ -220,7 +220,7 @@ function resolveStartTimeForDate(
  * Enumera todas as datas (YYYY-MM-DD) entre `startDate` (inclusivo) e
  * `endDate` (exclusivo) que caem em algum dos `weekDayIndexes` (0=domingo).
  */
-function enumerateDates(
+export function enumerateDates(
   startDate: string,
   endDate: string,
   weekDayIndexes: number[],
@@ -275,7 +275,7 @@ async function loadPlanItems(planId: number): Promise<PlanItem[]> {
  * `endDate` (exclusivo) que caem em algum dos `weekDayIndexes` (0=domingo).
  * Diferente de `enumerateDates`, para no `take`-ésimo match.
  */
-function enumerateFirstN(
+export function enumerateFirstN(
   startDate: string,
   endDate: string,
   weekDayIndexes: number[],

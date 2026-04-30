@@ -290,6 +290,22 @@ router.get(
   }),
 );
 
+// Sprint 15 (F4) — Preview da agenda do plano antes do aceite.
+//
+// Read-only: enumera as consultas que serão criadas pela materialização sem
+// persistir nada. Usado pelo editor do plano para mostrar o calendário em
+// tempo real conforme a agenda é configurada (e pelo aceite público v2).
+router.get(
+  "/treatment-plans/:planId/preview-appointments",
+  requirePermission("medical.read"),
+  asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const { enumeratePlanAppointments } = await import("./treatment-plans.preview.js");
+    const result = await enumeratePlanAppointments(planId);
+    res.json(result);
+  }),
+);
+
 // Sprint 2 — gera (ou reaproveita) um link público de aceite, válido por 7 dias.
 // Retorna a URL absoluta (montada com APP_PUBLIC_URL ou Origin do request).
 router.post(
