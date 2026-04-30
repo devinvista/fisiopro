@@ -6,6 +6,14 @@ import { asyncHandler } from "../../../utils/asyncHandler.js";
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
 
+// @deprecated Sprint 15 (F6) — para o fluxo normal de aceite, prefira
+// `POST /api/patients/:patientId/treatment-plans/:planId/accept-and-
+// materialize`, que orquestra aceite + materialização atomicamente.
+// Este endpoint segue suportado como ferramenta de **reparo** quando
+// uma materialização anterior falhou e precisa ser re-executada sem
+// refazer o aceite (ex.: bug corrigido em produção, ajuste de horários
+// pós-aceite, etc.). Não migrar para v2 — o caso de uso "materializar
+// sem aceitar" é legítimo e único.
 router.post(
   "/materialize",
   requirePermission("medical.write"),

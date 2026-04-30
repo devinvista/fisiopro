@@ -114,6 +114,8 @@ export function ClinicaSection() {
     noShowFeeAmount: "",
     cancellationWindowHours: "" as string | number,
     lateCancellationPolicy: "creditoNormal" as "creditoNormal" | "semCredito" | "taxa",
+    // Sprint 15 (F6) — flag do fluxo de aceite (v1 legado / v2 atômico).
+    useV2AcceptanceFlow: true,
   });
   const [logoPreview, setLogoPreview] = useState<string>("");
 
@@ -145,6 +147,9 @@ export function ClinicaSection() {
           | "creditoNormal"
           | "semCredito"
           | "taxa",
+        // Clínicas pré-F6 vêm sem o campo (undefined) → assumimos `false`
+        // para não promover ninguém ao v2 sem opt-in explícito.
+        useV2AcceptanceFlow: clinic.useV2AcceptanceFlow ?? false,
       });
       setLogoPreview(clinic.logoUrl ?? "");
     }
@@ -188,6 +193,10 @@ export function ClinicaSection() {
       cancellationWindowHours:
         formData.cancellationWindowHours !== "" ? Number(formData.cancellationWindowHours) : undefined,
       lateCancellationPolicy: formData.lateCancellationPolicy,
+      // Sprint 15 (F6) — envio explícito da flag (whitelist do PATCH só
+      // aceita boolean explícito; null/undefined são ignorados pelo
+      // backend para preservar o NOT NULL da coluna).
+      useV2AcceptanceFlow: formData.useV2AcceptanceFlow,
     };
     updateMutation.mutate(payload);
   };
@@ -643,6 +652,51 @@ export function ClinicaSection() {
                 <BadgeDollarSign className="h-3.5 w-3.5 shrink-0" />
                 Uma cobrança de <strong className="mx-1">R$ {Number(formData.noShowFeeAmount).toFixed(2).replace(".", ",")}</strong>
                 será gerada automaticamente para cada falta não justificada.
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Sprint 15 (F6) — Fluxo de aceite de plano (v1 legado / v2 atômico).
+              Clínicas novas nascem em v2 (default do banco). Clínicas existentes
+              começaram em v1 e podem migrar a qualquer momento por aqui. */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="pr-4">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                  Novo fluxo de aceite de plano
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Reorganiza o assistente de plano em 4 etapas (itens →
+                  cobrança → agenda → contrato) e gera as consultas
+                  automaticamente no momento da assinatura, em uma única
+                  transação. O paciente vê a agenda completa antes de
+                  assinar via link público.
+                </p>
+              </div>
+              <Switch
+                checked={formData.useV2AcceptanceFlow}
+                onCheckedChange={(v) => setFormData((p) => ({ ...p, useV2AcceptanceFlow: v }))}
+              />
+            </div>
+            {!formData.useV2AcceptanceFlow && (
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Você ainda está usando o fluxo legado (3 etapas, aceite
+                  separado da agenda). Recomendamos ativar o novo fluxo —
+                  evita planos aceitos sem agenda e fatura sem consulta
+                  marcada. Planos já vigentes não são afetados pela troca.
+                </span>
+              </div>
+            )}
+            {formData.useV2AcceptanceFlow && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-100 px-3 py-2 text-xs text-green-700">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                Novo fluxo ativado. Próximos planos passarão pelo wizard
+                de 4 etapas com aceite atômico.
               </div>
             )}
           </div>

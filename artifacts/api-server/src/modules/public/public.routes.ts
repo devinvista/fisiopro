@@ -154,6 +154,13 @@ router.get(
   }),
 );
 
+// @deprecated Sprint 15 (F6) — substituído por
+// `POST /treatment-plans/by-token/:token/accept-and-materialize` (logo
+// abaixo), que aceita + materializa atomicamente para clínicas em v2.
+// Endpoint mantido para compat com clínicas ainda em v1
+// (`use_v2_acceptance_flow=false`). O frontend `aceite.tsx` escolhe a
+// rota dinamicamente via flag do snapshot. Remoção planejada após 90
+// dias com 100% das clínicas em v2.
 router.post(
   "/treatment-plans/by-token/:token/accept",
   handle(async (req, res) => {

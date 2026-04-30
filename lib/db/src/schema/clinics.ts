@@ -38,7 +38,10 @@ export const clinicsTable = pgTable("clinics", {
   // `true`           : wizard v2 de 4 etapas (itens/cobrança/agenda/contrato)
   //                    + aceite atômico via `POST /accept-and-materialize`.
   // Coexistência durante rollout — ver migration 0017.
-  useV2AcceptanceFlow: boolean("use_v2_acceptance_flow").notNull().default(false),
+  // Sprint 15 (F6) — default TRUE: clínicas novas nascem no fluxo v2 (aceite
+  // atômico com calendário). Clínicas existentes pré-F6 mantêm o valor que
+  // já tinham (a migration 0018 trocou só o DEFAULT, não tocou linhas).
+  useV2AcceptanceFlow: boolean("use_v2_acceptance_flow").notNull().default(true),
 });
 
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ id: true, createdAt: true });

@@ -1,3 +1,10 @@
+/**
+ * @deprecated Sprint 15 (F6) — este é o painel de aceite do fluxo legado v1
+ * (renderizado pelo `TreatmentPlanTab` quando `useV2AcceptanceFlow=false`).
+ * Para clínicas em v2, o painel ativo é `ContractAcceptanceBlock.tsx`, que
+ * chama `POST /accept-and-materialize` (atômico). Mantido no bundle até
+ * que 100% das clínicas estejam em v2 — remoção planejada para Sprint 16+.
+ */
 import { useState } from "react";
 import {
   BadgeCheck, ClipboardCheck, Link2, Loader2, Mail, Paperclip, PenLine, Phone, ShieldAlert,

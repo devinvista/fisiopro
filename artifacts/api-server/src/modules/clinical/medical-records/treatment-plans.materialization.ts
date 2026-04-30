@@ -318,6 +318,16 @@ async function defaultScheduleId(clinicId: number | null): Promise<number> {
 
 /**
  * Materializa o plano de tratamento.
+ *
+ * @deprecated Sprint 15 (F6) — chamada **standalone** está depreciada para
+ * o fluxo de aceite. Use `acceptAndMaterializePlan` (em `treatment-plans
+ * .atomic.ts`), que orquestra aceite + materialização atomicamente com
+ * rollback compensatório. `materializeTreatmentPlan` segue exportada e
+ * suportada porque (a) é o building block interno do orquestrador e (b)
+ * ainda é usada pelo endpoint de **reparo** `POST /api/treatment-plans
+ * /:planId/materialize` para casos em que o materialize falhou e precisa
+ * ser re-executado manualmente sem refazer o aceite. Não criar novos
+ * callers.
  */
 export async function materializeTreatmentPlan(
   planId: number,

@@ -471,6 +471,13 @@ export interface AcceptanceTrailInput {
  * (legado, mantido por compat). O aceite promove `rascunho → vigente`.
  *
  * Idempotente: chamar duas vezes não duplica o snapshot.
+ *
+ * @deprecated Sprint 15 (F6) — preferir `acceptAndMaterializePlan` (em
+ * `treatment-plans.atomic.ts`), que aceita E materializa numa transação
+ * compensatória. Esta função permanece exportada e funcional pois ainda é
+ * o building block usado internamente pelo orquestrador atômico, mas
+ * **callers externos** (rotas HTTP, jobs) devem migrar para o fluxo v2.
+ * Remoção planejada após 90 dias com 100% das clínicas em v2 (rollout F6).
  */
 export async function acceptPatientTreatmentPlan(
   patientId: number,

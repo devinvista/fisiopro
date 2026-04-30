@@ -168,6 +168,12 @@ router.delete("/treatment-plans/:planId", requirePermission("medical.write"), as
 
 // Sprint 2 — aceite formal do plano (vira "venda"):
 // snapshot dos preços vigentes + bloqueio de edição de valores comerciais.
+//
+// @deprecated Sprint 15 (F6) — substituído por
+// `POST /treatment-plans/:planId/accept-and-materialize` (logo abaixo),
+// que aceita + materializa atomicamente. Endpoint mantido para compat
+// com clínicas ainda em v1 (`use_v2_acceptance_flow=false`). Remoção
+// planejada após 90 dias com 100% das clínicas migradas para v2.
 router.post(
   "/treatment-plans/:planId/accept",
   requirePermission("medical.write"),

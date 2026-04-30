@@ -1,3 +1,12 @@
+/**
+ * @deprecated Sprint 15 (F6) — este editor segue ATIVO no v2 (montado pelo
+ * `StepAgendaV2` em `TreatmentPlanTab`), mas a marca de depreciação
+ * sinaliza dois pontos: (a) o nome herda a era v1 ("Acceptance" foi
+ * pensado como "depois do aceite") e numa próxima revisão será renomeado
+ * para `PlanScheduleEditor`; (b) gates internos de "isAccepted" foram
+ * relaxados em F3 — a montagem antes do aceite é o caso de uso v2 e
+ * dependentes não devem reintroduzir esse acoplamento. Manter funcional.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
