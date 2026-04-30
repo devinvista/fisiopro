@@ -167,18 +167,22 @@ export function TreatmentPlanItemsSection({
     updateMutation.mutate({ id: item.id, body: updateBody });
   }
 
-  function calcItemTotal(item: PlanProcedureItem): { gross: number; discount: number; net: number } {
+  function calcItemTotal(item: PlanProcedureItem): { gross: number; discount: number; net: number; sessions: number } {
     const isMensal = item.packageType === "mensal";
     const discount = Number(item.discount ?? 0);
     if (isMensal) {
       const gross = Number(item.monthlyPrice ?? item.price ?? 0);
-      return { gross, discount, net: Math.max(0, gross - discount) };
+      return { gross, discount, net: Math.max(0, gross - discount), sessions: 0 };
     }
     const isAvulso = !item.packageId;
     const unitP = Number(item.price ?? 0);
-    const sessions = item.totalSessions ?? (isAvulso ? 1 : 0);
-    const gross = isAvulso ? unitP * sessions : unitP;
-    return { gross, discount, net: Math.max(0, gross - discount) };
+    // Avulso sem totalSessions fixo → usa a previsão (sessões/sem × semanas
+    // de vigência, ou contagem real pelos weekDays se já materializado).
+    const sessions = item.totalSessions != null
+      ? Number(item.totalSessions)
+      : (isAvulso ? plannedSessionsForItem(item, planStartDate, planMonths) : 0);
+    const gross = isAvulso ? unitP * Math.max(1, sessions) : unitP;
+    return { gross, discount, net: Math.max(0, gross - discount), sessions };
   }
 
   // Financial totals
@@ -191,8 +195,12 @@ export function TreatmentPlanItemsSection({
     0,
   );
   const estimatedWeeks = planItems
-    .filter(i => i.packageType !== "mensal" && i.totalSessions && i.sessionsPerWeek > 0)
-    .reduce((max, i) => Math.max(max, Math.ceil((i.totalSessions ?? 0) / i.sessionsPerWeek)), 0);
+    .filter(i => i.packageType !== "mensal" && i.sessionsPerWeek > 0)
+    .reduce((max, i) => {
+      const sess = i.totalSessions ?? plannedSessionsForItem(i, planStartDate, planMonths);
+      if (!sess || !i.sessionsPerWeek) return max;
+      return Math.max(max, Math.ceil(sess / i.sessionsPerWeek));
+    }, 0);
   const hasMensal = planItems.some(i => i.packageType === "mensal");
   const hasSessoes = planItems.some(i => i.packageType !== "mensal");
 
@@ -455,7 +463,14 @@ export function TreatmentPlanItemsSection({
                         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
                           {!isMensal && item.sessionsPerWeek > 0 && <span>{item.sessionsPerWeek}x/semana</span>}
                           {isMensal && <span>{item.sessionsPerWeek}x/sem · dia {item.billingDay ?? "—"}</span>}
-                          {!isMensal && item.totalSessions && <span className="font-medium">{item.totalSessions} sessões previstas</span>}
+                          {!isMensal && planned > 0 && (
+                            <span className="font-medium">
+                              {planned} sessões previstas
+                              {item.totalSessions == null && item.sessionsPerWeek > 0 && (
+                                <span className="text-slate-400 font-normal"> (estimativa)</span>
+                              )}
+                            </span>
+                          )}
                           {!isMensal && item.totalSessions && item.sessionsPerWeek > 0 && (
                             <span className="text-slate-400">~{Math.ceil(item.totalSessions / item.sessionsPerWeek)} semanas</span>
                           )}
@@ -465,9 +480,7 @@ export function TreatmentPlanItemsSection({
                           <span className="font-semibold text-slate-700">
                             {isMensal
                               ? <>{fmtCur(net)}/mês{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>
-                              : isAvulso && item.totalSessions
-                                ? <>{fmtCur(net)}{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>
-                                : <>{fmtCur(net)}{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>}
+                              : <>{fmtCur(net)}{disc > 0 && <span className="text-emerald-600 ml-1">(-{fmtCur(disc)})</span>}</>}
                           </span>
                           {item.notes && <span className="text-slate-400 italic w-full">{item.notes}</span>}
                         </div>
@@ -576,14 +589,15 @@ export function TreatmentPlanItemsSection({
 
           {/* Per-item breakdown */}
           <div className="space-y-1 text-xs">
-            {financialRows.map(({ item, gross, discount: disc, net }) => {
+            {financialRows.map(({ item, discount: disc, net, sessions }) => {
               const isMensal = item.packageType === "mensal";
               const isAvulso = !item.packageId;
               const label = item.packageName ?? item.procedureName ?? "—";
+              const isEstimate = isAvulso && item.totalSessions == null && sessions > 1;
               const detail = isMensal
                 ? `${fmtCur(net)}/mês`
-                : isAvulso && item.totalSessions
-                  ? `${item.totalSessions} × ${fmtCur(Number(item.price ?? 0))}${disc > 0 ? ` − ${fmtCur(disc)}` : ""} = ${fmtCur(net)}`
+                : isAvulso && sessions > 1
+                  ? `${sessions}${isEstimate ? "*" : ""} × ${fmtCur(Number(item.price ?? 0))}${disc > 0 ? ` − ${fmtCur(disc)}` : ""} = ${fmtCur(net)}`
                   : `${fmtCur(net)}${disc > 0 ? ` (desc. ${fmtCur(disc)})` : ""}`;
               return (
                 <div key={item.id} className="flex justify-between items-center py-0.5 border-b border-primary/10 last:border-0">
@@ -592,6 +606,11 @@ export function TreatmentPlanItemsSection({
                 </div>
               );
             })}
+            {financialRows.some(r => !r.item.packageId && r.item.totalSessions == null && r.sessions > 1) && (
+              <p className="text-[10px] text-slate-400 italic pt-1">
+                * estimativa baseada na vigência do plano ({planMonths} {planMonths === 1 ? "mês" : "meses"}) × sessões/semana. Atualiza para o número real após escolher as datas na agenda.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5 pt-1 border-t border-primary/20">

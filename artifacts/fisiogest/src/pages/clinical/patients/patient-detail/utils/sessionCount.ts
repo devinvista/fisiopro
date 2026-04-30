@@ -1,11 +1,16 @@
 /**
- * Cálculo real do número de sessões para itens recorrentes (mensal) de um plano,
- * espelhando a lógica do backend em `treatment-plans.materialization.ts`
- * (`enumerateDates`): conta as ocorrências dos `weekDays` configurados no
- * intervalo [startDate, startDate + durationMonths) — fim exclusivo.
+ * Cálculo do número de sessões previstas para itens de um plano de tratamento.
  *
- * Não usa a aproximação `sessionsPerWeek × 4 × meses`: vai dia a dia para
- * refletir o número exato de consultas que serão (ou foram) materializadas.
+ * Estratégia (em ordem de precedência):
+ *   1. Pacote com sessões fixas (`packageId` + `totalSessions`): valor contratado.
+ *   2. Se `weekDays` está configurado (após escolha das datas na agenda /
+ *      materialização): contagem REAL via `countRecurringSessions` — espelha
+ *      `enumerateDates` em `treatment-plans.materialization.ts`.
+ *   3. Estimativa inicial pelo período de vigência do plano:
+ *      `sessionsPerWeek × semanas_no_periodo`. Usado tanto para avulsos
+ *      (sem pacote) quanto para pacotes mensais antes da materialização.
+ *
+ * Tudo em UTC para evitar artefatos de fuso (mesma estratégia do backend).
  */
 
 const WEEKDAY_INDEX: Record<string, number> = {
@@ -71,11 +76,30 @@ export function countRecurringSessions(
 }
 
 /**
- * Total estimado para um item de plano:
- * - mensal: contagem real via `countRecurringSessions`. Se `weekDays` estiver
- *   vazio, cai para `sessionsPerWeek × 4 × meses` como aproximação até que
- *   o profissional configure os dias.
- * - avulso/pacote: usa `totalSessions` do item (já fixo por contrato).
+ * Quantas semanas (calendário) cabem entre `startISO` e
+ * `startISO + durationMonths`. Resultado fracionário — quem chama decide
+ * arredondar (`Math.round`, `Math.ceil`, etc.).
+ *
+ * Fallback: se `startISO` for inválido, usa a aproximação `4.345 × meses`
+ * (≈ 52,14 semanas/ano), mais precisa que `× 4`.
+ */
+export function weeksInValidityPeriod(
+  startISO: string | null | undefined,
+  durationMonths: number | null | undefined,
+): number {
+  const months = Math.max(1, Number(durationMonths ?? 1));
+  if (!startISO) return 4.345 * months;
+  const [sy, sm, sd] = startISO.split("-").map(Number);
+  if (!sy || !sm || !sd) return 4.345 * months;
+  const start = Date.UTC(sy, sm - 1, sd);
+  const end = Date.UTC(sy, sm - 1 + months, sd);
+  return (end - start) / (1000 * 60 * 60 * 24 * 7);
+}
+
+/**
+ * Total previsto de sessões para um item de plano. Veja o cabeçalho do arquivo
+ * para a estratégia completa (pacote fixo → contagem real por weekDays →
+ * estimativa por período de vigência).
  */
 export function plannedSessionsForItem(item: {
   packageType?: string | null;
@@ -85,13 +109,26 @@ export function plannedSessionsForItem(item: {
   weekDays?: string | string[] | null;
 }, planStartDate: string | null | undefined, planDurationMonths: number | null | undefined): number {
   const isMensal = item.packageType === "mensal";
-  if (!isMensal) {
-    if (item.totalSessions != null) return item.totalSessions;
-    return item.packageId ? 0 : 1; // avulso = 1
-  }
+  const isFixedPackage = !isMensal && !!item.packageId && item.totalSessions != null;
+
+  // 1. Pacote com sessões fixas (contratado): valor fixo.
+  if (isFixedPackage) return Number(item.totalSessions);
+
+  // 2. Se já há weekDays (escolha de agenda / materialização): contagem real.
   const real = countRecurringSessions(planStartDate, planDurationMonths, item.weekDays);
   if (real > 0) return real;
-  // Fallback quando ainda não há weekDays configurados.
-  const months = Math.max(1, Number(planDurationMonths ?? 12));
-  return Math.max(0, Number(item.sessionsPerWeek ?? 0)) * 4 * months;
+
+  // 3. Estimativa inicial pelo período de vigência × frequência semanal.
+  const sessionsPerWeek = Math.max(0, Number(item.sessionsPerWeek ?? 0));
+  if (sessionsPerWeek > 0) {
+    const weeks = weeksInValidityPeriod(planStartDate, planDurationMonths);
+    return Math.round(sessionsPerWeek * weeks);
+  }
+
+  // 4. Fallbacks finais (sem dados suficientes para projetar).
+  if (!isMensal) {
+    if (item.totalSessions != null) return Number(item.totalSessions);
+    return item.packageId ? 0 : 1; // avulso solto = 1 sessão
+  }
+  return 0;
 }
