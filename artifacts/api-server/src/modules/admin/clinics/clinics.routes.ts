@@ -159,6 +159,11 @@ const updateCurrentClinic = async (req: AuthRequest, res: import("express").Resp
           normalizedLatePolicy !== null && {
             lateCancellationPolicy: normalizedLatePolicy,
           }),
+        // Sprint 15 (F3) — feature flag do novo wizard de aceite. notNull no
+        // schema, então só aceita boolean explícito (ignora null/undefined).
+        ...(typeof useV2AcceptanceFlow === "boolean" && {
+          useV2AcceptanceFlow,
+        }),
       })
       .where(eq(clinicsTable.id, clinicId))
       .returning();

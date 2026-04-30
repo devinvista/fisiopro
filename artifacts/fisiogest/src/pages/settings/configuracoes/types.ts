@@ -23,6 +23,13 @@ export interface Clinic {
   cancellationWindowHours?: number | null;
   /** Sprint 5 — política aplicada quando o cancelamento é dentro da janela. */
   lateCancellationPolicy?: "creditoNormal" | "semCredito" | "taxa" | null;
+  /**
+   * Sprint 15 (F3) — feature flag do novo wizard de aceite (v2).
+   *  - `false` (default): wizard legado (itens → aceite → cobrança).
+   *  - `true`: wizard v2 (itens → cobrança → agenda → contrato + aceite atômico).
+   * Lido pelo `useV2AcceptanceFlow()` para alternar a UI do `TreatmentPlanTab`.
+   */
+  useV2AcceptanceFlow?: boolean;
 }
 
 /** Sprint 2 — T5: configurações financeiras da clínica. */
