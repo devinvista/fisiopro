@@ -306,14 +306,19 @@ Catálogo padronizado: para cada cenário, **Quando** dispara, **Lançamento** D
 ### 6.9 Mensalidade paga antes das sessões
 
 - **Quando:** pagamento antecipado de plano materializado (`faturaPlano`).
-- **Lançamento:** D 1.1.1 Caixa / C 2.1.1 Adiantamentos.
-- **Notas:** receita reconhecida proporcionalmente a cada sessão consumida no mês.
+- **Lançamento (P3 — modo padrão desde Sprint Financeiro 12):** o `deferred_receivable` (D 1.1.2 / C 2.1.1) já existe desde o aceite, então o pagamento é **settlement puro** → D 1.1.1 Caixa / C 1.1.2 Contas a Receber, alocando contra o entry antecipado via `allocateReceivable`. Não toca em 2.1.1 (já reconhecido como passivo no aceite).
+- **Lançamento (legado — planos sem `deferred_receivable`):** D 1.1.1 Caixa / C 2.1.1 Adiantamentos (`postCashAdvance`).
+- **Notas:** receita reconhecida proporcionalmente a cada sessão consumida no mês via `recognizeMonthlyInvoiceRevenuePartial` (P2). Em P3, cada fragmenta usa SEMPRE `postWalletUsage` (D 2.1.1 / C 4.1.2), independentemente do status da fatura.
 
-### 6.10 Mensalidade gerada e não paga
+### 6.10 Mensalidade gerada e não paga (P3 — Aceite contábil antecipado)
 
-- **Quando:** geração mensal lazy via `monthlyPlanBilling` cron sem pagamento associado.
-- **Lançamento (na geração):** D 1.1.2 Contas a Receber / C 2.1.1 Adiantamentos.
-- **Lançamento (no pagamento):** D 1.1.1 Caixa / C 1.1.2 Contas a Receber.
+- **Quando:** aceite formal do plano com `kind='recorrenteMensal'` — Sprint Financeiro 12.
+- **Lançamento (no aceite, para CADA mês da vigência):** D 1.1.2 Contas a Receber / C 2.1.1 Adiantamentos via `postDeferredReceivable` (`eventType='deferred_receivable'`). Idempotência por `(sourceType='financial_record', sourceId=fatura.id, eventType)`.
+- **Critério de aceite:** plano 12×R$ 800 deixa imediatamente R$ 9.600 em 1.1.2 e R$ 9.600 em 2.1.1.
+- **Lançamento (no consumo, P2):** cada sessão fragmenta posta D 2.1.1 / C 4.1.2 — o passivo desce e a receita sobe.
+- **Lançamento (no pagamento, P3):** D 1.1.1 / C 1.1.2 (settlement puro contra o entry antecipado).
+- **Cancelamento do plano** (`POST /api/treatment-plans/:planId/cancel`): para cada fatura mensal **NÃO consumida** (`recognitionCreditsConsumed=0` AND status IN `pendente`/`vencido`), posta `postReversal` no `deferred_receivable` correspondente e marca a fatura como `cancelado`. Faturas pagas/parcialmentePago e faturas com receita já reconhecida ficam fora (lista retornada como `paidInvoiceIds` para ressarcimento manual). Validação: `reason` obrigatório (mín. 3 chars). Persiste `cancellation_reason`, `cancelled_at`, `cancelled_by` em `treatment_plans` (migration `0016`).
+- **Job mensal `monthlyPlanBilling`:** continua existindo como rede de segurança para planos legados (sem `deferred_receivable`). Em planos P3, todas as faturas já existem desde o aceite — o job só renova vencimentos, não cria novas linhas.
 
 ### 6.11 Fatura consolidada
 
@@ -399,17 +404,27 @@ Persistido em `financial_records.priceSource` (`tabela`/`override_clinica`/`plan
 
 ### 7.4 Reconhecimento de receita do plano
 
-`recognizeMonthlyInvoiceRevenue(invoiceId)` — chamada na **1ª confirmação** de sessão do mês:
+**Modelo atual (P2 — Sprint Financeiro 10):** `recognizeMonthlyInvoiceRevenuePartial(invoiceId, appointmentId, appointmentDate)` — chamada em **CADA confirmação** de sessão do mês, posta receita **fracionada** (`amount / total_créditos`), com idempotência por `(fatura, sessão)`.
 
 ```
-1. pg_advisory_xact_lock(invoiceId)              ← fix B10 (race entre confirmações)
-2. SELECT recognizedEntryId FROM faturaPlano WHERE id = invoiceId
-3. Se recognizedEntryId IS NOT NULL → retorna (idempotente)
-4. Posta receita integral da fatura (D 1.1.2 ou 2.1.1 / C 4.1.x)
-5. UPDATE faturaPlano SET recognizedEntryId = newEntry.id
+ 1. pg_advisory_xact_lock(invoiceId)                      ← B10 (race entre confirmações)
+ 2. SELECT fatura
+ 3. Se status='cancelado' OU transactionType != 'faturaPlano' → bail
+ 4. Modelo legado (recognizedEntryId set + recognition_credits_total NULL) → bail
+ 5. Bootstrap do pool: COUNT de appointments do mês se total IS NULL (mín. 1)
+ 6. SELECT entry existente para esta sessão → se já posta, bail (idempotente)
+ 7. Calcula share = amount / total (último crédito absorve resíduo de centavos)
+ 8. SELECT deferred_receivable (P3) para detectar modo
+ 9. Se P3 (deferred existe) OU status='pago' (legado pago) → postWalletUsage (D 2.1.1 / C 4.1.x)
+10. Senão (legado pendente) → postReceivableRevenue (D 1.1.2 / C 4.1.x)
+11. UPDATE recognized_amount, recognition_credits_consumed (+1)
 ```
 
-**Rollback (fix B12):** ao desfazer status confirmado da **última** sessão do mês, `applyBillingRules` posta `postReversal(recognizedEntryId)` e zera a sentinel.
+**Rollback parcial (B12):** ao desfazer **uma** sessão confirmada, busca a fragmenta específica via `(financialRecordId, appointmentId)`, posta `postReversal` e decrementa `recognition_credits_consumed`. Estorno integral da fatura → `reverseFaturaPlanoFragments` itera todas as fragmentas vivas.
+
+**Job EOM `endOfMonthRevenueClosure` (`30 7 * * *` UTC = `04:30 BRT`):** no último dia do mês BRT, para cada `faturaPlano` viva com saldo residual, posta entry "Apropriação de resíduo do mês" pela diferença e marca `recognition_credits_consumed = total`. Garante que residuais por sessões canceladas / mortes do mês sejam apropriados.
+
+**Modo P3 (Sprint Financeiro 12):** quando o plano foi aceito sob P3, o `deferred_receivable` (D 1.1.2 / C 2.1.1) já foi postado por fatura no aceite. Cada fragmenta passa a SEMPRE consumir do adiantamento (`postWalletUsage`), mesmo com fatura `pendente`. Em planos legados (sem deferred), mantém `pago=walletUsage / pendente=receivableRevenue`.
 
 ### 7.5 Idempotência do billing (`runBilling`)
 
@@ -533,6 +548,7 @@ Compara em tempo real três pares de saldo + lista órfãos:
 | **Receita** na janela | `revenueSummarySql` | Saldo credor das contas `4.x` |
 | **Recebíveis pendentes** | `status='pendente' AND type='receita' AND transactionType ∈ RECEIVABLE_TYPES` | Saldo devedor de `1.1.2` |
 | **Caixa recebido** | settlements com `paymentDate` na janela | Saldo devedor de `1.1.1` |
+| **Recebíveis mensais antecipados (P3)** | `faturaPlano` em aberto (`pendente`/`vencido`/`parcialmentePago`) com `deferred_receivable` POSTADO e não estornado | Soma dos débitos em `1.1.2` dos `deferred_receivable` POSTADOS (JOIN `journal_lines`/`accounts`) |
 | **Órfãos** (até 50) | `financial_records` ativos sem `recognizedEntryId`/`accountingEntryId` | — |
 
 **Resposta exemplo:**
@@ -541,16 +557,33 @@ Compara em tempo real três pares de saldo + lista órfãos:
 {
   "ok": true,
   "tolerance": 0.01,
-  "diffs": {
-    "revenue":      { "operational": 12450.00, "accounting": 12450.00, "diff": 0 },
-    "receivables":  { "operational":  3200.00, "accounting":  3200.00, "diff": 0 },
-    "cashReceived": { "operational":  9250.00, "accounting":  9250.00, "diff": 0 }
+  "operational": {
+    "revenueInWindow": 12450.00,
+    "pendingReceivables": 3200.00,
+    "cashInWindow": 9250.00,
+    "deferredReceivablesOutstanding": 9600.00,
+    "deferredReceivablesCount": 12
   },
-  "orphans": []
+  "accounting": {
+    "revenueAllTime": 84320.00,
+    "receivablesBalance": 3200.00,
+    "cashBalance": 9250.00,
+    "deferredReceivablesOutstanding": 9600.00
+  },
+  "diffs": {
+    "pendingReceivables": 0,
+    "deferredReceivables": 0
+  },
+  "orphans": { "count": 0, "sample": [] }
 }
 ```
 
 `ok = false` se algum `diff > R$ 0,01` ou houver órfãos. Pronto para integração com job cron noturno + dashboard "Conciliação" no superadmin (ver §17).
+
+**Diff `deferredReceivables` (Sprint Financeiro 12):** detecta divergências entre faturas mensais em aberto que **deveriam** ter recebível antecipado vs. saldo contábil 1.1.2 efetivamente postado pelos `deferred_receivable`. Útil para detectar:
+- Faturas P3 sem entry (bug de aceite)
+- Entries postados sem fatura correspondente (bug de cancelamento parcial)
+- Estornos não-refletidos do lado operacional (race em cancelamento)
 
 ---
 

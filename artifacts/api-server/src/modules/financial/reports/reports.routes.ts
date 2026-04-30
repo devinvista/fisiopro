@@ -1,6 +1,13 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { financialRecordsTable, appointmentsTable, proceduresTable } from "@workspace/db";
+import {
+  financialRecordsTable,
+  appointmentsTable,
+  proceduresTable,
+  accountingJournalEntriesTable,
+  accountingJournalLinesTable,
+  accountingAccountsTable,
+} from "@workspace/db";
 import { and, eq, sql, gte, lte, isNull, inArray } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
@@ -311,9 +318,65 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
       ].filter(Boolean) as any[]))
       .limit(50);
 
-    // ─── 6. Diffs ─────────────────────────────────────────────────────────
+    // ─── 6. P3: Recebíveis mensais antecipados (deferred_receivable) ───────
+    // Esperados (operacional) = soma das `faturaPlano` ainda em aberto
+    // (pendente/vencido/parcialmentePago) que possuem entry contábil
+    // `deferred_receivable` postada e NÃO estornada.
+    const [opDeferredOutstanding] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
+        count: sql<number>`COUNT(*)::int`,
+      })
+      .from(financialRecordsTable)
+      .innerJoin(
+        accountingJournalEntriesTable,
+        and(
+          eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+          eq(accountingJournalEntriesTable.sourceId, financialRecordsTable.id),
+          eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+          eq(accountingJournalEntriesTable.status, "posted"),
+          isNull(accountingJournalEntriesTable.reversalOfEntryId),
+        ),
+      )
+      .where(and(...[
+        clinicFilter,
+        eq(financialRecordsTable.transactionType, "faturaPlano"),
+        sql`${financialRecordsTable.status} IN ('pendente','vencido','parcialmentePago')`,
+      ].filter(Boolean) as any[]));
+
+    // Realizados (contábil) = saldo líquido em 1.1.2 (Recebíveis) restrito
+    // aos lançamentos `deferred_receivable` ainda postados (débitos − créditos
+    // já aplicados via settlements/reversals que afetam a mesma 1.1.2).
+    // Atalho prático: soma os DÉBITOS em 1.1.2 dos `deferred_receivable`
+    // POSTADOS (não estornados); essa é a "carteira" antecipada viva.
+    const [accDeferredOutstanding] = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${accountingJournalLinesTable.debitAmount}::numeric), 0)`,
+      })
+      .from(accountingJournalLinesTable)
+      .innerJoin(
+        accountingJournalEntriesTable,
+        eq(accountingJournalEntriesTable.id, accountingJournalLinesTable.entryId),
+      )
+      .innerJoin(
+        accountingAccountsTable,
+        eq(accountingAccountsTable.id, accountingJournalLinesTable.accountId),
+      )
+      .where(and(...[
+        clinicId == null ? null : eq(accountingJournalEntriesTable.clinicId, clinicId),
+        eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+        eq(accountingJournalEntriesTable.status, "posted"),
+        eq(accountingAccountsTable.code, "1.1.2"),
+      ].filter(Boolean) as any[]));
+
+    // ─── 7. Diffs ─────────────────────────────────────────────────────────
     const diffPendingReceivables = Number(opPendingReceivables.total) - accReceivables;
-    const ok = orphanRecords.length === 0 && Math.abs(diffPendingReceivables) < tolerance;
+    const diffDeferredReceivables =
+      Number(opDeferredOutstanding.total) - Number(accDeferredOutstanding.total);
+    const ok =
+      orphanRecords.length === 0 &&
+      Math.abs(diffPendingReceivables) < tolerance &&
+      Math.abs(diffDeferredReceivables) < tolerance;
 
     res.json({
       ok,
@@ -323,14 +386,20 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         revenueInWindow: Number(opRevenue.total),
         pendingReceivables: Number(opPendingReceivables.total),
         cashInWindow: Number(opCashIn.total),
+        deferredReceivablesOutstanding: Number(opDeferredOutstanding.total),
+        deferredReceivablesCount: Number(opDeferredOutstanding.count),
       },
       accounting: {
         revenueAllTime: accRevenueAllTime,
         receivablesBalance: accReceivables,
         cashBalance: accCash,
+        deferredReceivablesOutstanding: Number(accDeferredOutstanding.total),
       },
       diffs: {
         pendingReceivables: Number(diffPendingReceivables.toFixed(2)),
+        // P3: esperado (faturas em aberto com deferred_receivable) vs
+        // realizado (saldo contábil 1.1.2 dos deferred_receivable postados).
+        deferredReceivables: Number(diffDeferredReceivables.toFixed(2)),
       },
       orphans: {
         count: orphanRecords.length,

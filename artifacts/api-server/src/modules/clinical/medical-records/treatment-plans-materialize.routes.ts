@@ -33,4 +33,30 @@ router.delete(
   }),
 );
 
+// Sprint Financeiro 12 (P3) — Cancela um plano vigente, estornando os
+// `deferred_receivable` das faturas mensais futuras ainda não consumidas.
+// Faturas já pagas/parcialmente pagas ficam de fora (ressarcimento manual).
+router.post(
+  "/cancel",
+  requirePermission("medical.write"),
+  asyncHandler(async (req: Request<{ planId: string }>, res: Response) => {
+    const planId = parseInt(req.params.planId);
+    const { reason } = (req.body ?? {}) as { reason?: string };
+    if (!reason || typeof reason !== "string" || reason.trim().length < 3) {
+      res
+        .status(400)
+        .json({ error: "Motivo do cancelamento é obrigatório (mínimo 3 caracteres)." });
+      return;
+    }
+    const userId = (req as any).user?.id ?? null;
+    const { cancelTreatmentPlan } = await import("./treatment-plans.cancel.js");
+    const result = await cancelTreatmentPlan({
+      planId,
+      reason: reason.trim(),
+      cancelledBy: userId,
+    });
+    res.json(result);
+  }),
+);
+
 export default router;

@@ -235,10 +235,42 @@ export async function postWalletUsage(input: Omit<JournalEntryInput, "lines" | "
 }
 
 /**
+ * Sprint Financeiro 12 (P3) — Aceite contábil antecipado de fatura mensal.
+ *
+ * Postado no momento do aceite do plano (uma vez por mês de vigência).
+ * Lança simultaneamente o **recebível** (D 1.1.2) e o **adiantamento**
+ * (C 2.1.1, "obrigação de prestar serviço futuro"). A receita NÃO é
+ * reconhecida aqui — só nasce com o consumo da sessão (P2:
+ * `recognizeMonthlyInvoiceRevenuePartial` → `postWalletUsage`).
+ *
+ * Quando o paciente paga, o pagamento vira um SETTLEMENT puro
+ * (`postReceivableSettlement`: D 1.1.1 / C 1.1.2), liquidando o
+ * recebível, mas SEM tocar no adiantamento — ele só desce sessão a sessão.
+ *
+ * Idempotência: o callsite (`acceptPlanFinancials`) verifica se já existe
+ * uma entry com `eventType='deferred_receivable'` e `sourceId=fatura.id`
+ * antes de postar.
+ */
+export async function postDeferredReceivable(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
+  return createJournalEntry({
+    ...input,
+    eventType: input.eventType ?? "deferred_receivable",
+    lines: [
+      { accountCode: ACCOUNT_CODES.receivables, debit: input.amount },
+      { accountCode: ACCOUNT_CODES.customerAdvances, credit: input.amount },
+    ],
+  }, tx);
+}
+
+/**
  * Pagamento antecipado de fatura mensal (plano de tratamento) ANTES da
  * 1ª sessão do mês ser confirmada. Vai para Adiantamentos de Cliente
  * (passivo). A receita só é reconhecida no consumo (D: Adiantamentos /
  * C: Receita) via `postWalletUsage` na 1ª confirmação.
+ *
+ * NOTA (P3): apenas usado em **modelo legado** (planos sem
+ * `deferred_receivable` postado no aceite). Em planos P3 o pagamento
+ * é settlement puro (`postReceivableSettlement`).
  */
 export async function postCashAdvance(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
   return createJournalEntry({

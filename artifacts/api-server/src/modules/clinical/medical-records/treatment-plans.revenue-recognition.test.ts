@@ -124,7 +124,9 @@ describe("recognizeMonthlyInvoiceRevenuePartial", () => {
     dbMock.enqueueExecute([{ total: 8 }]);
     // 3. SELECT entry existente → vazio (idempotência: sem fragmenta prévia)
     dbMock.enqueue([]);
-    // 4. UPDATE financial_records
+    // 4. SELECT deferred_receivable (P3) → vazio = modo legado
+    dbMock.enqueue([]);
+    // 5. UPDATE financial_records
     dbMock.enqueue(undefined);
 
     postReceivableRevenueMock.mockResolvedValueOnce({ id: 9001 });
@@ -160,6 +162,7 @@ describe("recognizeMonthlyInvoiceRevenuePartial", () => {
       accountingEntryId: 9002,
     }]);
     dbMock.enqueue([]); // idempotência
+    dbMock.enqueue([]); // SELECT deferred_receivable (P3) → vazio
     dbMock.enqueue(undefined); // update
 
     postReceivableRevenueMock.mockResolvedValueOnce({ id: 9003 });
@@ -248,6 +251,7 @@ describe("recognizeMonthlyInvoiceRevenuePartial", () => {
     dbMock.enqueue([{ ...baseInvoice, status: "pago" }]);
     dbMock.enqueueExecute([{ total: 4 }]);
     dbMock.enqueue([]);
+    dbMock.enqueue([]); // SELECT deferred_receivable (P3) → vazio (modo legado pago)
     dbMock.enqueue(undefined);
 
     postWalletUsageMock.mockResolvedValueOnce({ id: 8001 });
@@ -268,6 +272,7 @@ describe("recognizeMonthlyInvoiceRevenuePartial", () => {
     dbMock.enqueue([{ ...baseInvoice }]);
     dbMock.enqueueExecute([{ total: 0 }]); // race com INSERT da própria sessão
     dbMock.enqueue([]);
+    dbMock.enqueue([]); // SELECT deferred_receivable (P3) → vazio
     dbMock.enqueue(undefined);
 
     postReceivableRevenueMock.mockResolvedValueOnce({ id: 9999 });
@@ -281,6 +286,33 @@ describe("recognizeMonthlyInvoiceRevenuePartial", () => {
     expect(result.recognized).toBe(true);
     expect(result.recognitionCreditsTotal).toBe(1);
     expect(result.shareAmount).toBe(800);
+  });
+
+  it("modo P3 (deferred_receivable presente) → usa postWalletUsage MESMO com fatura pendente", async () => {
+    // 1. SELECT fatura — pendente, modelo P2/P3
+    dbMock.enqueue([{ ...baseInvoice }]);
+    // 2. COUNT appointments → pool=8
+    dbMock.enqueueExecute([{ total: 8 }]);
+    // 3. SELECT entry existente → vazio
+    dbMock.enqueue([]);
+    // 4. SELECT deferred_receivable (P3) → ENCONTROU entry → modo P3
+    dbMock.enqueue([{ id: 5555 }]);
+    // 5. UPDATE financial_records
+    dbMock.enqueue(undefined);
+
+    postWalletUsageMock.mockResolvedValueOnce({ id: 8002 });
+
+    const result = await recognizeMonthlyInvoiceRevenuePartial({
+      monthlyInvoiceId: 100,
+      appointmentId: 501,
+      appointmentDate: "2026-04-05",
+    });
+
+    expect(result.recognized).toBe(true);
+    expect(result.shareAmount).toBe(100); // 800/8
+    // CRÍTICO: em P3, mesmo com fatura pendente, consome adiantamento (2.1.1).
+    expect(postWalletUsageMock).toHaveBeenCalledTimes(1);
+    expect(postReceivableRevenueMock).not.toHaveBeenCalled();
   });
 
   it("expansão de pool: sessão extra além do snapshot inicial → expande total e posta share residual", async () => {

@@ -274,14 +274,34 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       revenueAccountCode,
     };
 
+    // ── Sprint Financeiro 12 (P3) — detecção do modo P3 ───────────────────
+    // Em P3, o aceite já postou D 1.1.2 / C 2.1.1 (deferred_receivable) para
+    // CADA fatura mensal — receita e adiantamento existem ANTES da sessão.
+    // Logo cada fragmenta deve SEMPRE consumir do adiantamento (postWalletUsage),
+    // independente do status da fatura (paga ou pendente). Em modo legado,
+    // mantemos o ramo antigo: pago=walletUsage, pendente=receivableRevenue.
+    const [hasDeferred] = await tx
+      .select({ id: accountingJournalEntriesTable.id })
+      .from(accountingJournalEntriesTable)
+      .where(
+        and(
+          eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+          eq(accountingJournalEntriesTable.sourceId, invoice.id),
+          eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+          eq(accountingJournalEntriesTable.status, "posted"),
+        ),
+      )
+      .limit(1);
+    const isP3Mode = !!hasDeferred;
+
     let entryId: number;
-    if (invoice.status === "pago") {
-      // Fatura já paga via postCashAdvance (Adiantamentos). Cada fragmenta
-      // consome do passivo. D 2.1.1 / C 4.1.2.
+    if (isP3Mode || invoice.status === "pago") {
+      // P3 OU pago via cash-advance legado — em ambos o passivo (2.1.1) já
+      // existe. Cada fragmenta consome do adiantamento. D 2.1.1 / C 4.1.2.
       const entry = await postWalletUsage(baseEntry, tx as any);
       entryId = entry.id;
     } else {
-      // Fatura pendente. Cada fragmenta gera recebível + receita.
+      // Legado pendente. Cada fragmenta gera recebível + receita.
       // D 1.1.2 / C 4.1.2.
       const entry = await postReceivableRevenue(baseEntry, tx as any);
       entryId = entry.id;

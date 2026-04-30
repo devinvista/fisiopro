@@ -181,6 +181,14 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // que vá ao paciente). Usado para combinados internos com a recepção,
   // particularidades de convênio, lembretes do profissional, etc.
   internalNotes: text("internal_notes"),
+  // ── Sprint Financeiro 12 (P3) — Auditoria de cancelamento ───────────────
+  // Motivo livre informado pela clínica ao cancelar o plano (LGPD: trilha
+  // probatória de operação comercial). Obrigatório quando status='cancelado'.
+  cancellationReason: text("cancellation_reason"),
+  // Timestamp do momento em que o plano foi efetivamente cancelado.
+  cancelledAt: timestamp("cancelled_at"),
+  // ID do usuário (clínica) que executou o cancelamento.
+  cancelledBy: integer("cancelled_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

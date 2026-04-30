@@ -34,6 +34,7 @@ import {
   proceduresTable,
   patientsTable,
   sessionCreditsTable,
+  accountingJournalEntriesTable,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -41,6 +42,10 @@ import {
   planMonthRefOf,
   resolveMonthlyDueDay,
 } from "./treatment-plans.billing-dates.js";
+import {
+  postDeferredReceivable,
+  resolveAccountCodeById,
+} from "../../shared/accounting/accounting.service.js";
 
 export interface AcceptPlanFinancialsResult {
   planId: number;
@@ -274,16 +279,16 @@ export async function acceptPlanFinancials(
         continue;
       }
 
-      // ─── Recorrente mensal: somente fatura da 1ª competência do plano ────
-      // Cobre tanto o caso "mensalidade de procedimento" (sem packageId,
-      // apenas `unitMonthlyPrice` no item) quanto o de "pacote mensalidade"
-      // (com packageId, valor fixo em `packages.monthly_price`). Para o
-      // segundo caso o item pode não ter `unitMonthlyPrice` próprio — então
-      // caímos no valor do pacote.
+      // ─── Recorrente mensal — Sprint Financeiro 12 (P3) ─────────────────────
+      // Antes do P3 só era criada a fatura do MÊS 0 (a "fatura de aceite") e
+      // os meses seguintes nasciam lazy via `materializeTreatmentPlan` ou via
+      // job mensal. Sob P3, criamos TODAS as faturas da vigência já no aceite
+      // E postamos contábil antecipadamente: D 1.1.2 / C 2.1.1 (recebível +
+      // adiantamento). A receita continua nascendo só na sessão consumida (P2).
       //
-      // O `dueDate` da 1ª parcela é a próxima ocorrência do `billingDay`
-      // em ou após o `startDate` (vigência) do plano — nunca antes (ver
-      // `planInstallmentDueDate`).
+      // O `dueDate` de cada parcela usa `planInstallmentDueDate(start, day, m)`,
+      // garantindo que a 1ª nunca seja antes do `startDate` do plano.
+      // Idempotência forte por (plano, item, planMonthRef).
       if (kind === "recorrenteMensal") {
         const effectiveMonthly =
           Number(item.unitMonthlyPrice ?? item.packageMonthlyPrice ?? 0);
@@ -300,43 +305,107 @@ export async function acceptPlanFinancials(
           packageBillingDay: item.packageBillingDay,
         });
         const planStart = plan.startDate ?? now.iso;
-        const itemMonthRef = planMonthRefOf(planStart, 0);
-        const dueDate = planInstallmentDueDate(planStart, billingDay, 0);
+        const durationMonths = plan.durationMonths ?? 12;
 
-        // Idempotência: 1 fatura por (plano, item, mês de competência).
-        const [exists] = await tx
-          .select({ id: financialRecordsTable.id })
-          .from(financialRecordsTable)
-          .where(
-            and(
-              eq(financialRecordsTable.treatmentPlanId, planId),
-              eq(financialRecordsTable.treatmentPlanProcedureId, item.id),
-              eq(financialRecordsTable.transactionType, "faturaPlano"),
-              eq(financialRecordsTable.planMonthRef, itemMonthRef),
-            ),
-          )
-          .limit(1);
+        // Sub-conta de receita pelo procedimento (4.1.2 default fracionado).
+        const revenueAccountCode = await resolveAccountCodeById(
+          (procedure as any).accountingAccountId ?? null,
+          "4.1.2",
+          plan.clinicId ?? null,
+          tx as any,
+        );
 
-        if (!exists) {
-          await tx.insert(financialRecordsTable).values({
-            type: "receita",
-            amount: monthlyAmount.toFixed(2),
-            description: `Aceite de plano #${planId} — ${procedure.name} — ${patientName} — ${itemMonthRef.slice(0, 7)}`,
-            category: procedure.category,
-            patientId: plan.patientId,
-            procedureId,
-            clinicId: plan.clinicId,
-            transactionType: "faturaPlano",
-            status: "pendente",
-            dueDate,
-            treatmentPlanId: planId,
-            treatmentPlanProcedureId: item.id,
-            planMonthRef: itemMonthRef,
-            priceSource: "plano_mensal_proporcional",
-            originalUnitPrice: procedure.price,
-          });
-          invoicesCreated++;
-          totalImmediateCharge += monthlyAmount;
+        for (let m = 0; m < durationMonths; m++) {
+          const itemMonthRef = planMonthRefOf(planStart, m);
+          const dueDate = planInstallmentDueDate(planStart, billingDay, m);
+
+          // Idempotência: 1 fatura por (plano, item, mês de competência).
+          const [exists] = await tx
+            .select({
+              id: financialRecordsTable.id,
+              amount: financialRecordsTable.amount,
+            })
+            .from(financialRecordsTable)
+            .where(
+              and(
+                eq(financialRecordsTable.treatmentPlanId, planId),
+                eq(financialRecordsTable.treatmentPlanProcedureId, item.id),
+                eq(financialRecordsTable.transactionType, "faturaPlano"),
+                eq(financialRecordsTable.planMonthRef, itemMonthRef),
+              ),
+            )
+            .limit(1);
+
+          let invoiceId: number;
+          if (exists) {
+            invoiceId = exists.id;
+          } else {
+            const isMonthZero = m === 0;
+            const description = isMonthZero
+              ? `Aceite de plano #${planId} — ${procedure.name} — ${patientName} — ${itemMonthRef.slice(0, 7)}`
+              : `Plano #${planId} — ${procedure.name} — ${patientName} — ${itemMonthRef.slice(0, 7)}`;
+            const [inserted] = await tx
+              .insert(financialRecordsTable)
+              .values({
+                type: "receita",
+                amount: monthlyAmount.toFixed(2),
+                description,
+                category: procedure.category,
+                patientId: plan.patientId,
+                procedureId,
+                clinicId: plan.clinicId,
+                transactionType: "faturaPlano",
+                status: "pendente",
+                dueDate,
+                treatmentPlanId: planId,
+                treatmentPlanProcedureId: item.id,
+                planMonthRef: itemMonthRef,
+                priceSource: "plano_mensal_proporcional",
+                originalUnitPrice: procedure.price,
+              })
+              .returning({ id: financialRecordsTable.id });
+            invoiceId = inserted.id;
+            invoicesCreated++;
+            // Apenas o mês 0 conta como "cobrança imediata" para o aceite —
+            // os demais são contas-a-receber futuras.
+            if (isMonthZero) totalImmediateCharge += monthlyAmount;
+          }
+
+          // ── P3: postagem contábil antecipada (idempotente por sourceId) ──
+          // Verifica se já existe um deferred_receivable para esta fatura.
+          // Importante: NÃO desconta entries reversed — se foi estornado por
+          // cancelamento, religar exigiria re-aceite, fora de escopo.
+          const [existingDeferred] = await tx
+            .select({ id: accountingJournalEntriesTable.id })
+            .from(accountingJournalEntriesTable)
+            .where(
+              and(
+                eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+                eq(accountingJournalEntriesTable.sourceId, invoiceId),
+                eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+              ),
+            )
+            .limit(1);
+
+          if (!existingDeferred) {
+            await postDeferredReceivable(
+              {
+                clinicId: plan.clinicId ?? null,
+                entryDate: now.iso,
+                amount: monthlyAmount,
+                description:
+                  `Aceite contábil antecipado — fatura #${invoiceId} — ` +
+                  `plano #${planId} — ${itemMonthRef.slice(0, 7)}`,
+                sourceType: "financial_record",
+                sourceId: invoiceId,
+                patientId: plan.patientId,
+                procedureId,
+                financialRecordId: invoiceId,
+                revenueAccountCode,
+              } as any,
+              tx as any,
+            );
+          }
         }
       }
     }

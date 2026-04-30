@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, sessionCreditsTable, patientsTable,
   patientWalletTable, patientWalletTransactionsTable,
+  accountingJournalEntriesTable,
 } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -172,34 +173,83 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         let receivableEntryId = pending.accountingEntryId ?? pending.recognizedEntryId;
 
         // ── faturaPlano paga ANTES da 1ª sessão do mês ───────────────────
-        // Não reconhece receita aqui — vai para Adiantamentos de Cliente
-        // (passivo). A receita só é reconhecida na 1ª confirmação de sessão
-        // do mês (em applyBillingRules → recognizeMonthlyInvoiceRevenue),
-        // momento em que o adiantamento é consumido (D: Adiantamentos /
-        // C: Receita).
+        // **Sprint Financeiro 12 (P3) — branching por modo:**
+        //
+        //   • **P3 (deferred_receivable já postado no aceite)**: o recebível
+        //     (1.1.2) e o adiantamento (2.1.1) já existem desde o aceite. O
+        //     pagamento aqui é apenas um SETTLEMENT puro: D 1.1.1 / C 1.1.2,
+        //     alocado contra o `deferred_receivable.id`. O 2.1.1 NÃO é tocado
+        //     aqui — só desce sessão a sessão (P2).
+        //
+        //   • **Legado (sem deferred_receivable)**: comportamento histórico —
+        //     `postCashAdvance` (D 1.1.1 / C 2.1.1) e a receita só nasce na
+        //     primeira sessão consumida.
         const isFaturaPlanoPrepaid =
           pending.transactionType === "faturaPlano" && !receivableEntryId;
 
         if (isFaturaPlanoPrepaid) {
-          const advanceEntry = await postCashAdvance({
-            clinicId: pending.clinicId ?? req.clinicId ?? null,
-            entryDate: today,
-            amount: allocationAmount,
-            description: `Pagamento antecipado de fatura mensal — ${pending.description}`,
-            sourceType: "financial_record",
-            sourceId: paymentRecord.id,
-            patientId,
-            appointmentId: pending.appointmentId,
-            procedureId: pending.procedureId,
-            subscriptionId: pending.subscriptionId,
-            financialRecordId: paymentRecord.id,
-          }, tx as any);
-          primaryEntryId ??= advanceEntry.id;
+          const [deferredEntry] = await tx
+            .select({ id: accountingJournalEntriesTable.id })
+            .from(accountingJournalEntriesTable)
+            .where(
+              and(
+                eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+                eq(accountingJournalEntriesTable.sourceId, pending.id),
+                eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+                eq(accountingJournalEntriesTable.status, "posted"),
+              ),
+            )
+            .limit(1);
+
+          let mainEntryId: number;
+          if (deferredEntry) {
+            // P3: settlement puro — D Caixa / C Recebíveis.
+            const settleEntry = await postReceivableSettlement({
+              clinicId: pending.clinicId ?? req.clinicId ?? null,
+              entryDate: today,
+              amount: allocationAmount,
+              description: `Pagamento de fatura mensal antecipada — ${pending.description}`,
+              sourceType: "financial_record",
+              sourceId: paymentRecord.id,
+              patientId,
+              appointmentId: pending.appointmentId,
+              procedureId: pending.procedureId,
+              subscriptionId: pending.subscriptionId,
+              financialRecordId: paymentRecord.id,
+            }, tx as any);
+            mainEntryId = settleEntry.id;
+            // Aloca contra o recebível antecipado para conciliação.
+            await allocateReceivable({
+              clinicId: pending.clinicId ?? req.clinicId ?? null,
+              paymentEntryId: settleEntry.id,
+              receivableEntryId: deferredEntry.id,
+              patientId,
+              amount: allocationAmount,
+              allocatedAt: today,
+            }, tx as any);
+          } else {
+            // Legado: D Caixa / C Adiantamentos (pendente de reconhecer).
+            const advanceEntry = await postCashAdvance({
+              clinicId: pending.clinicId ?? req.clinicId ?? null,
+              entryDate: today,
+              amount: allocationAmount,
+              description: `Pagamento antecipado de fatura mensal — ${pending.description}`,
+              sourceType: "financial_record",
+              sourceId: paymentRecord.id,
+              patientId,
+              appointmentId: pending.appointmentId,
+              procedureId: pending.procedureId,
+              subscriptionId: pending.subscriptionId,
+              financialRecordId: paymentRecord.id,
+            }, tx as any);
+            mainEntryId = advanceEntry.id;
+          }
+          primaryEntryId ??= mainEntryId;
 
           if (allocationAmount >= Number(pending.amount)) {
             await tx
               .update(financialRecordsTable)
-              .set({ status: "pago", paymentDate: today, paymentMethod: paymentMethod || null, settlementEntryId: advanceEntry.id })
+              .set({ status: "pago", paymentDate: today, paymentMethod: paymentMethod || null, settlementEntryId: mainEntryId })
               .where(eq(financialRecordsTable.id, pending.id));
             // Promove pool de créditos prepago → disponivel
             const { promotePrepaidCreditsForFinancialRecord } =
