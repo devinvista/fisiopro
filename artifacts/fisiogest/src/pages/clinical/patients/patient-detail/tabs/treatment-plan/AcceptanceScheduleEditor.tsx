@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 import {
@@ -427,6 +427,19 @@ function ItemRow({
   const allDaysHaveTime =
     weekDays.length > 0 && weekDays.every((k) => !!startTimes[k]);
   const isValid = !!scheduleId && allDaysHaveTime;
+  const missingDays = useMemo(
+    () => weekDays.filter((k) => !startTimes[k]),
+    [weekDays, startTimes],
+  );
+
+  // Refs para os cards de cada dia, para permitir scroll-into-view ao
+  // primeiro dia pendente quando a validação de salvar falha.
+  const dayCardRefs = useRef<Map<WeekDayKey, HTMLDivElement | null>>(new Map());
+  const setDayCardRef = (key: WeekDayKey) => (el: HTMLDivElement | null) => {
+    if (el) dayCardRefs.current.set(key, el);
+    else dayCardRefs.current.delete(key);
+  };
+  const [pulseDay, setPulseDay] = useState<WeekDayKey | null>(null);
   const slotsPerWeek = weekDays.length;
   const totalSessions = item.totalSessions ?? null;
 
@@ -559,8 +572,7 @@ function ItemRow({
       return;
     }
     if (!allDaysHaveTime) {
-      const faltantes = weekDays
-        .filter((k) => !startTimes[k])
+      const faltantes = missingDays
         .map((k) => WEEK_DAYS.find((w) => w.key === k)?.long)
         .join(", ");
       toast({
@@ -568,6 +580,15 @@ function ItemRow({
         description: `Falta o horário em: ${faltantes}.`,
         variant: "destructive",
       });
+      // Rola até o primeiro dia pendente e dispara um pulso visual para
+      // facilitar localizar o card que está faltando preencher.
+      const first = missingDays[0];
+      if (first) {
+        const el = dayCardRefs.current.get(first);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        setPulseDay(first);
+        window.setTimeout(() => setPulseDay(null), 1800);
+      }
       return;
     }
     mutation.mutate(buildSavePayload());
@@ -784,6 +805,27 @@ function ItemRow({
           {availabilityQueries.isFetching && (
             <Loader2 className="w-3 h-3 animate-spin text-slate-400 ml-1" />
           )}
+          {weekDays.length > 0 && (
+            <span
+              className={`ml-2 text-[10px] font-mono px-1.5 py-0.5 rounded border normal-case tracking-normal ${
+                allDaysHaveTime
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-amber-50 text-amber-700 border-amber-200"
+              }`}
+              data-testid="status-times-per-day"
+            >
+              {weekDays.length - missingDays.length}/{weekDays.length} dias preenchidos
+              {missingDays.length > 0 && (
+                <>
+                  {" "}· falta{missingDays.length === 1 ? "" : "m"}:{" "}
+                  {missingDays
+                    .map((k) => WEEK_DAYS.find((w) => w.key === k)?.short)
+                    .filter(Boolean)
+                    .join(", ")}
+                </>
+              )}
+            </span>
+          )}
         </Label>
 
         {!scheduleId || weekDays.length === 0 ? (
@@ -801,14 +843,27 @@ function ItemRow({
               const slots = slotsByDay[key] ?? [];
               const chosen = startTimes[key] ?? "";
               const noLonger = !!chosen && !slots.some((s) => s.time === chosen);
+              const isMissing = !chosen;
+              const isPulsing = pulseDay === key;
               return (
                 <div
                   key={key}
-                  className="rounded-lg border border-slate-200 bg-slate-50/40 p-2.5"
+                  ref={setDayCardRef(key)}
+                  data-testid={`day-card-${key}`}
+                  className={`rounded-lg border p-2.5 transition-colors ${
+                    isMissing
+                      ? "border-amber-300 bg-amber-50/40"
+                      : "border-slate-200 bg-slate-50/40"
+                  } ${isPulsing ? "ring-2 ring-amber-400 ring-offset-1 animate-pulse" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-semibold text-slate-700">
+                    <span className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
                       {dayMeta.long}
+                      {isMissing && (
+                        <span className="text-[10px] font-normal text-amber-700 bg-amber-100 border border-amber-200 px-1 py-px rounded">
+                          escolha um horário
+                        </span>
+                      )}
                     </span>
                     {chosen && !noLonger && (
                       <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">

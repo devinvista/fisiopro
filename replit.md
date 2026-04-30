@@ -17,6 +17,15 @@ The project is a **pnpm monorepo** hosted on Replit, divided into three artifact
 
 ## Recent Changes
 
+**30/04/2026 — UX: facilitar localizar dia pendente no editor "Horário por dia" (AcceptanceScheduleEditor)**
+- **Sintoma:** ao salvar uma mensalidade 2x/sem (Seg + Qua) com horário definido apenas para Segunda, o toast "Defina um horário para cada dia. Falta o horário em: Quarta." aparecia, mas o card do segundo dia ficava abaixo do dobra (cada card pode ter dezenas de slots ocupando bastante altura). O usuário não percebia que existia um card de Quarta logo abaixo do de Segunda.
+- **Correção (`AcceptanceScheduleEditor.tsx`):**
+  - **Resumo** "X/Y dias preenchidos · falta(m): Qua" no header da Etapa 3 (badge âmbar quando incompleto, esmeralda quando ok).
+  - **Cards dos dias pendentes** com borda âmbar, fundo `amber-50/40` e mini-badge "escolha um horário" ao lado do nome do dia.
+  - **Scroll automático** ao primeiro dia pendente quando `handleSave` falha por horário faltando, com **pulse visual** (`ring-2 ring-amber-400 animate-pulse`) por ~1.8s no card alvo.
+  - Refs gerenciadas em `useRef<Map<WeekDayKey, HTMLDivElement|null>>` com setter por chave; `pulseDay` em state limpa-se via `setTimeout`.
+- **Estado validado:** `pnpm --filter fisiogest typecheck` verde, `pnpm test` 351/351 verde.
+
 **30/04/2026 — Bugfix: desconto na Previsão Financeira do Plano (procedimentos avulsos)**
 - **Bug 1:** o campo "Desconto" em procedimentos avulsos era armazenado como abatimento fixo no total — entrar R$ 80 num procedimento de R$ 180 com 17 sessões resultava em `17 × 180 − 80 = R$ 2.980,00`, em vez do esperado `17 × (180 − 80) = R$ 1.700,00`.
 - **Bug 2 (subjacente, descoberto em validação):** quando o usuário deixava "Total de sessões" vazio (plano "aberto" — estima-se pelas semanas de vigência × sessões/semana), o `handleAddSubmit` usava `Number(itemSessions) || 1` → multiplicava o desconto-por-sessão por **1**, gravando R$ 80 no banco. No display posterior, o sistema dividia por 104 sessões estimadas → "(-R$ 0,77/sessão)" e total `104 × (180 − 0,77) = R$ 18.640,00`.
