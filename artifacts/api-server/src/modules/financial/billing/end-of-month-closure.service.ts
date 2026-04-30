@@ -1,0 +1,230 @@
+/**
+ * Sprint Financeiro 10 (P2) — Apropriação de resíduo no fim do mês.
+ *
+ * Para cada `faturaPlano` no MODELO FRACIONADO em que sobraram créditos não
+ * consumidos no fim do mês (paciente não compareceu a todas as sessões),
+ * apropria o saldo restante numa única entry de fechamento.
+ *
+ * Justificativa contratual: cláusula `REAGENDAMENTO_INTRAMENSAL` (P5) —
+ * sessões não realizadas dentro do mês não geram crédito futuro nem reembolso;
+ * a receita do mês é integral conforme contratada.
+ *
+ * **Idempotência:**
+ *   • Por fatura: TX dedicada + `pg_advisory_xact_lock(invoiceId)`.
+ *   • Por estado: skip se `recognitionCreditsConsumed >= recognitionCreditsTotal`
+ *     ou `residual <= 0,005` (<= meio centavo).
+ *
+ * Após o fechamento, a fatura tem `recognizedAmount = amount` e
+ * `recognitionCreditsConsumed = recognitionCreditsTotal` — qualquer chamada
+ * subsequente do reconhecimento fracionado será no-op.
+ */
+import { db } from "@workspace/db";
+import { financialRecordsTable, proceduresTable } from "@workspace/db";
+import { and, eq, isNotNull, lt, notInArray, sql } from "drizzle-orm";
+import { lastDayOfMonth, monthDateRangeBRT, nowBRT } from "../../../utils/dateUtils.js";
+import {
+  postReceivableRevenue,
+  postWalletUsage,
+  resolveAccountCodeById,
+} from "../../shared/accounting/accounting.service.js";
+
+export interface EndOfMonthClosureResult {
+  closed: number;
+  skipped: number;
+  errors: number;
+  residualTotal: string;
+  details: Array<{
+    invoiceId: number;
+    status: "closed" | "skipped" | "error";
+    residual?: number;
+    reason?: string;
+  }>;
+}
+
+export interface RunEndOfMonthClosureInput {
+  /** Sobrescreve o "hoje" para testes (ISO YYYY-MM-DD em BRT). */
+  today?: string;
+  /** "scheduler" | "manual" | "test" — só vai pro log. */
+  triggeredBy: string;
+  /** Quando true, executa mesmo que `today` não seja o último dia do mês. */
+  forceRun?: boolean;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export async function runEndOfMonthRevenueClosure(
+  input: RunEndOfMonthClosureInput,
+): Promise<EndOfMonthClosureResult> {
+  const result: EndOfMonthClosureResult = {
+    closed: 0,
+    skipped: 0,
+    errors: 0,
+    residualTotal: "0.00",
+    details: [],
+  };
+
+  // Determina o "hoje" e checa se é o último dia do mês BRT.
+  let year: number, month: number, day: number;
+  if (input.today) {
+    const [y, m, d] = input.today.split("-").map(Number);
+    year = y; month = m; day = d;
+  } else {
+    const now = nowBRT();
+    year = now.year; month = now.month; day = now.day;
+  }
+  const lastDay = lastDayOfMonth(year, month);
+  if (!input.forceRun && day !== lastDay) {
+    return result; // Não é o último dia — no-op silencioso.
+  }
+
+  const { startDate, endDate } = monthDateRangeBRT(year, month);
+
+  // Busca faturas no MODELO FRACIONADO com créditos restantes no mês corrente.
+  const candidates = await db
+    .select({
+      id: financialRecordsTable.id,
+      clinicId: financialRecordsTable.clinicId,
+      patientId: financialRecordsTable.patientId,
+      procedureId: financialRecordsTable.procedureId,
+      description: financialRecordsTable.description,
+      amount: financialRecordsTable.amount,
+      recognizedAmount: financialRecordsTable.recognizedAmount,
+      recognitionCreditsTotal: financialRecordsTable.recognitionCreditsTotal,
+      recognitionCreditsConsumed: financialRecordsTable.recognitionCreditsConsumed,
+      status: financialRecordsTable.status,
+      planMonthRef: financialRecordsTable.planMonthRef,
+    })
+    .from(financialRecordsTable)
+    .where(and(
+      eq(financialRecordsTable.transactionType, "faturaPlano"),
+      notInArray(financialRecordsTable.status, ["cancelado", "estornado"]),
+      isNotNull(financialRecordsTable.recognitionCreditsTotal),
+      // consumed < total
+      sql`${financialRecordsTable.recognitionCreditsConsumed} < ${financialRecordsTable.recognitionCreditsTotal}`,
+      sql`${financialRecordsTable.planMonthRef} >= ${startDate}::date`,
+      sql`${financialRecordsTable.planMonthRef} <= ${endDate}::date`,
+    ));
+
+  let totalResidual = 0;
+
+  for (const inv of candidates) {
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${inv.id}::bigint)`);
+
+        // Re-lê dentro do lock (estado fresco).
+        const [invoice] = await tx
+          .select()
+          .from(financialRecordsTable)
+          .where(eq(financialRecordsTable.id, inv.id))
+          .limit(1);
+        if (!invoice) {
+          result.skipped++;
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "Fatura sumiu" });
+          return;
+        }
+        if (invoice.status === "cancelado" || invoice.status === "estornado") {
+          result.skipped++;
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: `status ${invoice.status}` });
+          return;
+        }
+        if (invoice.recognitionCreditsTotal == null) {
+          result.skipped++;
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "modelo legado" });
+          return;
+        }
+        const consumed = invoice.recognitionCreditsConsumed ?? 0;
+        if (consumed >= invoice.recognitionCreditsTotal) {
+          result.skipped++;
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "já consumido" });
+          return;
+        }
+
+        const amount = Number(invoice.amount);
+        const recognized = Number(invoice.recognizedAmount ?? 0);
+        const residual = round2(amount - recognized);
+        if (residual <= 0.005) {
+          // Saldo desprezível — apenas marca como consumido para evitar loop.
+          await tx
+            .update(financialRecordsTable)
+            .set({ recognitionCreditsConsumed: invoice.recognitionCreditsTotal })
+            .where(eq(financialRecordsTable.id, invoice.id));
+          result.skipped++;
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "residual ~0" });
+          return;
+        }
+
+        // Sub-conta de receita pelo procedimento (4.1.2 default).
+        let revenueAccountCode = "4.1.2";
+        if (invoice.procedureId) {
+          const [proc] = await tx
+            .select({ accountingAccountId: (proceduresTable as any).accountingAccountId })
+            .from(proceduresTable)
+            .where(eq(proceduresTable.id, invoice.procedureId))
+            .limit(1);
+          revenueAccountCode = await resolveAccountCodeById(
+            proc?.accountingAccountId ?? null,
+            "4.1.2",
+            invoice.clinicId ?? null,
+          );
+        }
+
+        const remainingCredits = invoice.recognitionCreditsTotal - consumed;
+        const baseEntry = {
+          clinicId: invoice.clinicId ?? null,
+          entryDate: endDate,
+          amount: residual,
+          description:
+            `Apropriação de resíduo do mês — fatura #${invoice.id} ` +
+            `(${remainingCredits} crédito(s) não consumido(s)) — ${invoice.description}`,
+          sourceType: "financial_record" as const,
+          sourceId: invoice.id,
+          patientId: invoice.patientId ?? null,
+          procedureId: invoice.procedureId ?? null,
+          financialRecordId: invoice.id,
+          revenueAccountCode,
+          eventType: "end_of_month_closure",
+        };
+
+        let entryId: number;
+        if (invoice.status === "pago") {
+          const entry = await postWalletUsage(baseEntry as any, tx as any);
+          entryId = entry.id;
+        } else {
+          const entry = await postReceivableRevenue(baseEntry as any, tx as any);
+          entryId = entry.id;
+        }
+
+        await tx
+          .update(financialRecordsTable)
+          .set({
+            recognizedAmount: amount.toFixed(2),
+            recognitionCreditsConsumed: invoice.recognitionCreditsTotal,
+            recognizedEntryId: invoice.recognizedEntryId ?? entryId,
+            accountingEntryId: entryId,
+          })
+          .where(eq(financialRecordsTable.id, invoice.id));
+
+        totalResidual += residual;
+        result.closed++;
+        result.details.push({ invoiceId: invoice.id, status: "closed", residual });
+      });
+    } catch (err) {
+      result.errors++;
+      result.details.push({
+        invoiceId: inv.id,
+        status: "error",
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      console.error(
+        `[endOfMonthRevenueClosure] falha ao fechar fatura #${inv.id}:`,
+        err,
+      );
+    }
+  }
+
+  result.residualTotal = totalResidual.toFixed(2);
+  return result;
+}

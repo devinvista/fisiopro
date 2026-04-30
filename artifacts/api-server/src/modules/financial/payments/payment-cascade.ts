@@ -27,8 +27,12 @@
  *
  * Esta função cobre exclusivamente o caso (1).
  */
-import { financialRecordsTable } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import {
+  financialRecordsTable,
+  accountingJournalEntriesTable,
+  accountingJournalLinesTable,
+} from "@workspace/db";
+import { and, eq, sql, isNull, inArray } from "drizzle-orm";
 import { allocateReceivable, postReversal } from "../../shared/accounting/accounting.service.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
 
@@ -247,6 +251,121 @@ export async function cascadeReversalForFaturaMensalAvulso(
 
   return {
     reversedChildIds,
+    reversalEntryIds,
+    totalReversed: total.toFixed(2),
+  };
+}
+
+// ─── Sprint Financeiro 10 (P2) — Estorno de TODAS as fragmentas ────────────
+// de uma `faturaPlano` no MODELO FRACIONADO.
+
+export interface ReverseFaturaPlanoFragmentsInput {
+  /** Transação aberta (Drizzle Tx). */
+  tx: any;
+  /** Linha da `faturaPlano` sendo estornada. */
+  invoice: {
+    id: number;
+    clinicId: number | null;
+    patientId: number | null;
+    procedureId: number | null;
+    appointmentId: number | null;
+    description: string;
+  };
+  /** Data do estorno (`YYYY-MM-DD`); default: hoje BRT. */
+  reversalDate?: string;
+  /** Motivo (auditoria contábil). */
+  reversalReason: string;
+  /** Usuário responsável (audit trail). */
+  reversedBy?: number | null;
+}
+
+export interface ReverseFaturaPlanoFragmentsResult {
+  /** IDs dos `journal_entries` originais estornados nesta chamada. */
+  reversedEntryIds: number[];
+  /** IDs dos `journal_entries` de estorno gerados. */
+  reversalEntryIds: number[];
+  /** Soma dos valores estornados (string com 2 casas). */
+  totalReversed: string;
+}
+
+/**
+ * Estorna em cascata TODAS as fragmentas de receita de uma `faturaPlano` no
+ * MODELO FRACIONADO. Para cada `journal_entry` de evento
+ * `receivable_revenue` ou `wallet_usage_revenue` ligado à fatura
+ * (`financialRecordId=invoice.id`) que ainda NÃO foi estornado, posta um
+ * `postReversal` espelhado.
+ *
+ * Idempotente: entries com `reversalOfEntryId` já apontado por outro
+ * journal_entry são excluídas via LEFT JOIN antirredundância.
+ *
+ * Não atualiza o registro financeiro — quem chama (handler de PATCH/DELETE)
+ * já cuida do `status='estornado'`, `originalAmount`, `reversalReason`, etc.
+ */
+export async function reverseFaturaPlanoFragments(
+  input: ReverseFaturaPlanoFragmentsInput,
+): Promise<ReverseFaturaPlanoFragmentsResult> {
+  const { tx, invoice, reversalReason, reversedBy } = input;
+  const reversalDate = input.reversalDate ?? todayBRT();
+
+  // Busca fragmentas vivas (não estornadas). Usa NOT EXISTS para excluir
+  // entries que já têm um reversal apontando para elas.
+  const fragments = await tx
+    .select({
+      id: accountingJournalEntriesTable.id,
+      amount: sql<string>`(
+        SELECT COALESCE(SUM(debit_amount), 0)::text
+        FROM ${accountingJournalLinesTable}
+        WHERE entry_id = ${accountingJournalEntriesTable.id}
+      )`,
+    })
+    .from(accountingJournalEntriesTable)
+    .where(and(
+      eq(accountingJournalEntriesTable.financialRecordId, invoice.id),
+      inArray(
+        accountingJournalEntriesTable.eventType,
+        ["receivable_revenue", "wallet_usage_revenue", "end_of_month_closure"],
+      ),
+      isNull(accountingJournalEntriesTable.reversalOfEntryId),
+      sql`NOT EXISTS (
+        SELECT 1 FROM ${accountingJournalEntriesTable} r
+        WHERE r.reversal_of_entry_id = ${accountingJournalEntriesTable.id}
+      )`,
+    ));
+
+  if (fragments.length === 0) {
+    return { reversedEntryIds: [], reversalEntryIds: [], totalReversed: "0.00" };
+  }
+
+  const reversalEntryIds: number[] = [];
+  const reversedEntryIds: number[] = [];
+  let total = 0;
+
+  for (const frag of fragments) {
+    const reversal = await postReversal(
+      frag.id,
+      {
+        clinicId: invoice.clinicId,
+        entryDate: reversalDate,
+        description:
+          `[Estorno faturaPlano fracionado] ${invoice.description} ` +
+          `(motivo: ${reversalReason})`,
+        sourceType: "financial_record",
+        sourceId: invoice.id,
+        patientId: invoice.patientId,
+        appointmentId: invoice.appointmentId,
+        procedureId: invoice.procedureId,
+        financialRecordId: invoice.id,
+        createdBy: reversedBy ?? null,
+      },
+      tx,
+    );
+    reversalEntryIds.push(reversal.id);
+    reversedEntryIds.push(frag.id);
+    total += Number(frag.amount ?? 0);
+  }
+
+  return {
+    reversedEntryIds,
     reversalEntryIds,
     totalReversed: total.toFixed(2),
   };

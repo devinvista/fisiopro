@@ -32,6 +32,7 @@ import {
 import {
   cascadeFaturaMensalAvulsoPayment,
   cascadeReversalForFaturaMensalAvulso,
+  reverseFaturaPlanoFragments,
 } from "../payments/payment-cascade.js";
 import {
   createRecordSchema, updateRecordSchema, updateRecordStatusSchema,
@@ -357,20 +358,42 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
       }
 
       if ((status === "cancelado" || status === "estornado") && existing.status !== status) {
-        const entryId = existing.accountingEntryId ?? existing.recognizedEntryId ?? existing.settlementEntryId;
-        if (entryId) {
-          await postReversal(entryId, {
-            clinicId: existing.clinicId ?? req.clinicId ?? null,
-            entryDate: todayBRT(),
-            description: `Estorno/cancelamento — ${existing.description}`,
-            sourceType: "financial_record",
-            sourceId: existing.id,
-            patientId: existing.patientId,
-            appointmentId: existing.appointmentId,
-            procedureId: existing.procedureId,
-            subscriptionId: existing.subscriptionId,
-            financialRecordId: existing.id,
-          }, tx as any);
+        // Sprint Financeiro 10 (P2): faturaPlano no MODELO FRACIONADO tem N
+        // entries (uma por sessão). Estorna TODAS via helper. Faturas
+        // legadas (recognitionCreditsTotal NULL) seguem o caminho genérico.
+        if (
+          existing.transactionType === "faturaPlano" &&
+          existing.recognitionCreditsTotal != null
+        ) {
+          await reverseFaturaPlanoFragments({
+            tx,
+            invoice: {
+              id: existing.id,
+              clinicId: existing.clinicId ?? req.clinicId ?? null,
+              patientId: existing.patientId,
+              procedureId: existing.procedureId,
+              appointmentId: existing.appointmentId,
+              description: existing.description,
+            },
+            reversalReason: `PATCH /status → ${status}`,
+            reversedBy: req.userId ?? null,
+          });
+        } else {
+          const entryId = existing.accountingEntryId ?? existing.recognizedEntryId ?? existing.settlementEntryId;
+          if (entryId) {
+            await postReversal(entryId, {
+              clinicId: existing.clinicId ?? req.clinicId ?? null,
+              entryDate: todayBRT(),
+              description: `Estorno/cancelamento — ${existing.description}`,
+              sourceType: "financial_record",
+              sourceId: existing.id,
+              patientId: existing.patientId,
+              appointmentId: existing.appointmentId,
+              procedureId: existing.procedureId,
+              subscriptionId: existing.subscriptionId,
+              financialRecordId: existing.id,
+            }, tx as any);
+          }
         }
 
         // PR-FIN8-2: cascata mãe→filhos para faturaMensalAvulso. Se a mãe é
@@ -442,21 +465,42 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
         .where(whereClause)
         .returning();
 
-      const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
-      if (entryId) {
-        await postReversal(entryId, {
-          clinicId: record.clinicId ?? req.clinicId ?? null,
-          entryDate: todayBRT(),
-          description: `Estorno — ${record.description} (motivo: ${body.reversalReason})`,
-          sourceType: "financial_record",
-          sourceId: record.id,
-          patientId: record.patientId,
-          appointmentId: record.appointmentId,
-          procedureId: record.procedureId,
-          subscriptionId: record.subscriptionId,
-          financialRecordId: record.id,
-          createdBy: req.userId ?? null,
-        }, tx as any);
+      // Sprint Financeiro 10 (P2): faturaPlano fracionada → estorna TODAS as
+      // fragmentas. Demais casos seguem postReversal genérico (1 entry).
+      if (
+        record.transactionType === "faturaPlano" &&
+        record.recognitionCreditsTotal != null
+      ) {
+        await reverseFaturaPlanoFragments({
+          tx,
+          invoice: {
+            id: record.id,
+            clinicId: record.clinicId ?? req.clinicId ?? null,
+            patientId: record.patientId,
+            procedureId: record.procedureId,
+            appointmentId: record.appointmentId,
+            description: record.description,
+          },
+          reversalReason: body.reversalReason,
+          reversedBy: req.userId ?? null,
+        });
+      } else {
+        const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
+        if (entryId) {
+          await postReversal(entryId, {
+            clinicId: record.clinicId ?? req.clinicId ?? null,
+            entryDate: todayBRT(),
+            description: `Estorno — ${record.description} (motivo: ${body.reversalReason})`,
+            sourceType: "financial_record",
+            sourceId: record.id,
+            patientId: record.patientId,
+            appointmentId: record.appointmentId,
+            procedureId: record.procedureId,
+            subscriptionId: record.subscriptionId,
+            financialRecordId: record.id,
+            createdBy: req.userId ?? null,
+          }, tx as any);
+        }
       }
 
       // PR-FIN8-2: cascata mãe→filhos.
@@ -637,21 +681,41 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
           })
           .where(whereClause);
 
-        const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
-        if (entryId) {
-          await postReversal(entryId, {
-            clinicId: record.clinicId ?? req.clinicId ?? null,
-            entryDate: todayBRT(),
-            description: `Estorno via DELETE — ${record.description} (motivo: ${reversalReason})`,
-            sourceType: "financial_record",
-            sourceId: record.id,
-            patientId: record.patientId,
-            appointmentId: record.appointmentId,
-            procedureId: record.procedureId,
-            subscriptionId: record.subscriptionId,
-            financialRecordId: record.id,
-            createdBy: req.userId ?? null,
-          }, tx as any);
+        // Sprint Financeiro 10 (P2): faturaPlano fracionada → estorna TODAS.
+        if (
+          record.transactionType === "faturaPlano" &&
+          record.recognitionCreditsTotal != null
+        ) {
+          await reverseFaturaPlanoFragments({
+            tx,
+            invoice: {
+              id: record.id,
+              clinicId: record.clinicId ?? req.clinicId ?? null,
+              patientId: record.patientId,
+              procedureId: record.procedureId,
+              appointmentId: record.appointmentId,
+              description: record.description,
+            },
+            reversalReason,
+            reversedBy: req.userId ?? null,
+          });
+        } else {
+          const entryId = record.accountingEntryId ?? record.recognizedEntryId ?? record.settlementEntryId;
+          if (entryId) {
+            await postReversal(entryId, {
+              clinicId: record.clinicId ?? req.clinicId ?? null,
+              entryDate: todayBRT(),
+              description: `Estorno via DELETE — ${record.description} (motivo: ${reversalReason})`,
+              sourceType: "financial_record",
+              sourceId: record.id,
+              patientId: record.patientId,
+              appointmentId: record.appointmentId,
+              procedureId: record.procedureId,
+              subscriptionId: record.subscriptionId,
+              financialRecordId: record.id,
+              createdBy: req.userId ?? null,
+            }, tx as any);
+          }
         }
 
         // PR-FIN8-2: cascata mãe→filhos.

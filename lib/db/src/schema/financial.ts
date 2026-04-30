@@ -30,6 +30,18 @@ export const financialRecordsTable = pgTable("financial_records", {
   accountingEntryId: integer("accounting_entry_id"),
   recognizedEntryId: integer("recognized_entry_id"),
   settlementEntryId: integer("settlement_entry_id"),
+  // ── Sprint Financeiro 10 (P2) — reconhecimento fracionado ─────────────────
+  // Quando uma `faturaPlano` está no MODELO FRACIONADO, cada sessão concluída
+  // posta uma fragmenta `share = amount / recognitionCreditsTotal` e atualiza
+  // `recognizedAmount` e `recognitionCreditsConsumed`. O job EOM apropria o
+  // resíduo (`amount - recognizedAmount`) no último dia do mês.
+  //
+  // `recognitionCreditsTotal IS NULL` sinaliza MODELO LEGADO (P1 e anteriores)
+  // — receita reconhecida integralmente na 1ª sessão. Faturas legadas não
+  // migram automaticamente; o serviço de reconhecimento detecta e respeita.
+  recognizedAmount: numeric("recognized_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  recognitionCreditsTotal: integer("recognition_credits_total"),
+  recognitionCreditsConsumed: integer("recognition_credits_consumed").notNull().default(0),
   // ── Auditoria de preço (Sprint 1) ─────────────────────────────────────────
   // Origem do valor cobrado: "tabela" | "override_clinica" | "plano_tratamento"
   priceSource: text("price_source"),
