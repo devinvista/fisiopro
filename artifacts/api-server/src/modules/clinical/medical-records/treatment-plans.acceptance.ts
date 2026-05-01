@@ -202,11 +202,17 @@ export async function acceptPlanFinancials(
         if (!avulsoProcedureId) continue;
 
         const unit = Number(item.unitPrice ?? 0);
-        const discount = Math.max(0, Number(item.discount ?? 0));
-        const unitEffective = Math.max(0, unit - discount);
+        // item.discount armazena o desconto TOTAL do plano (desconto/sessão ×
+        // sessões estimadas), NÃO o desconto unitário. Isso é a convenção do
+        // formulário de itens (TreatmentPlanItemsSection.tsx). Precisamos
+        // recuperar o desconto por sessão antes de calcular o preço efetivo.
+        const totalDiscount = Math.max(0, Number(item.discount ?? 0));
+        const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
+        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * 4 * (durationMonths ?? 12)));
+        const unitDiscount = totalDiscount / estimatedTotalSessions;
+        const unitEffective = Math.max(0, unit - unitDiscount);
         if (unitEffective <= 0) continue;
 
-        const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
         const sessionsPerMonth = Math.max(1, Math.round(sessionsPerWeek * 4));
         const monthlyAmount = unitEffective * sessionsPerMonth;
 

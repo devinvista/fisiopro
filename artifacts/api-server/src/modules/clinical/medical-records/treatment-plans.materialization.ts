@@ -781,10 +781,17 @@ export async function materializeTreatmentPlan(
       if (!procedure) continue;
 
       const kind = resolveItemKind(item);
+      // pacoteSessoes: série fechada — usa totalSessions contratado.
+      // avulso: totalSessions NÃO é armazenado no banco (é calculado
+      //   dinamicamente no frontend via weekDays × vigência). Usamos um cap
+      //   alto (9999) e deixamos o intervalo de datas ser o limitador natural,
+      //   espelhando a lógica de `plannedSessionsForItem` no frontend.
       const cap =
         kind === "pacoteSessoes"
           ? Math.max(0, item.totalSessions ?? 0)
-          : Math.max(1, item.totalSessions ?? 1);
+          : item.totalSessions != null
+            ? Math.max(1, item.totalSessions)
+            : 9999;
       if (cap === 0) continue;
 
       // Duração: SEMPRE a duração cadastrada do procedimento (sem override

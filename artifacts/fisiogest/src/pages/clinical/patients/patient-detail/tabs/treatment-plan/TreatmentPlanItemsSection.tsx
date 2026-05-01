@@ -273,7 +273,7 @@ export function TreatmentPlanItemsSection({
     <div className="pt-4 border-t border-slate-100 space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2 min-w-0">
+        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2 min-w-0">
           <Package className="w-4 h-4 text-primary shrink-0" />
           <span className="truncate">Procedimentos e Pacotes do Plano</span>
           {isAccepted && (
@@ -281,7 +281,7 @@ export function TreatmentPlanItemsSection({
               <Lock className="h-3 w-3" /> Itens congelados
             </Badge>
           )}
-        </p>
+        </div>
         {addMode === null && editingId === null && !isAccepted && (
           <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-1.5">
             <Button size="sm" variant="outline" className="w-full sm:w-auto h-9 rounded-xl text-xs gap-1.5 px-3" onClick={() => { setAddMode("package"); setItemSpw(2); setItemSessions(""); setItemNotes(""); setItemDiscount("0"); setItemDiscountType("reais"); setItemCustomPrice(""); }}>
