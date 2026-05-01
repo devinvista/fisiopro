@@ -43,6 +43,7 @@ import { CloseMonthBlock } from "./treatment-plan/CloseMonthBlock";
 import { CreditsStatementBlock } from "./treatment-plan/CreditsStatementBlock";
 import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
+import { ContractPreviewDialog } from "./treatment-plan/ContractPreviewDialog";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Plano de Tratamento — orquestrador slim do wizard de 4 etapas.
@@ -80,6 +81,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const [creatingNew, setCreatingNew] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [clinicalOpen, setClinicalOpen] = useState(false);
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
+  const [contractPreviewHtml, setContractPreviewHtml] = useState("");
   // Marca quando o usuário salvou as configs de cobrança (libera Agenda).
   // Não persistido no servidor — heurística local para guiar o stepper.
   const [billingConfigured, setBillingConfigured] = useState(false);
@@ -288,8 +291,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     staleTime: 60000,
   });
 
-  const handlePrintContract = () => {
-    if (!selectedPlan || !patient) return;
+  const buildContractHtml = () => {
+    if (!selectedPlan || !patient) return "";
     const acceptance = selectedPlan?.acceptedAt
       ? {
           acceptedAt: selectedPlan.acceptedAt,
@@ -299,7 +302,19 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           acceptedVia: selectedPlan.acceptedVia ?? "presencial",
         }
       : null;
-    const html = generateContractHTML(patient, form, planItems, clinic, acceptance, contractClauses);
+    return generateContractHTML(patient, form, planItems, clinic, acceptance, contractClauses);
+  };
+
+  const handleOpenContractPreview = () => {
+    const html = buildContractHtml();
+    if (!html) return;
+    setContractPreviewHtml(html);
+    setContractPreviewOpen(true);
+  };
+
+  const handlePrintContract = () => {
+    const html = buildContractHtml();
+    if (!html || !patient) return;
     printDocument(html, `Contrato — ${patient.name}`);
   };
 
@@ -435,8 +450,18 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         isStarted={isStarted}
         handlePrintPlan={handlePrintPlan}
         handlePrintContract={handlePrintContract}
+        onOpenContractPreview={handleOpenContractPreview}
         deleteMutation={deleteMutation}
         selectedPlanId={selectedPlanId}
+      />
+
+      <ContractPreviewDialog
+        open={contractPreviewOpen}
+        onOpenChange={setContractPreviewOpen}
+        html={contractPreviewHtml}
+        patientName={patient?.name ?? "Paciente"}
+        isAccepted={isAccepted}
+        isStarted={isStarted}
       />
 
       {/* Stepper — 4 etapas: itens → cobrança → agenda → contrato */}
@@ -624,7 +649,7 @@ function PlanSelectorBar({
 // ─── Header do plano selecionado ───────────────────────────────────────────
 function PlanHeader({
   selectedPlan, planItemsCount, headerMetrics, isAccepted, isStarted,
-  handlePrintPlan, handlePrintContract, deleteMutation, selectedPlanId,
+  handlePrintPlan, handlePrintContract, onOpenContractPreview, deleteMutation, selectedPlanId,
 }: {
   selectedPlan: any;
   planItemsCount: number;
@@ -633,6 +658,7 @@ function PlanHeader({
   isStarted: boolean;
   handlePrintPlan: () => void;
   handlePrintContract: () => void;
+  onOpenContractPreview: () => void;
   deleteMutation: any;
   selectedPlanId: number;
 }) {
@@ -720,7 +746,7 @@ function PlanHeader({
               size="sm"
               variant="outline"
               className="h-9 gap-1 text-xs rounded-xl"
-              onClick={handlePrintContract}
+              onClick={onOpenContractPreview}
             >
               <ScrollText className="w-3.5 h-3.5 shrink-0" /> Contrato
             </Button>
