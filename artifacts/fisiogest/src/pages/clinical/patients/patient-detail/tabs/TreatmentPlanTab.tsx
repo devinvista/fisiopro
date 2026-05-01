@@ -281,6 +281,13 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     printDocument(html, `Plano de Tratamento — ${patient.name}`);
   };
 
+  const { data: contractClauses = [] } = useQuery<{ title: string; body: string }[]>({
+    queryKey: ["/api/clinics/current/contract-clauses"],
+    queryFn: () =>
+      apiFetchJson<{ title: string; body: string }[]>("/api/clinics/current/contract-clauses"),
+    staleTime: 60000,
+  });
+
   const handlePrintContract = () => {
     if (!selectedPlan || !patient) return;
     const acceptance = selectedPlan?.acceptedAt
@@ -292,7 +299,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           acceptedVia: selectedPlan.acceptedVia ?? "presencial",
         }
       : null;
-    const html = generateContractHTML(patient, form, planItems, clinic, acceptance);
+    const html = generateContractHTML(patient, form, planItems, clinic, acceptance, contractClauses);
     printDocument(html, `Contrato — ${patient.name}`);
   };
 
@@ -708,14 +715,16 @@ function PlanHeader({
           >
             <Printer className="w-3.5 h-3.5 shrink-0" /> Plano
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 gap-1 text-xs rounded-xl"
-            onClick={handlePrintContract}
-          >
-            <ScrollText className="w-3.5 h-3.5 shrink-0" /> Contrato
-          </Button>
+          {planItemsCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1 text-xs rounded-xl"
+              onClick={handlePrintContract}
+            >
+              <ScrollText className="w-3.5 h-3.5 shrink-0" /> Contrato
+            </Button>
+          )}
 
           <AlertDialog>
             <Button

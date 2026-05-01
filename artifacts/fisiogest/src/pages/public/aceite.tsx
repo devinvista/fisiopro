@@ -116,6 +116,7 @@ interface PublicPlanSnapshot {
   frequency: string | null;
   estimatedSessions: number | null;
   startDate: string | null;
+  durationMonths: number | null;
   responsibleProfessional: string | null;
   items: PublicPlanItem[];
   totalEstimatedRevenue: string;
@@ -186,6 +187,7 @@ function snapshotToContractInputs(snap: PublicPlanSnapshot): {
       estimatedSessions: snap.estimatedSessions ?? undefined,
       status: snap.status,
       startDate: snap.startDate ?? undefined,
+      durationMonths: snap.durationMonths ?? undefined,
       responsibleProfessional: snap.responsibleProfessional ?? undefined,
     },
     items: snap.items.map<PlanProcedureItem>((it) => ({
@@ -279,7 +281,13 @@ export default function AceitePage() {
   const contractHtml = useMemo(() => {
     if (!snapshot) return "";
     const { patient, plan, items, clinic } = snapshotToContractInputs(snapshot);
-    return generateContractHTML(patient, plan, items, clinic, snapshot.acceptance);
+    // Bug 3 fix: pass custom clauses into the contract HTML so they appear in
+    // the printed body. Use frozen accepted clauses when already signed, otherwise
+    // use the current active clauses from the clinic.
+    const clauses = snapshot.acceptance
+      ? (snapshot.acceptedClauses ?? [])
+      : (snapshot.contractClauses ?? []);
+    return generateContractHTML(patient, plan, items, clinic, snapshot.acceptance, clauses);
   }, [snapshot]);
 
   const requiredClauseCodes = useMemo(
@@ -408,7 +416,10 @@ export default function AceitePage() {
           type="button"
           onClick={() => {
             const { patient, plan, items, clinic } = snapshotToContractInputs(snap);
-            const html = generateContractHTML(patient, plan, items, clinic, snap.acceptance);
+            const printClauses = snap.acceptance
+              ? (snap.acceptedClauses ?? [])
+              : (snap.contractClauses ?? []);
+            const html = generateContractHTML(patient, plan, items, clinic, snap.acceptance, printClauses);
             printDocument(html, `Contrato — ${snap.patient.name}`);
           }}
           className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 rounded-lg px-3 py-1.5 transition-colors"

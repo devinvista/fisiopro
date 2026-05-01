@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale";
 import type { PatientBasic, ClinicInfo, PlanProcedureItem } from "../../types";
 import { todayBRTDate } from "../format";
 import { buildClinicHeaderHTML, extractCityState, fmtCurrency } from "./_shared";
+import { plannedSessionsForItem } from "../sessionCount";
 
 /**
  * Trilha de aceite renderizada no rodapé do contrato. Quando informada, a
@@ -31,12 +32,18 @@ function escapeAttr(s: string): string {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+export interface ContractClauseInput {
+  title: string;
+  body: string;
+}
+
 export function generateContractHTML(
   patient: PatientBasic,
-  plan: { objectives?: string; techniques?: string; frequency?: string; estimatedSessions?: string | number; status?: string; startDate?: string; responsibleProfessional?: string },
+  plan: { objectives?: string; techniques?: string; frequency?: string; estimatedSessions?: string | number; status?: string; startDate?: string; responsibleProfessional?: string; durationMonths?: number | null },
   planItems: PlanProcedureItem[],
   clinic?: ClinicInfo | null,
   acceptance?: ContractAcceptance | null,
+  contractClauses?: ContractClauseInput[] | null,
 ) {
   const today = format(todayBRTDate(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const cpfFmt = patient.cpf ? patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : "—";
@@ -51,7 +58,14 @@ export function generateContractHTML(
   const itemRows = planItems.map((item) => {
     const isMensal = item.packageType === "mensal";
     const isAvulso = !item.packageId;
-    const sessionCount = item.totalSessions ?? (isAvulso ? 1 : 0);
+    // Bug 1 fix: for avulso items without an explicit totalSessions, estimate
+    // sessions the same way the UI does — using plan duration × sessionsPerWeek.
+    // Previously it defaulted to 1, which caused a mismatch with the discount
+    // that was stored using the plan-duration estimate (e.g. 13 sessions × R$50
+    // = R$650 discount, but gross = R$150 × 1 = R$150 → net = R$0 incorrectly).
+    const sessionCount = isAvulso && item.totalSessions == null
+      ? plannedSessionsForItem(item, plan.startDate, plan.durationMonths)
+      : (item.totalSessions ?? (isAvulso ? 1 : 0));
     const disc = Number(item.discount ?? 0);
     const unitP = Number(item.price ?? 0);
     // Para itens mensais, usar `monthlyPrice` quando disponível e cair de
@@ -195,6 +209,7 @@ export function generateContractHTML(
         <li>As informações clínicas são sigilosas e regidas pelo Código de Ética do COFFITO.</li>
         <li>Qualquer rescisão deverá ser comunicada por escrito com antecedência mínima de 15 dias corridos.</li>
         <li>O presente instrumento é firmado em duas vias de igual teor e forma.</li>
+        ${(contractClauses ?? []).map((c) => `<li><strong>${escapeAttr(c.title)}:</strong> ${escapeAttr(c.body)}</li>`).join("")}
       </ol>
     </div>
 

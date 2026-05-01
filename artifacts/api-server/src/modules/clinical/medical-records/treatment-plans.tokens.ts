@@ -225,6 +225,7 @@ export interface PublicPlanSnapshot {
   frequency: string | null;
   estimatedSessions: number | null;
   startDate: string | null;
+  durationMonths: number | null;
   responsibleProfessional: string | null;
   items: PublicPlanSnapshotItem[];
   totalEstimatedRevenue: string;
@@ -328,6 +329,10 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     }
   }
 
+  const clinicWhereClause = patient?.clinicId
+    ? eq(clinicsTable.id, patient.clinicId)
+    : eq(clinicsTable.isActive, true);
+
   const [clinicRow] = await db
     .select({
       name: clinicsTable.name,
@@ -346,7 +351,7 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       noShowFeeAmount: clinicsTable.noShowFeeAmount,
     })
     .from(clinicsTable)
-    .where(eq(clinicsTable.isActive, true))
+    .where(clinicWhereClause)
     .limit(1);
 
   const rows = await db
@@ -463,6 +468,7 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     frequency: plan.frequency,
     estimatedSessions: plan.estimatedSessions,
     startDate: plan.startDate,
+    durationMonths: plan.durationMonths ?? null,
     responsibleProfessional: plan.responsibleProfessional ?? null,
     items,
     totalEstimatedRevenue: totalRevenue.toFixed(2),
