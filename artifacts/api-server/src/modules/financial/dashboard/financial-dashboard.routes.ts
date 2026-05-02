@@ -35,20 +35,25 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
     const cc = clinicCond(req);
     const ac = apptClinicCond(req);
 
-    const accountingTotals = await getAccountingTotals({
-      clinicId: req.isSuperAdmin ? null : req.clinicId,
-      startDate,
-      endDate,
-    });
-    const accountingBalances = await getAccountingBalances({
-      clinicId: req.isSuperAdmin ? null : req.clinicId,
-    });
+    const [accountingTotals, accountingBalances, revenueRow] = await Promise.all([
+      getAccountingTotals({ clinicId: req.isSuperAdmin ? null : req.clinicId, startDate, endDate }),
+      getAccountingBalances({ clinicId: req.isSuperAdmin ? null : req.clinicId }),
+      // Receita: fonte única de verdade = financial_records (revenueSummarySql + recordDateFilter)
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)` })
+        .from(financialRecordsTable)
+        .where(
+          cc
+            ? and(cc, revenueSummarySql(), recordDateFilter(startDate, endDate))
+            : and(revenueSummarySql(), recordDateFilter(startDate, endDate)),
+        )
+        .then((q) => q[0]),
+    ]);
+
     const totalByCode = new Map(accountingTotals.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));
     const balanceByCode = new Map(accountingBalances.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));
+    const monthlyRevenue = Number(revenueRow?.total ?? 0);
 
-    const monthlyRevenue =
-      (totalByCode.get(ACCOUNT_CODES.serviceRevenue)?.credit ?? 0) +
-      (totalByCode.get(ACCOUNT_CODES.packageRevenue)?.credit ?? 0);
     const monthlyExpenses =
       (totalByCode.get(ACCOUNT_CODES.operatingExpenses)?.debit ?? 0) +
       (totalByCode.get(ACCOUNT_CODES.revenueReversals)?.debit ?? 0);

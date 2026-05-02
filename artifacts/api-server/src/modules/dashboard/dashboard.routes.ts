@@ -5,6 +5,7 @@ import { eq, and, sql, gte, gt, lte, isNull } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/rbac.js";
 import { todayBRT, nowBRT, monthDateRangeBRT } from "../../utils/dateUtils.js";
+import { revenueSummarySql, recordDateFilter } from "../financial/shared/financial-reports.service.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -74,14 +75,13 @@ router.get("/", requirePermission("patients.read"), async (req, res) => {
       .limit(5);
 
     const revenueResult = await db.select({
-      total: sql<number>`COALESCE(SUM(amount::numeric), 0)`
+      total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`
     })
       .from(financialRecordsTable)
       .where(
         and(
-          eq(financialRecordsTable.type, "receita"),
-          gte(financialRecordsTable.paymentDate, startDate),
-          lte(financialRecordsTable.paymentDate, endDate),
+          revenueSummarySql(),
+          recordDateFilter(startDate, endDate),
           finFilter ?? undefined
         )
       );

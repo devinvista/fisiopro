@@ -18,6 +18,7 @@ import {
 import {
   RECEIVABLE_TYPES,
   revenueSummarySql,
+  recordDateFilter,
 } from "../shared/financial-reports.service.js";
 import { clinicCond } from "../financial.repository.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
@@ -136,8 +137,8 @@ router.get("/cost-per-procedure", requireFeature("financial.cost_per_procedure")
     const apptMap = new Map(apptStats.map(a => [a.procedureId, a]));
 
     const revStatsCond = clinicId
-      ? and(eq(financialRecordsTable.clinicId, clinicId), revenueSummarySql(), gte(financialRecordsTable.paymentDate, startDate), lte(financialRecordsTable.paymentDate, endDate))
-      : and(revenueSummarySql(), gte(financialRecordsTable.paymentDate, startDate), lte(financialRecordsTable.paymentDate, endDate));
+      ? and(eq(financialRecordsTable.clinicId, clinicId), revenueSummarySql(), recordDateFilter(startDate, endDate))
+      : and(revenueSummarySql(), recordDateFilter(startDate, endDate));
 
     const revByProcedure = await db
       .select({
@@ -241,16 +242,22 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
     const { start: ps, end: pe } = dateRange(prevYear, prevMonth);
 
     async function getMonthlyFinancials(s: string, e: string) {
-      const totals = await getAccountingTotals({
-        clinicId: req.isSuperAdmin ? null : clinicId,
-        startDate: s,
-        endDate: e,
-      });
+      // Receita: fonte única de verdade = financial_records (revenueSummarySql + recordDateFilter)
+      const [[revRow], totals] = await Promise.all([
+        db
+          .select({ total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)` })
+          .from(financialRecordsTable)
+          .where(
+            cc
+              ? and(cc, revenueSummarySql(), recordDateFilter(s, e))
+              : and(revenueSummarySql(), recordDateFilter(s, e)),
+          ),
+        getAccountingTotals({ clinicId: req.isSuperAdmin ? null : clinicId, startDate: s, endDate: e }),
+      ]);
+
+      const revenue = Number(revRow?.total ?? 0);
       const byCode = new Map(totals.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));
 
-      const revenue =
-        (byCode.get(ACCOUNT_CODES.serviceRevenue)?.credit ?? 0) +
-        (byCode.get(ACCOUNT_CODES.packageRevenue)?.credit ?? 0);
       const operatingExpenses = byCode.get(ACCOUNT_CODES.operatingExpenses)?.debit ?? 0;
       const revenueReversals = byCode.get(ACCOUNT_CODES.revenueReversals)?.debit ?? 0;
       const totalExpenses = operatingExpenses + revenueReversals;
