@@ -3,7 +3,6 @@ import {
   accountingAccountsTable,
   accountingJournalEntriesTable,
   accountingJournalLinesTable,
-  financialRecordsTable,
   receivableAllocationsTable,
 } from "@workspace/db";
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
@@ -472,43 +471,37 @@ export async function getAccountingBalances(input: { clinicId?: number | null; p
  * sessão, depósitos de carteira, estornos, etc.) a competência é a própria
  * `entry_date` — que já representa o dia em que o evento ocorreu.
  *
- * Resultado: COALESCE(due_date_do_record, entry_date) BETWEEN start AND end.
+ * Resultado: COALESCE(fr.due_date, aje.entry_date) BETWEEN startDate AND endDate.
+ *
+ * Usa SQL raw via db.execute para garantir que o COALESCE entre duas colunas
+ * de tabelas diferentes seja gerado corretamente (evita ambiguidade no ORM).
  */
 export async function getCustomerAdvancesByCompetence(input: {
   clinicId?: number | null;
   startDate: string;
   endDate: string;
 }): Promise<number> {
-  const conditions: any[] = [
-    eq(accountingJournalEntriesTable.status, "posted"),
-    eq(accountingAccountsTable.code, ACCOUNT_CODES.customerAdvances),
-    sql`COALESCE(${financialRecordsTable.dueDate}, ${accountingJournalEntriesTable.entryDate}) BETWEEN ${input.startDate} AND ${input.endDate}`,
-  ];
-  if (input.clinicId != null) {
-    conditions.push(eq(accountingJournalEntriesTable.clinicId, input.clinicId));
-  }
+  const clinicFilter = input.clinicId != null
+    ? sql`AND aje.clinic_id = ${input.clinicId}`
+    : sql``;
 
-  const [row] = await db
-    .select({
-      advances: sql<number>`
-        COALESCE(SUM(${accountingJournalLinesTable.creditAmount}::numeric), 0)
-        - COALESCE(SUM(${accountingJournalLinesTable.debitAmount}::numeric), 0)
-      `,
-    })
-    .from(accountingJournalLinesTable)
-    .innerJoin(
-      accountingJournalEntriesTable,
-      eq(accountingJournalLinesTable.entryId, accountingJournalEntriesTable.id),
-    )
-    .innerJoin(
-      accountingAccountsTable,
-      eq(accountingJournalLinesTable.accountId, accountingAccountsTable.id),
-    )
-    .leftJoin(
-      financialRecordsTable,
-      eq(accountingJournalEntriesTable.financialRecordId, financialRecordsTable.id),
-    )
-    .where(and(...conditions));
+  const raw = await db.execute<{ advances: string }>(sql`
+    SELECT
+      COALESCE(SUM(ajl.credit_amount::numeric), 0)
+      - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
+    FROM accounting_journal_lines ajl
+    JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
+    JOIN accounting_accounts aa ON aa.id = ajl.account_id
+    LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
+    WHERE aje.status = 'posted'
+      AND aa.code = '2.1.1'
+      ${clinicFilter}
+      AND COALESCE(fr.due_date, aje.entry_date) BETWEEN ${input.startDate} AND ${input.endDate}
+  `);
 
+  const rows: { advances: string }[] =
+    (raw as unknown as { rows: { advances: string }[] }).rows ??
+    (raw as unknown as { advances: string }[]);
+  const row = rows[0];
   return Math.max(0, Number(row?.advances ?? 0));
 }
