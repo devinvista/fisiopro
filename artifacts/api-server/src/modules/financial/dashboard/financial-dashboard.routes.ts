@@ -12,6 +12,7 @@ import {
   ACCOUNT_CODES,
   getAccountingBalances,
   getAccountingTotals,
+  getCustomerAdvancesByCompetence,
 } from "../../shared/accounting/accounting.service.js";
 import {
   RECEIVABLE_TYPES,
@@ -53,7 +54,14 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
       (totalByCode.get(ACCOUNT_CODES.revenueReversals)?.debit ?? 0);
     const cashReceived = totalByCode.get(ACCOUNT_CODES.cash)?.debit ?? 0;
     const accountsReceivable = (balanceByCode.get(ACCOUNT_CODES.receivables)?.debit ?? 0) - (balanceByCode.get(ACCOUNT_CODES.receivables)?.credit ?? 0);
-    const customerAdvances = (balanceByCode.get(ACCOUNT_CODES.customerAdvances)?.credit ?? 0) - (balanceByCode.get(ACCOUNT_CODES.customerAdvances)?.debit ?? 0);
+    // Adiantamentos filtrados por COMPETÊNCIA do mês: para deferred_receivable
+    // usa due_date do financial_record vinculado (não entry_date, que reflete o
+    // aceite do plano e agrupa todos os meses futuros no mesmo dia).
+    const customerAdvances = await getCustomerAdvancesByCompetence({
+      clinicId: req.isSuperAdmin ? null : req.clinicId,
+      startDate,
+      endDate,
+    });
 
     const completedAppts = await db
       .select({ count: sql<number>`count(*)` })

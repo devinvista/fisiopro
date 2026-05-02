@@ -3,6 +3,7 @@ import {
   accountingAccountsTable,
   accountingJournalEntriesTable,
   accountingJournalLinesTable,
+  financialRecordsTable,
   receivableAllocationsTable,
 } from "@workspace/db";
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
@@ -456,4 +457,58 @@ export async function getAccountingBalances(input: { clinicId?: number | null; p
     .innerJoin(accountingAccountsTable, eq(accountingJournalLinesTable.accountId, accountingAccountsTable.id))
     .where(and(...conditions))
     .groupBy(accountingAccountsTable.code, accountingAccountsTable.type);
+}
+
+/**
+ * Retorna o saldo de Adiantamentos de Clientes (2.1.1) filtrado pela
+ * COMPETÊNCIA do mês selecionado.
+ *
+ * Para entradas do tipo `deferred_receivable` (geradas no aceite do plano),
+ * todos os meses futuros são lançados no mesmo dia (entry_date = data do
+ * aceite). Por isso, a data de competência é lida da `due_date` do
+ * `financial_record` vinculado, não da `entry_date` do lançamento.
+ *
+ * Para todos os demais lançamentos de 2.1.1 (reconhecimento de receita por
+ * sessão, depósitos de carteira, estornos, etc.) a competência é a própria
+ * `entry_date` — que já representa o dia em que o evento ocorreu.
+ *
+ * Resultado: COALESCE(due_date_do_record, entry_date) BETWEEN start AND end.
+ */
+export async function getCustomerAdvancesByCompetence(input: {
+  clinicId?: number | null;
+  startDate: string;
+  endDate: string;
+}): Promise<number> {
+  const conditions: any[] = [
+    eq(accountingJournalEntriesTable.status, "posted"),
+    eq(accountingAccountsTable.code, ACCOUNT_CODES.customerAdvances),
+    sql`COALESCE(${financialRecordsTable.dueDate}, ${accountingJournalEntriesTable.entryDate}) BETWEEN ${input.startDate} AND ${input.endDate}`,
+  ];
+  if (input.clinicId != null) {
+    conditions.push(eq(accountingJournalEntriesTable.clinicId, input.clinicId));
+  }
+
+  const [row] = await db
+    .select({
+      advances: sql<number>`
+        COALESCE(SUM(${accountingJournalLinesTable.creditAmount}::numeric), 0)
+        - COALESCE(SUM(${accountingJournalLinesTable.debitAmount}::numeric), 0)
+      `,
+    })
+    .from(accountingJournalLinesTable)
+    .innerJoin(
+      accountingJournalEntriesTable,
+      eq(accountingJournalLinesTable.entryId, accountingJournalEntriesTable.id),
+    )
+    .innerJoin(
+      accountingAccountsTable,
+      eq(accountingJournalLinesTable.accountId, accountingAccountsTable.id),
+    )
+    .leftJoin(
+      financialRecordsTable,
+      eq(accountingJournalEntriesTable.financialRecordId, financialRecordsTable.id),
+    )
+    .where(and(...conditions));
+
+  return Math.max(0, Number(row?.advances ?? 0));
 }
