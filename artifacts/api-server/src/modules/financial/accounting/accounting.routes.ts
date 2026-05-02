@@ -14,7 +14,7 @@
  *  - O `code` deve seguir o padrão de prefixo do pai (ex.: `4.1.1.01`).
  */
 import { Router } from "express";
-import { db, accountingAccountsTable, accountingJournalEntriesTable, accountingJournalLinesTable, proceduresTable, appointmentsTable, financialRecordsTable, patientsTable } from "@workspace/db";
+import { db, accountingAccountsTable, accountingJournalEntriesTable, accountingJournalLinesTable, proceduresTable, appointmentsTable, financialRecordsTable, patientsTable, sessionCreditsTable } from "@workspace/db";
 import { eq, and, sql, gte, lte, isNull, or, desc, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -418,4 +418,219 @@ router.post(
   }),
 );
 
+// ─── GET /accounting/plan-invoices ────────────────────────────────────────────
+// Lista faturas de plano mensal (faturaPlano + faturaPlanoAvulsoMensal) do
+// mês/ano selecionado, com contagem de sessões e fragmentas reconhecidas.
+router.get(
+  "/accounting/plan-invoices",
+  requireFeature("financial.view.accounting"),
+  requirePermission("financial.read"),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const clinicId = req.clinicId ?? null;
+    const monthRaw = parseInt(req.query.month as string);
+    const yearRaw  = parseInt(req.query.year  as string);
+    if (!Number.isFinite(monthRaw) || monthRaw < 1 || monthRaw > 12)
+      throw HttpError.badRequest("month inválido (1–12)");
+    if (!Number.isFinite(yearRaw) || yearRaw < 2020 || yearRaw > 2100)
+      throw HttpError.badRequest("year inválido");
+
+    const clinicFilter = clinicId
+      ? sql`fr.clinic_id = ${clinicId}`
+      : sql`TRUE`;
+
+    const rows = await db.execute(sql`
+      SELECT
+        fr.id,
+        fr.amount::numeric                                AS amount,
+        fr.recognized_amount::numeric                     AS recognized_amount,
+        fr.recognition_credits_total,
+        fr.recognition_credits_consumed,
+        fr.status                                         AS invoice_status,
+        fr.transaction_type,
+        fr.description,
+        fr.due_date::text                                 AS due_date,
+        fr.plan_month_ref::text                           AS plan_month_ref,
+        p.name                                            AS patient_name,
+        p.id                                              AS patient_id,
+        (SELECT COUNT(*)::int
+           FROM appointments a
+          WHERE a.monthly_invoice_id = fr.id
+            AND a.status <> 'cancelado')                  AS appointment_count,
+        (SELECT COUNT(*)::int
+           FROM accounting_journal_entries je
+          WHERE je.financial_record_id = fr.id
+            AND je.event_type IN ('wallet_usage_revenue', 'receivable_revenue')
+            AND je.reversal_of_entry_id IS NULL)          AS entry_count
+      FROM financial_records fr
+      JOIN patients p ON p.id = fr.patient_id
+      WHERE fr.transaction_type IN ('faturaPlano', 'faturaPlanoAvulsoMensal')
+        AND fr.status NOT IN ('cancelado', 'estornado')
+        AND ${clinicFilter}
+        AND (
+          (EXTRACT(YEAR  FROM fr.due_date) = ${yearRaw}
+            AND EXTRACT(MONTH FROM fr.due_date) = ${monthRaw})
+          OR
+          (EXTRACT(YEAR  FROM fr.plan_month_ref) = ${yearRaw}
+            AND EXTRACT(MONTH FROM fr.plan_month_ref) = ${monthRaw})
+        )
+      ORDER BY p.name ASC, fr.id ASC
+    `);
+
+    const invoices = (rows as any[]).map((r) => ({
+      id:                       Number(r.id),
+      amount:                   Number(r.amount ?? 0),
+      recognizedAmount:         Number(r.recognized_amount ?? 0),
+      recognitionCreditsTotal:  r.recognition_credits_total != null ? Number(r.recognition_credits_total) : null,
+      recognitionCreditsConsumed: Number(r.recognition_credits_consumed ?? 0),
+      invoiceStatus:            r.invoice_status,
+      transactionType:          r.transaction_type,
+      description:              r.description ?? null,
+      dueDate:                  r.due_date ?? null,
+      planMonthRef:             r.plan_month_ref ?? null,
+      patientName:              r.patient_name ?? "(sem nome)",
+      patientId:                Number(r.patient_id),
+      appointmentCount:         Number(r.appointment_count ?? 0),
+      entryCount:               Number(r.entry_count ?? 0),
+    }));
+
+    res.json({ invoices });
+  }),
+);
+
+// ─── GET /accounting/invoice-fragments/:id ────────────────────────────────────
+// Retorna as fragmentas contábeis (uma por sessão) de uma fatura mensal,
+// com status da sessão vinculada e crédito de reposição gerado (se houver).
+router.get(
+  "/accounting/invoice-fragments/:id",
+  requireFeature("financial.view.accounting"),
+  requirePermission("financial.read"),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const clinicId = req.clinicId ?? null;
+    const invoiceId = parseInt(req.params.id as string);
+    if (!Number.isFinite(invoiceId)) throw HttpError.badRequest("id inválido");
+
+    // Fetch invoice
+    const [invoice] = await db
+      .select()
+      .from(financialRecordsTable)
+      .where(eq(financialRecordsTable.id, invoiceId))
+      .limit(1);
+
+    if (!invoice) throw HttpError.notFound("Fatura não encontrada");
+    if (clinicId && invoice.clinicId !== clinicId) throw HttpError.forbidden("Fatura de outra clínica");
+
+    const [patient] = await db
+      .select({ name: patientsTable.name })
+      .from(patientsTable)
+      .where(eq(patientsTable.id, invoice.patientId!))
+      .limit(1);
+
+    // Build appointment query based on invoice type
+    let apptRows: any[];
+    if (
+      invoice.transactionType === "faturaPlanoAvulsoMensal" &&
+      invoice.treatmentPlanProcedureId &&
+      invoice.planMonthRef
+    ) {
+      const monthStart = String(invoice.planMonthRef).slice(0, 10);
+      apptRows = (await db.execute(sql`
+        SELECT
+          a.id            AS appointment_id,
+          a.date::text    AS appointment_date,
+          a.status        AS appointment_status,
+          je.id           AS entry_id,
+          je.entry_date::text AS entry_date,
+          je.event_type   AS entry_event_type,
+          je.status       AS entry_status,
+          (SELECT COALESCE(SUM(jl.debit_amount), 0)::numeric
+             FROM accounting_journal_lines jl
+            WHERE jl.entry_id = je.id) AS entry_amount,
+          sc.id           AS credit_id,
+          sc.origin       AS credit_origin,
+          sc.status       AS credit_status,
+          sc.quantity     AS credit_quantity,
+          sc.used_quantity AS credit_used_quantity
+        FROM appointments a
+        LEFT JOIN accounting_journal_entries je
+          ON je.financial_record_id = ${invoiceId}
+         AND je.appointment_id = a.id
+         AND je.event_type IN ('wallet_usage_revenue', 'receivable_revenue')
+         AND je.reversal_of_entry_id IS NULL
+        LEFT JOIN session_credits sc
+          ON sc.source_appointment_id = a.id
+         AND sc.origin IN ('reposicaoFalta', 'reposicaoRemarcacao')
+        WHERE a.treatment_plan_procedure_id = ${invoice.treatmentPlanProcedureId}
+          AND a.date >= ${monthStart}::date
+          AND a.date <  (${monthStart}::date + INTERVAL '1 month')
+          AND a.status <> 'cancelado'
+        ORDER BY a.date ASC, a.id ASC
+      `)) as any[];
+    } else {
+      apptRows = (await db.execute(sql`
+        SELECT
+          a.id            AS appointment_id,
+          a.date::text    AS appointment_date,
+          a.status        AS appointment_status,
+          je.id           AS entry_id,
+          je.entry_date::text AS entry_date,
+          je.event_type   AS entry_event_type,
+          je.status       AS entry_status,
+          (SELECT COALESCE(SUM(jl.debit_amount), 0)::numeric
+             FROM accounting_journal_lines jl
+            WHERE jl.entry_id = je.id) AS entry_amount,
+          sc.id           AS credit_id,
+          sc.origin       AS credit_origin,
+          sc.status       AS credit_status,
+          sc.quantity     AS credit_quantity,
+          sc.used_quantity AS credit_used_quantity
+        FROM appointments a
+        LEFT JOIN accounting_journal_entries je
+          ON je.financial_record_id = ${invoiceId}
+         AND je.appointment_id = a.id
+         AND je.event_type IN ('wallet_usage_revenue', 'receivable_revenue')
+         AND je.reversal_of_entry_id IS NULL
+        LEFT JOIN session_credits sc
+          ON sc.source_appointment_id = a.id
+         AND sc.origin IN ('reposicaoFalta', 'reposicaoRemarcacao')
+        WHERE a.monthly_invoice_id = ${invoiceId}
+          AND a.status <> 'cancelado'
+        ORDER BY a.date ASC, a.id ASC
+      `)) as any[];
+    }
+
+    const fragments = (apptRows as any[]).map((r) => ({
+      appointmentId:      Number(r.appointment_id),
+      appointmentDate:    r.appointment_date ?? null,
+      appointmentStatus:  r.appointment_status ?? "pendente",
+      entryId:            r.entry_id != null ? Number(r.entry_id) : null,
+      entryDate:          r.entry_date ?? null,
+      entryAmount:        r.entry_amount != null ? Number(r.entry_amount) : null,
+      entryEventType:     r.entry_event_type ?? null,
+      entryStatus:        r.entry_status ?? null,
+      creditId:           r.credit_id != null ? Number(r.credit_id) : null,
+      creditOrigin:       r.credit_origin ?? null,
+      creditStatus:       r.credit_status ?? null,
+      creditQuantity:     r.credit_quantity != null ? Number(r.credit_quantity) : null,
+      creditUsedQuantity: r.credit_used_quantity != null ? Number(r.credit_used_quantity) : null,
+    }));
+
+    res.json({
+      invoice: {
+        id:                       invoice.id,
+        amount:                   Number(invoice.amount ?? 0),
+        recognizedAmount:         Number(invoice.recognizedAmount ?? 0),
+        recognitionCreditsTotal:  invoice.recognitionCreditsTotal ?? null,
+        recognitionCreditsConsumed: invoice.recognitionCreditsConsumed ?? 0,
+        invoiceStatus:            invoice.status,
+        transactionType:          invoice.transactionType,
+        patientName:              patient?.name ?? "(sem nome)",
+        dueDate:                  invoice.dueDate ? String(invoice.dueDate) : null,
+        planMonthRef:             invoice.planMonthRef ? String(invoice.planMonthRef) : null,
+      },
+      fragments,
+    });
+  }),
+);
+
 export default router;
+
