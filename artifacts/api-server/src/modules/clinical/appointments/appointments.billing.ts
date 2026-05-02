@@ -213,7 +213,10 @@ export async function applyBillingRules(
             appointmentDate,
           });
         } catch (err) {
-          console.error("[applyBillingRules] failed to recognize monthly revenue:", err);
+          console.error(
+            `[applyBillingRules] failed to recognize monthly revenue — invoiceId=${monthlyInvoiceId} appointmentId=${appointmentId}:`,
+            err,
+          );
         }
       }
       return;

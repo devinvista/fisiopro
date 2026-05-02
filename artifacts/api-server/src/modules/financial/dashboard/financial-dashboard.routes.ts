@@ -128,7 +128,7 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
     const recurringItems = await db
       .select({
         count: sql<number>`count(*)`,
-        mrr: sql<number>`COALESCE(SUM(COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric), 0)`,
+        mrr: sql<number>`COALESCE(SUM(GREATEST(0, COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric - COALESCE(${treatmentPlanProceduresTable.discount}, 0)::numeric)), 0)`,
       })
       .from(treatmentPlanProceduresTable)
       .innerJoin(treatmentPlansTable, eq(treatmentPlansTable.id, treatmentPlanProceduresTable.treatmentPlanId))

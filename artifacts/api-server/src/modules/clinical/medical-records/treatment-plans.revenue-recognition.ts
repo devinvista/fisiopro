@@ -294,7 +294,7 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     let revenueAccountCode = "4.1.2";
     if (invoice.procedureId) {
       const [proc] = await tx
-        .select({ accountingAccountId: (proceduresTable as any).accountingAccountId })
+        .select({ accountingAccountId: proceduresTable.accountingAccountId })
         .from(proceduresTable)
         .where(eq(proceduresTable.id, invoice.procedureId))
         .limit(1);
