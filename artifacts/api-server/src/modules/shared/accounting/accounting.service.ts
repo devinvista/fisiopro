@@ -1,4 +1,4 @@
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   accountingAccountsTable,
   accountingJournalEntriesTable,
@@ -481,27 +481,41 @@ export async function getCustomerAdvancesByCompetence(input: {
   startDate: string;
   endDate: string;
 }): Promise<number> {
-  const clinicFilter = input.clinicId != null
-    ? sql`AND aje.clinic_id = ${input.clinicId}`
-    : sql``;
+  let queryText: string;
+  let params: (string | number)[];
 
-  const raw = await db.execute<{ advances: string }>(sql`
-    SELECT
-      COALESCE(SUM(ajl.credit_amount::numeric), 0)
-      - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
-    FROM accounting_journal_lines ajl
-    JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
-    JOIN accounting_accounts aa ON aa.id = ajl.account_id
-    LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
-    WHERE aje.status = 'posted'
-      AND aa.code = '2.1.1'
-      ${clinicFilter}
-      AND COALESCE(fr.due_date, aje.entry_date) BETWEEN ${input.startDate} AND ${input.endDate}
-  `);
+  if (input.clinicId != null) {
+    queryText = `
+      SELECT
+        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
+      FROM accounting_journal_lines ajl
+      JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
+      JOIN accounting_accounts aa ON aa.id = ajl.account_id
+      LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
+      WHERE aje.status = 'posted'
+        AND aa.code = '2.1.1'
+        AND aje.clinic_id = $1
+        AND COALESCE(fr.due_date, aje.entry_date) BETWEEN $2 AND $3
+    `;
+    params = [input.clinicId, input.startDate, input.endDate];
+  } else {
+    queryText = `
+      SELECT
+        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
+      FROM accounting_journal_lines ajl
+      JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
+      JOIN accounting_accounts aa ON aa.id = ajl.account_id
+      LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
+      WHERE aje.status = 'posted'
+        AND aa.code = '2.1.1'
+        AND COALESCE(fr.due_date, aje.entry_date) BETWEEN $1 AND $2
+    `;
+    params = [input.startDate, input.endDate];
+  }
 
-  const rows: { advances: string }[] =
-    (raw as unknown as { rows: { advances: string }[] }).rows ??
-    (raw as unknown as { advances: string }[]);
-  const row = rows[0];
+  const result = await pool.query<{ advances: string }>(queryText, params);
+  const row = result.rows[0];
   return Math.max(0, Number(row?.advances ?? 0));
 }
