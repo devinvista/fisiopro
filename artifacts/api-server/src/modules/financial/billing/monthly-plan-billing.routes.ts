@@ -84,6 +84,7 @@ router.get(
           unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
           packageMonthlyPrice: packagesTable.monthlyPrice,
           packageBillingDay: packagesTable.billingDay,
+          discount: treatmentPlanProceduresTable.discount,
         })
         .from(treatmentPlanProceduresTable)
         .innerJoin(
@@ -116,7 +117,9 @@ router.get(
           }
           const nextBillingDate = `${y}-${pad(m)}-${pad(Math.min(day, 28))}`;
           // Pacote mensalidade: o valor mensal pode estar somente no pacote.
-          const amount = Number(it.unitMonthlyPrice ?? it.packageMonthlyPrice ?? 0);
+          // Subtrai desconto para refletir o valor contratado líquido.
+          const gross = Number(it.unitMonthlyPrice ?? it.packageMonthlyPrice ?? 0);
+          const amount = Math.max(0, gross - Number(it.discount ?? 0));
           return {
             id: it.itemId,
             patientName: it.patientName ?? `Paciente #${it.planId}`,
