@@ -14,8 +14,8 @@
  *  - O `code` deve seguir o padrão de prefixo do pai (ex.: `4.1.1.01`).
  */
 import { Router } from "express";
-import { db, accountingAccountsTable, accountingJournalEntriesTable, accountingJournalLinesTable, proceduresTable } from "@workspace/db";
-import { eq, and, sql, gte, lte, isNull, or, desc } from "drizzle-orm";
+import { db, accountingAccountsTable, accountingJournalEntriesTable, accountingJournalLinesTable, proceduresTable, appointmentsTable, financialRecordsTable, patientsTable } from "@workspace/db";
+import { eq, and, sql, gte, lte, isNull, or, desc, isNotNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import type { AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
@@ -23,6 +23,7 @@ import { requireFeature } from "../../../middleware/plan-features.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
 import { validateBody } from "../../../utils/validate.js";
 import { HttpError } from "../../../utils/httpError.js";
+import { recognizeMonthlyInvoiceRevenuePartial } from "../../clinical/medical-records/treatment-plans.revenue-recognition.js";
 
 const router = Router();
 
@@ -270,6 +271,149 @@ router.get(
         totalRevenue: Number(r.totalRevenue ?? 0),
         entries: Number(r.entries ?? 0),
       })),
+    });
+  }),
+);
+
+// ─── GET /accounting/repair-revenue ───────────────────────────────────────────
+// Diagnóstico: lista agendamentos concluídos sem reconhecimento de receita.
+router.get(
+  "/accounting/repair-revenue",
+  requireFeature("financial.view.accounting"),
+  requirePermission("financial.read"),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const clinicId = req.clinicId ?? null;
+
+    const clinicFilter = clinicId
+      ? sql`fr.clinic_id = ${clinicId}`
+      : sql`true`;
+
+    const rows = await db.execute(sql`
+      SELECT
+        a.id                   AS appointment_id,
+        a.date                 AS appointment_date,
+        a.monthly_invoice_id,
+        p.name                 AS patient_name,
+        fr.amount              AS invoice_amount,
+        fr.recognized_amount,
+        fr.status              AS invoice_status,
+        fr.transaction_type,
+        fr.clinic_id
+      FROM appointments a
+      JOIN financial_records fr ON fr.id = a.monthly_invoice_id
+      JOIN patients p ON p.id = a.patient_id
+      WHERE a.status IN ('concluido', 'compareceu')
+        AND a.monthly_invoice_id IS NOT NULL
+        AND fr.transaction_type IN ('faturaPlano', 'faturaPlanoAvulsoMensal')
+        AND fr.status NOT IN ('cancelado', 'estornado')
+        AND fr.amount::numeric > 0
+        AND ${clinicFilter}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM accounting_journal_entries je
+          WHERE je.financial_record_id = fr.id
+            AND je.appointment_id = a.id
+            AND je.event_type IN ('wallet_usage_revenue', 'receivable_revenue')
+            AND je.reversal_of_entry_id IS NULL
+        )
+      ORDER BY a.date DESC
+      LIMIT 200
+    `);
+
+    const appointments = (rows as any[]).map((r) => ({
+      appointmentId: Number(r.appointment_id),
+      appointmentDate: r.appointment_date,
+      monthlyInvoiceId: Number(r.monthly_invoice_id),
+      patientName: r.patient_name ?? "(sem nome)",
+      invoiceAmount: Number(r.invoice_amount ?? 0),
+      recognizedAmount: Number(r.recognized_amount ?? 0),
+      invoiceStatus: r.invoice_status,
+      transactionType: r.transaction_type,
+      clinicId: Number(r.clinic_id),
+    }));
+
+    res.json({ count: appointments.length, appointments });
+  }),
+);
+
+// ─── POST /accounting/repair-revenue ──────────────────────────────────────────
+// Executa reconhecimento de receita para todos os agendamentos pendentes.
+router.post(
+  "/accounting/repair-revenue",
+  requireFeature("financial.view.accounting"),
+  requirePermission("financial.write"),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const clinicId = req.clinicId ?? null;
+
+    const clinicFilter = clinicId
+      ? sql`fr.clinic_id = ${clinicId}`
+      : sql`true`;
+
+    const rows = await db.execute(sql`
+      SELECT
+        a.id                   AS appointment_id,
+        a.date                 AS appointment_date,
+        a.monthly_invoice_id,
+        fr.clinic_id
+      FROM appointments a
+      JOIN financial_records fr ON fr.id = a.monthly_invoice_id
+      WHERE a.status IN ('concluido', 'compareceu')
+        AND a.monthly_invoice_id IS NOT NULL
+        AND fr.transaction_type IN ('faturaPlano', 'faturaPlanoAvulsoMensal')
+        AND fr.status NOT IN ('cancelado', 'estornado')
+        AND fr.amount::numeric > 0
+        AND ${clinicFilter}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM accounting_journal_entries je
+          WHERE je.financial_record_id = fr.id
+            AND je.appointment_id = a.id
+            AND je.event_type IN ('wallet_usage_revenue', 'receivable_revenue')
+            AND je.reversal_of_entry_id IS NULL
+        )
+      ORDER BY a.date ASC
+      LIMIT 200
+    `);
+
+    const pending = rows as Array<{
+      appointment_id: unknown;
+      appointment_date: unknown;
+      monthly_invoice_id: unknown;
+    }>;
+
+    let repaired = 0;
+    let skipped = 0;
+    const errors: Array<{ appointmentId: number; invoiceId: number; error: string }> = [];
+
+    for (const r of pending) {
+      const appointmentId = Number(r.appointment_id);
+      const monthlyInvoiceId = Number(r.monthly_invoice_id);
+      const appointmentDate = String(r.appointment_date).slice(0, 10);
+      try {
+        const result = await recognizeMonthlyInvoiceRevenuePartial({
+          monthlyInvoiceId,
+          appointmentId,
+          appointmentDate,
+        });
+        if (result.recognized) {
+          repaired++;
+        } else {
+          skipped++;
+        }
+      } catch (err: any) {
+        errors.push({
+          appointmentId,
+          invoiceId: monthlyInvoiceId,
+          error: err?.message ?? String(err),
+        });
+      }
+    }
+
+    res.json({
+      found: pending.length,
+      repaired,
+      skipped,
+      errors,
     });
   }),
 );
