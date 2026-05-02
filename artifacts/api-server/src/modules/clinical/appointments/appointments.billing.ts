@@ -3,12 +3,11 @@ import {
   appointmentsTable, financialRecordsTable, sessionCreditsTable,
   patientWalletTable, patientWalletTransactionsTable,
   patientPackagesTable, treatmentPlansTable, packagesTable, clinicsTable,
-  accountingJournalEntriesTable, accountingJournalLinesTable,
 } from "@workspace/db";
-import { eq, and, gt, sql, asc, desc, inArray, isNull } from "drizzle-orm";
+import { eq, and, gt, sql, asc, desc, inArray } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
-  postPackageCreditUsage, postReceivableRevenue, postReversal, postWalletUsage, resolveAccountCodeById,
+  postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import { recognizeMonthlyInvoiceRevenuePartial } from "../medical-records/treatment-plans.revenue-recognition.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
@@ -321,121 +320,16 @@ export async function applyBillingRules(
       return;
     }
 
-    // ── PR-FIN7-4 (B12): Rollback de receita quando uma sessão sai do estado
-    // confirmado (ex.: compareceu → agendado por correção).
+    // ── Modelo "1ª sessão = 100%": SEM estorno em planos materializados ──────
     //
-    // Sprint Financeiro 10 (P2):
-    //   • MODELO FRACIONADO (`recognitionCreditsTotal IS NOT NULL`):
-    //       estorna apenas a fragmenta `(financialRecordId, appointmentId)`
-    //       desta sessão e decrementa `recognizedAmount` / `consumed`.
-    //   • MODELO LEGADO (`recognitionCreditsTotal IS NULL`):
-    //       comportamento original — estorna a entry inteira só se esta era
-    //       a última sessão confirmada do mês.
+    // A receita mensal é reconhecida INTEGRALMENTE na 1ª confirmação do mês
+    // (fato gerador = competência do mês contratado). Quando uma sessão sai
+    // do estado confirmado — por reagendamento, correção ou cancelamento —
+    // a receita NÃO é estornada, pois o vínculo é com o mês/fatura, não com
+    // a sessão individual. Créditos de sessão garantem o direito do paciente
+    // à reposição sem impacto no resultado contábil do mês.
     if (!confirmedSet.includes(newStatus) && confirmedSet.includes(oldStatus)) {
-      const monthlyInvoiceId: number | null = (details as any).monthlyInvoiceId ?? null;
-      if (monthlyInvoiceId) {
-        try {
-          const [invoice] = await db
-            .select({
-              id: financialRecordsTable.id,
-              recognizedEntryId: financialRecordsTable.recognizedEntryId,
-              recognizedAmount: financialRecordsTable.recognizedAmount,
-              recognitionCreditsTotal: financialRecordsTable.recognitionCreditsTotal,
-              recognitionCreditsConsumed: financialRecordsTable.recognitionCreditsConsumed,
-              clinicId: financialRecordsTable.clinicId,
-              patientId: financialRecordsTable.patientId,
-            })
-            .from(financialRecordsTable)
-            .where(eq(financialRecordsTable.id, monthlyInvoiceId))
-            .limit(1);
-
-          if (invoice && invoice.recognitionCreditsTotal != null) {
-            // ── Modelo FRACIONADO: estorna só a fragmenta desta sessão ─
-            const fragmentRows = await db
-              .select({
-                id: accountingJournalEntriesTable.id,
-                amount: sql<string>`(
-                  SELECT COALESCE(SUM(debit_amount), 0)::text
-                  FROM ${accountingJournalLinesTable}
-                  WHERE entry_id = ${accountingJournalEntriesTable.id}
-                )`,
-              })
-              .from(accountingJournalEntriesTable)
-              .where(and(
-                eq(accountingJournalEntriesTable.financialRecordId, monthlyInvoiceId),
-                eq(accountingJournalEntriesTable.appointmentId, appointmentId),
-                inArray(
-                  accountingJournalEntriesTable.eventType,
-                  ["receivable_revenue", "wallet_usage_revenue"],
-                ),
-                isNull(accountingJournalEntriesTable.reversalOfEntryId),
-              ))
-              .limit(1);
-
-            if (fragmentRows.length > 0) {
-              const fragment = fragmentRows[0];
-              const shareAmount = Number(fragment.amount ?? 0);
-              await postReversal(fragment.id, {
-                clinicId: invoice.clinicId ?? null,
-                entryDate: appointmentDate,
-                description:
-                  `[B12-fracionado] Estorno share da sessão #${appointmentId} ` +
-                  `— fatura #${monthlyInvoiceId}`,
-                sourceType: "financial_record",
-                sourceId: invoice.id,
-                patientId: invoice.patientId ?? null,
-                financialRecordId: invoice.id,
-                appointmentId,
-              });
-              const prevRecognized = Number(invoice.recognizedAmount ?? 0);
-              const newRecognized = Math.max(0, Math.round((prevRecognized - shareAmount) * 100) / 100);
-              const prevConsumed = invoice.recognitionCreditsConsumed ?? 0;
-              await db
-                .update(financialRecordsTable)
-                .set({
-                  recognizedAmount: newRecognized.toFixed(2),
-                  recognitionCreditsConsumed: Math.max(0, prevConsumed - 1),
-                })
-                .where(eq(financialRecordsTable.id, monthlyInvoiceId));
-            }
-          } else if (invoice?.recognizedEntryId) {
-            // ── Modelo LEGADO: estorna entry inteira se for a última ─
-            const { startDate, endDate } = monthRangeFromDate(appointmentDate);
-            const [{ confirmedCount }] = await db
-              .select({ confirmedCount: sql<number>`count(*)::int` })
-              .from(appointmentsTable)
-              .where(and(
-                eq(appointmentsTable.monthlyInvoiceId, monthlyInvoiceId),
-                inArray(appointmentsTable.status, confirmedSet as AppointmentStatus[]),
-                sql`${appointmentsTable.date} >= ${startDate}::date`,
-                sql`${appointmentsTable.date} <= ${endDate}::date`,
-                sql`${appointmentsTable.id} != ${appointmentId}`,
-              ));
-
-            if ((confirmedCount ?? 0) === 0) {
-              await postReversal(invoice.recognizedEntryId, {
-                clinicId: invoice.clinicId ?? null,
-                entryDate: appointmentDate,
-                description:
-                  `[B12] Estorno de receita mensal — nenhuma sessão confirmada restante ` +
-                  `— fatura #${monthlyInvoiceId}`,
-                sourceType: "financial_record",
-                sourceId: invoice.id,
-                patientId: invoice.patientId ?? null,
-                financialRecordId: invoice.id,
-                appointmentId,
-              });
-              await db
-                .update(financialRecordsTable)
-                .set({ recognizedEntryId: null, accountingEntryId: null })
-                .where(eq(financialRecordsTable.id, monthlyInvoiceId));
-            }
-          }
-        } catch (err) {
-          console.error("[applyBillingRules] B12 — falha ao estornar receita reconhecida:", err);
-        }
-      }
-      return;
+      return; // no-op — receita permanece reconhecida pela competência do mês
     }
 
     // Outros status (agendado→agendado etc.) — no-op.

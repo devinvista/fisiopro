@@ -1,22 +1,28 @@
 /**
  * Reconhecimento de receita de fatura mensal de plano de tratamento.
  *
- * ─── Sprint Financeiro 10 (P2) ─── Reconhecimento FRACIONADO ──────────────
+ * ─── Modelo "1ª Sessão = 100%" ────────────────────────────────────────────
  *
- * **Modelo NOVO (fracionado):**
+ * **Princípio contábil:**
+ *   A mensalidade é uma receita de competência do mês contratado. No momento
+ *   em que o paciente comparece pela primeira vez no mês (1ª sessão confirmada),
+ *   toda a receita daquele mês é reconhecida integralmente.
+ *   Sessões subsequentes são serviço entregue já coberto pela receita reconhecida.
+ *
+ * **Fluxo:**
  *   • A fatura mensal nasce `pendente` na materialização, sem journal.
  *   • Na 1ª confirmação de sessão (compareceu/concluido) do mês:
  *       1. Snapshota `recognitionCreditsTotal` = nº de appointments
  *          materializados (status NOT IN 'cancelado') ligados à fatura.
- *       2. Posta uma fragmenta `share = amount / total` (D Recebíveis ou
- *          D Adiantamentos / C Receita).
- *       3. Acumula `recognizedAmount` e incrementa `recognitionCreditsConsumed`.
- *   • Cada confirmação subsequente repete (2)+(3) — uma fragmenta por sessão.
- *   • A última fragmenta (consumed+1 == total) recebe o resíduo de centavos
- *     para garantir que a soma das fragmentas == amount exato.
- *   • Sessões não consumidas no fim do mês têm o resíduo apropriado pelo job
- *     `endOfMonthRevenueClosure` (cláusula contratual de reagendamento
- *     intramensal — receita do mês contratada não retorna).
+ *       2. Posta `share = remaining = amount` inteiro (D Adiantamentos / C Receita
+ *          em modo P3, ou D Recebíveis / C Receita em modo legado pendente).
+ *       3. Define `recognizedAmount = amount` e `recognitionCreditsConsumed = 1`.
+ *   • Cada confirmação subsequente é no-op (remaining = 0, retorna cedo).
+ *   • Cancelamentos/faltas NÃO estornam receita — geram crédito de sessão
+ *     para o paciente, vinculado ao fato gerador original.
+ *   • `endOfMonthRevenueClosure` é no-op para faturas já 100% reconhecidas;
+ *     funciona como safety net para faturas sem nenhuma sessão confirmada
+ *     (residual reconhecido ao final do mês por competência).
  *
  * **Idempotência:**
  *   • Por sessão: busca journal entry existente para
@@ -27,9 +33,8 @@
  *
  * **Modelo LEGADO (preservado, sem migração):**
  *   • Faturas com `recognizedEntryId IS NOT NULL` e
- *     `recognitionCreditsTotal IS NULL` foram reconhecidas integralmente
- *     antes do P2. O serviço detecta esse estado e retorna no-op — não
- *     fragmentamos nem re-reconhecemos.
+ *     `recognitionCreditsTotal IS NULL` foram reconhecidas antes desta versão.
+ *     O serviço detecta esse estado e retorna no-op — não re-reconhecemos.
  */
 import { db } from "@workspace/db";
 import {
@@ -277,10 +282,10 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     }
 
     // ── Calcula o share desta fragmenta ────────────────────────────────────
-    // Última fragmenta absorve o resíduo de centavos para zerar saldo.
-    const isLastFragment = consumed + 1 >= creditsTotal;
-    let share = isLastFragment ? remaining : round2(amount / creditsTotal);
-    if (share > remaining) share = remaining;
+    // Modelo "1ª sessão = 100%": a primeira confirmação reconhece o valor
+    // INTEGRAL do mês (share = remaining = amount inteiro). Confirmações
+    // subsequentes caem no guard `remaining <= 0` acima e são no-op.
+    const share = remaining;
     if (share <= 0) {
       return {
         recognized: false,

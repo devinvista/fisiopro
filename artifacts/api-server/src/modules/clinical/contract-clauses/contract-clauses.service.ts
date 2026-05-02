@@ -296,13 +296,32 @@ export async function buildAcceptedClausesSnapshot(
 export const DEFAULT_CLAUSES: ClauseInput[] = [
   {
     code: "REAGENDAMENTO_INTRAMENSAL",
-    title: "Reagendamento dentro do mês",
+    title: "Receita mensal e crédito de reposição",
     body:
-      "As sessões mensais devem ser realizadas dentro do mês de competência. " +
-      "Faltas sem reagendamento dentro do próprio mês não geram crédito futuro " +
-      "nem reembolso, ficando o valor mensal contratado integralmente devido.",
+      "O valor mensal contratado é devido integralmente pela competência do mês, " +
+      "sendo reconhecido contabilmente na primeira sessão realizada. " +
+      "Em caso de cancelamento ou falta, o paciente receberá um crédito de sessão " +
+      "equivalente à sessão não realizada, sem estorno do valor mensal — a receita " +
+      "permanece vinculada ao fato gerador (mês contratado). " +
+      "O crédito de reposição pode ser utilizado dentro do período de validade " +
+      "estabelecido no plano (padrão: 30 dias a partir da data da falta ou cancelamento). " +
+      "Reagendamentos dentro do mês não alteram o reconhecimento de receita já realizado.",
     isRequired: true,
     sortOrder: 10,
+  },
+  {
+    code: "CREDITO_REPOSICAO",
+    title: "Política de crédito de sessão",
+    body:
+      "O crédito de sessão gerado por falta ou cancelamento é pessoal e intransferível, " +
+      "válido exclusivamente para o mesmo procedimento contratado. " +
+      "O prazo de validade do crédito é definido individualmente em cada plano de " +
+      "tratamento; na ausência de definição específica, aplica-se o prazo padrão de " +
+      "30 (trinta) dias corridos a partir da data do evento gerador. " +
+      "Créditos não utilizados dentro do prazo de validade expiram automaticamente, " +
+      "sem direito a reembolso, conforme cláusula de receita mensal acima.",
+    isRequired: false,
+    sortOrder: 15,
   },
   {
     code: "PRECO_DIFERENCIADO",
