@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Receipt, BarChart3, Target, Activity, Settings2, Wallet, RotateCcw, Layers } from "lucide-react";
+import { BookOpen, CalendarDays, Receipt, BarChart3, Target, Activity, Settings2, Wallet, RotateCcw, Layers, Stethoscope } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -14,6 +14,8 @@ import { DespesasFixasTab } from "./components/DespesasFixasTab";
 import { CashFlowTab } from "./components/CashFlowTab";
 import { EstornosTab } from "./components/EstornosTab";
 import { DreByProcedureTab } from "./components/DreByProcedureTab";
+import { DiagnosticoTab } from "./components/DiagnosticoTab";
+import { ConferenciaContabilTab } from "./components/ConferenciaContabilTab";
 import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
@@ -34,6 +36,8 @@ const ALL_TABS: TabDef[] = [
   { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,  label: "Despesas Fixas",       feature: "module.recurring_expenses" },
   { value: "estornos",        icon: <RotateCcw className="w-3.5 h-3.5" />,  label: "Estornos",             feature: "financial.view.simple" },
   { value: "dre-procedimento",icon: <Layers className="w-3.5 h-3.5" />,     label: "DRE/Procedimento",     feature: "financial.view.accounting" },
+  { value: "diagnostico",     icon: <Stethoscope className="w-3.5 h-3.5" />, label: "Diagnóstico",           feature: "financial.view.accounting" },
+  { value: "conferencia",     icon: <BookOpen className="w-3.5 h-3.5" />,    label: "Conferência Contábil",  feature: "financial.view.accounting" },
 ];
 
 export default function Financial() {
@@ -138,6 +142,16 @@ export default function Financial() {
         {hasFeature("financial.view.accounting") && (
           <TabsContent value="dre-procedimento">
             <DreByProcedureTab />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.accounting") && (
+          <TabsContent value="diagnostico">
+            <DiagnosticoTab />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.accounting") && (
+          <TabsContent value="conferencia">
+            <ConferenciaContabilTab month={month} year={year} />
           </TabsContent>
         )}
       </Tabs>

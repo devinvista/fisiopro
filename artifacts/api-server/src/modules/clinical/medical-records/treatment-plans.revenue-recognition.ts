@@ -1,22 +1,28 @@
 /**
  * Reconhecimento de receita de fatura mensal de plano de tratamento.
  *
- * ─── Sprint Financeiro 10 (P2) ─── Reconhecimento FRACIONADO ──────────────
+ * ─── Modelo "1ª Sessão = 100%" ────────────────────────────────────────────
  *
- * **Modelo NOVO (fracionado):**
+ * **Princípio contábil:**
+ *   A mensalidade é uma receita de competência do mês contratado. No momento
+ *   em que o paciente comparece pela primeira vez no mês (1ª sessão confirmada),
+ *   toda a receita daquele mês é reconhecida integralmente.
+ *   Sessões subsequentes são serviço entregue já coberto pela receita reconhecida.
+ *
+ * **Fluxo:**
  *   • A fatura mensal nasce `pendente` na materialização, sem journal.
  *   • Na 1ª confirmação de sessão (compareceu/concluido) do mês:
  *       1. Snapshota `recognitionCreditsTotal` = nº de appointments
  *          materializados (status NOT IN 'cancelado') ligados à fatura.
- *       2. Posta uma fragmenta `share = amount / total` (D Recebíveis ou
- *          D Adiantamentos / C Receita).
- *       3. Acumula `recognizedAmount` e incrementa `recognitionCreditsConsumed`.
- *   • Cada confirmação subsequente repete (2)+(3) — uma fragmenta por sessão.
- *   • A última fragmenta (consumed+1 == total) recebe o resíduo de centavos
- *     para garantir que a soma das fragmentas == amount exato.
- *   • Sessões não consumidas no fim do mês têm o resíduo apropriado pelo job
- *     `endOfMonthRevenueClosure` (cláusula contratual de reagendamento
- *     intramensal — receita do mês contratada não retorna).
+ *       2. Posta `share = remaining = amount` inteiro (D Adiantamentos / C Receita
+ *          em modo P3, ou D Recebíveis / C Receita em modo legado pendente).
+ *       3. Define `recognizedAmount = amount` e `recognitionCreditsConsumed = 1`.
+ *   • Cada confirmação subsequente é no-op (remaining = 0, retorna cedo).
+ *   • Cancelamentos/faltas NÃO estornam receita — geram crédito de sessão
+ *     para o paciente, vinculado ao fato gerador original.
+ *   • `endOfMonthRevenueClosure` é no-op para faturas já 100% reconhecidas;
+ *     funciona como safety net para faturas sem nenhuma sessão confirmada
+ *     (residual reconhecido ao final do mês por competência).
  *
  * **Idempotência:**
  *   • Por sessão: busca journal entry existente para
@@ -27,9 +33,8 @@
  *
  * **Modelo LEGADO (preservado, sem migração):**
  *   • Faturas com `recognizedEntryId IS NOT NULL` e
- *     `recognitionCreditsTotal IS NULL` foram reconhecidas integralmente
- *     antes do P2. O serviço detecta esse estado e retorna no-op — não
- *     fragmentamos nem re-reconhecemos.
+ *     `recognitionCreditsTotal IS NULL` foram reconhecidas antes desta versão.
+ *     O serviço detecta esse estado e retorna no-op — não re-reconhecemos.
  */
 import { db } from "@workspace/db";
 import {
@@ -75,47 +80,49 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/**
- * Conta appointments materializados ligados a esta fatura mensal e elegíveis
- * a consumir um crédito (qualquer status exceto `cancelado`). Faltas contam
- * pois geram crédito de reposição que será consumido depois.
- */
-async function countInvoiceCredits(tx: Tx, monthlyInvoiceId: number): Promise<number> {
-  const [{ total }] = (await tx.execute(
-    sql`SELECT COUNT(*)::int AS total
-        FROM ${appointmentsTable}
-        WHERE ${appointmentsTable.monthlyInvoiceId} = ${monthlyInvoiceId}
-          AND ${appointmentsTable.status} <> 'cancelado'`,
-  )) as unknown as Array<{ total: number }>;
-  return Number(total ?? 0);
-}
+type ApptRow = { id: number; date: string };
 
 /**
- * Sprint Financeiro 13 (P4) — variante de contagem para `faturaPlanoAvulsoMensal`.
- * Conta sessões avulsas do plano para o mês de competência da fatura, via
- * `treatmentPlanProcedureId + competência do mês` (não usa `monthlyInvoiceId`
- * porque o materializer atual não vincula appointments avulsos a fatura
- * mensal — vínculo é feito lazy pelo billing).
+ * Busca todos os appointments não-cancelados ligados a uma `faturaPlano`,
+ * ordenados por data e id. Esses são os "slots" a receber fragmentas de receita.
+ * Faltas contam (o paciente tem direito à sessão; crédito de reposição não
+ * altera a receita do mês já contabilizada).
  */
-async function countAvulsoSessions(
+async function fetchInvoiceAppointments(
   tx: Tx,
-  treatmentPlanProcedureId: number,
-  planMonthRef: string,
-): Promise<number> {
-  // planMonthRef no schema vem como YYYY-MM-01 ou YYYY-MM. Normalizamos para
-  // janela [monthStart, nextMonthStart) sobre `appointments.date`.
-  const monthStart = planMonthRef.length >= 10
-    ? planMonthRef.slice(0, 10)
-    : `${planMonthRef.slice(0, 7)}-01`;
-  const [{ total }] = (await tx.execute(
-    sql`SELECT COUNT(*)::int AS total
-        FROM ${appointmentsTable}
-        WHERE ${appointmentsTable.treatmentPlanProcedureId} = ${treatmentPlanProcedureId}
-          AND ${appointmentsTable.date} >= ${monthStart}::date
-          AND ${appointmentsTable.date} <  (${monthStart}::date + INTERVAL '1 month')
-          AND ${appointmentsTable.status} <> 'cancelado'`,
-  )) as unknown as Array<{ total: number }>;
-  return Number(total ?? 0);
+  invoice: { id: number; transactionType: string | null; treatmentPlanProcedureId: number | null; planMonthRef: string | null },
+): Promise<ApptRow[]> {
+  if (
+    invoice.transactionType === "faturaPlanoAvulsoMensal" &&
+    invoice.treatmentPlanProcedureId &&
+    invoice.planMonthRef
+  ) {
+    const monthStart = invoice.planMonthRef.length >= 10
+      ? invoice.planMonthRef.slice(0, 10)
+      : `${invoice.planMonthRef.slice(0, 7)}-01`;
+    const rows = (await tx.execute(
+      sql`SELECT id, date::text AS date
+          FROM ${appointmentsTable}
+          WHERE ${appointmentsTable.treatmentPlanProcedureId} = ${invoice.treatmentPlanProcedureId}
+            AND ${appointmentsTable.date} >= ${monthStart}::date
+            AND ${appointmentsTable.date} <  (${monthStart}::date + INTERVAL '1 month')
+            AND ${appointmentsTable.status} <> 'cancelado'
+          ORDER BY date ASC, id ASC`,
+    )) as unknown as ApptRow[];
+    return Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+  }
+
+  const rows = await tx
+    .select({ id: appointmentsTable.id, date: appointmentsTable.date })
+    .from(appointmentsTable)
+    .where(
+      and(
+        eq(appointmentsTable.monthlyInvoiceId, invoice.id),
+        sql`${appointmentsTable.status} <> 'cancelado'`,
+      ),
+    )
+    .orderBy(sql`${appointmentsTable.date} ASC, ${appointmentsTable.id} ASC`);
+  return rows.map(r => ({ id: r.id, date: String(r.date) }));
 }
 
 /**
@@ -153,24 +160,32 @@ async function findExistingFragmentForAppointment(
 }
 
 /**
- * Reconhece UMA fragmenta de receita da fatura mensal correspondente a uma
- * sessão concluída. Idempotente — chamadas repetidas para o mesmo
- * `(monthlyInvoiceId, appointmentId)` são no-op.
+ * Reconhece receita proporcional por sessão, disparada na 1ª confirmação do mês.
  *
- * Para o modelo legado (faturas anteriores ao P2 já reconhecidas integralmente)
- * retorna `{ recognized: false, reason: 'Receita legada já reconhecida' }`.
+ * Modelo "1ª sessão dispara tudo":
+ *   • Na 1ª confirmação (consumed === 0): busca TODAS as sessões não-canceladas
+ *     do mês, cria uma fragmenta de `amount / N` para CADA uma (datada na data
+ *     de cada sessão), e marca a fatura como 100% reconhecida.
+ *   • Confirmações subsequentes encontram a fragmenta já existente via
+ *     idempotência (findExistingFragmentForAppointment) → no-op.
+ *   • Cancelamentos/faltas posteriores NÃO estornam — créditos de sessão
+ *     garantem o direito do paciente sem impacto no P&L do mês.
  *
- * O parâmetro `_tx` é mantido por compatibilidade retroativa com o callsite
- * anterior em `appointments.billing.ts` mas é ignorado — a função sempre
- * gerencia sua própria transação para acoplar o advisory lock corretamente.
+ * Idempotência dupla:
+ *   • Por sessão: `(financialRecordId, appointmentId)` → no-op se já postado.
+ *   • Por fatura: `pg_advisory_xact_lock(invoiceId)` → serializa concorrência.
+ *
+ * Modelo LEGADO: faturas com `recognizedEntryId IS NOT NULL` e
+ *   `recognitionCreditsTotal IS NULL` são no-op (não re-reconhecemos).
+ *
+ * O parâmetro `_tx` é mantido por retrocompatibilidade mas ignorado — a
+ * função sempre gerencia sua própria transação para acoplar o advisory lock.
  */
 export async function recognizeMonthlyInvoiceRevenuePartial(
   input: RecognizeRevenueInput,
   _tx: Tx = db,
 ): Promise<RecognizeRevenueResult> {
   return db.transaction(async (tx) => {
-    // Serializa reconhecimentos concorrentes da MESMA fatura. Sessões de
-    // faturas diferentes não se bloqueiam entre si.
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(${input.monthlyInvoiceId}::bigint)`,
     );
@@ -181,13 +196,8 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       .where(eq(financialRecordsTable.id, input.monthlyInvoiceId))
       .limit(1);
 
-    if (!invoice) {
-      return { recognized: false, reason: "Fatura não encontrada" };
-    }
+    if (!invoice) return { recognized: false, reason: "Fatura não encontrada" };
 
-    // Sprint Financeiro 13 (P4) — aceita também `faturaPlanoAvulsoMensal`
-    // (mesmo modelo de aceite contábil antecipado, mas para itens avulsos
-    // estimados por sessões/semana × 4).
     if (
       invoice.transactionType !== "faturaPlano" &&
       invoice.transactionType !== "faturaPlanoAvulsoMensal"
@@ -200,14 +210,9 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     }
 
     const amount = Number(invoice.amount);
-    if (amount <= 0) {
-      return { recognized: false, reason: "Valor zero" };
-    }
+    if (amount <= 0) return { recognized: false, reason: "Valor zero" };
 
-    // ── Compatibilidade com modelo LEGADO ──────────────────────────────────
-    // Faturas reconhecidas integralmente antes do P2 (sentinel populado e
-    // pool de créditos NÃO snapshotado) seguem o modelo antigo. NÃO migramos
-    // automaticamente — o B12 ainda sabe estornar entry inteira nesse caso.
+    // ── Modelo LEGADO: já reconhecido integralmente antes desta versão ──────
     if (invoice.recognizedEntryId != null && invoice.recognitionCreditsTotal == null) {
       return {
         recognized: false,
@@ -216,31 +221,7 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       };
     }
 
-    // ── Bootstrap do pool ──────────────────────────────────────────────────
-    let creditsTotal = invoice.recognitionCreditsTotal;
-    if (creditsTotal == null) {
-      let counted = 0;
-      if (
-        invoice.transactionType === "faturaPlanoAvulsoMensal" &&
-        invoice.treatmentPlanProcedureId &&
-        invoice.planMonthRef
-      ) {
-        // P4: avulso → count via (item, mês de competência).
-        counted = await countAvulsoSessions(
-          tx as unknown as Tx,
-          invoice.treatmentPlanProcedureId,
-          invoice.planMonthRef,
-        );
-      } else {
-        counted = await countInvoiceCredits(tx as unknown as Tx, invoice.id);
-      }
-      // Mínimo 1: garantimos que esta sessão (que nos chamou) ao menos esteja
-      // contada. Cobre cenário de borda em que o COUNT da própria sessão
-      // ainda não materializou (race com o INSERT do appointment).
-      creditsTotal = Math.max(1, counted);
-    }
-
-    // ── Idempotência por (fatura, sessão) ──────────────────────────────────
+    // ── Idempotência por sessão: fragmenta já existe para este appointment? ─
     const existingFragment = await findExistingFragmentForAppointment(
       tx as unknown as Tx,
       invoice.id,
@@ -252,49 +233,50 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
         reason: "Fragmenta já postada para esta sessão",
         entryId: existingFragment.id,
         shareAmount: Number(existingFragment.amount),
-        recognitionCreditsTotal: creditsTotal,
-        recognitionCreditsConsumed: invoice.recognitionCreditsConsumed,
+        recognitionCreditsTotal: invoice.recognitionCreditsTotal ?? undefined,
+        recognitionCreditsConsumed: invoice.recognitionCreditsConsumed ?? undefined,
       };
     }
 
+    // ── Se consumed > 0 a fatura foi reconhecida em bulk na 1ª sessão ───────
+    // Esta sessão não tem fragmenta (criada depois do bulk? edge case).
+    // Retorna no-op — a receita do mês já foi 100% reconhecida.
     const consumed = invoice.recognitionCreditsConsumed ?? 0;
-    if (consumed >= creditsTotal) {
-      // Pool já esgotado e esta sessão ainda não tem fragmenta — significa
-      // que o pool foi estimado por baixo (sessão extra criada após bootstrap).
-      // Expande o pool em +1 para acomodar e procede.
-      creditsTotal = consumed + 1;
-    }
-
-    const recognized = Number(invoice.recognizedAmount ?? 0);
-    const remaining = round2(amount - recognized);
-    if (remaining <= 0) {
+    if (consumed > 0) {
       return {
         recognized: false,
-        reason: "Receita já totalmente apropriada",
-        recognitionCreditsTotal: creditsTotal,
+        reason: "Receita já reconhecida em bulk na 1ª sessão do mês",
+        recognitionCreditsTotal: invoice.recognitionCreditsTotal ?? undefined,
         recognitionCreditsConsumed: consumed,
       };
     }
 
-    // ── Calcula o share desta fragmenta ────────────────────────────────────
-    // Última fragmenta absorve o resíduo de centavos para zerar saldo.
-    const isLastFragment = consumed + 1 >= creditsTotal;
-    let share = isLastFragment ? remaining : round2(amount / creditsTotal);
-    if (share > remaining) share = remaining;
-    if (share <= 0) {
-      return {
-        recognized: false,
-        reason: "Share calculado <= 0",
-        recognitionCreditsTotal: creditsTotal,
-        recognitionCreditsConsumed: consumed,
-      };
+    // ── 1ª sessão do mês: dispara reconhecimento proporcional para TODAS ────
+    // Busca todas as sessões não-canceladas do mês ligadas a esta fatura.
+    let allAppointments = await fetchInvoiceAppointments(
+      tx as unknown as Tx,
+      {
+        id: invoice.id,
+        transactionType: invoice.transactionType,
+        treatmentPlanProcedureId: invoice.treatmentPlanProcedureId ?? null,
+        planMonthRef: invoice.planMonthRef ?? null,
+      },
+    );
+
+    // Safety: garante que a sessão disparadora está na lista (race condition).
+    if (!allAppointments.some(a => a.id === input.appointmentId)) {
+      allAppointments.push({ id: input.appointmentId, date: input.appointmentDate });
+      allAppointments.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
     }
 
-    // ── Sub-conta de receita pelo procedimento (4.1.2 default fracionado) ─
+    const total = Math.max(1, allAppointments.length);
+    const shareBase = round2(amount / total);
+
+    // ── Sub-conta de receita e modo P3 ────────────────────────────────────
     let revenueAccountCode = "4.1.2";
     if (invoice.procedureId) {
       const [proc] = await tx
-        .select({ accountingAccountId: (proceduresTable as any).accountingAccountId })
+        .select({ accountingAccountId: proceduresTable.accountingAccountId })
         .from(proceduresTable)
         .where(eq(proceduresTable.id, invoice.procedureId))
         .limit(1);
@@ -305,29 +287,8 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       );
     }
 
-    const fragmentNumber = consumed + 1;
-    const baseEntry = {
-      clinicId: invoice.clinicId ?? null,
-      entryDate: input.appointmentDate,
-      amount: share,
-      description:
-        `Receita parcial ${fragmentNumber}/${creditsTotal} — ` +
-        `fatura #${invoice.id} — sessão #${input.appointmentId} — ${invoice.description}`,
-      sourceType: "financial_record" as const,
-      sourceId: invoice.id,
-      patientId: invoice.patientId ?? null,
-      appointmentId: input.appointmentId,
-      procedureId: invoice.procedureId ?? null,
-      financialRecordId: invoice.id,
-      revenueAccountCode,
-    };
-
-    // ── Sprint Financeiro 12 (P3) — detecção do modo P3 ───────────────────
-    // Em P3, o aceite já postou D 1.1.2 / C 2.1.1 (deferred_receivable) para
-    // CADA fatura mensal — receita e adiantamento existem ANTES da sessão.
-    // Logo cada fragmenta deve SEMPRE consumir do adiantamento (postWalletUsage),
-    // independente do status da fatura (paga ou pendente). Em modo legado,
-    // mantemos o ramo antigo: pago=walletUsage, pendente=receivableRevenue.
+    // P3: aceite já postou D 1.1.2 / C 2.1.1 → fragmentas consomem adiantamento.
+    // Legado pendente: fragmentas geram recebível + receita (D 1.1.2 / C 4.1.2).
     const [hasDeferred] = await tx
       .select({ id: accountingJournalEntriesTable.id })
       .from(accountingJournalEntriesTable)
@@ -342,43 +303,65 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       .limit(1);
     const isP3Mode = !!hasDeferred;
 
-    let entryId: number;
-    if (isP3Mode || invoice.status === "pago") {
-      // P3 OU pago via cash-advance legado — em ambos o passivo (2.1.1) já
-      // existe. Cada fragmenta consome do adiantamento. D 2.1.1 / C 4.1.2.
-      const entry = await postWalletUsage(baseEntry, tx as any);
-      entryId = entry.id;
-    } else {
-      // Legado pendente. Cada fragmenta gera recebível + receita.
-      // D 1.1.2 / C 4.1.2.
-      const entry = await postReceivableRevenue(baseEntry, tx as any);
-      entryId = entry.id;
+    // ── Cria uma fragmenta proporcional para cada sessão do mês ─────────────
+    let firstEntryId: number | null = null;
+    let triggerEntryId: number | null = null;
+    let totalPosted = 0;
+
+    for (let i = 0; i < allAppointments.length; i++) {
+      const appt = allAppointments[i];
+      const isLast = i === allAppointments.length - 1;
+      // Última fragmenta absorve centavos de arredondamento.
+      const share = isLast ? round2(amount - totalPosted) : shareBase;
+      if (share <= 0) continue;
+
+      const entryBase = {
+        clinicId: invoice.clinicId ?? null,
+        entryDate: appt.date,             // competência = data da PRÓPRIA sessão
+        amount: share,
+        description:
+          `Receita ${i + 1}/${total} — fatura #${invoice.id} — sessão #${appt.id} — ${invoice.description}`,
+        sourceType: "financial_record" as const,
+        sourceId: invoice.id,
+        patientId: invoice.patientId ?? null,
+        appointmentId: appt.id,           // vinculada à sessão individual
+        procedureId: invoice.procedureId ?? null,
+        financialRecordId: invoice.id,
+        revenueAccountCode,
+      };
+
+      let entryId: number;
+      if (isP3Mode || invoice.status === "pago") {
+        const entry = await postWalletUsage(entryBase, tx as any);
+        entryId = entry.id;
+      } else {
+        const entry = await postReceivableRevenue(entryBase, tx as any);
+        entryId = entry.id;
+      }
+
+      if (firstEntryId === null) firstEntryId = entryId;
+      if (appt.id === input.appointmentId) triggerEntryId = entryId;
+      totalPosted = round2(totalPosted + share);
     }
 
-    const newRecognized = round2(recognized + share);
-    const newConsumed = consumed + 1;
-
+    // ── Atualiza fatura: 100% reconhecida, consumed = total ─────────────────
     await tx
       .update(financialRecordsTable)
       .set({
-        recognizedAmount: newRecognized.toFixed(2),
-        recognitionCreditsTotal: creditsTotal,
-        recognitionCreditsConsumed: newConsumed,
-        // Sentinel agregado: aponta para a 1ª fragmenta. Mantém compatibilidade
-        // com leitura antiga (cascade de pagamento, conciliação) que assume
-        // 1 entry por fatura. Para estorno fracionado o B12 busca por
-        // (financialRecordId, appointmentId).
-        recognizedEntryId: invoice.recognizedEntryId ?? entryId,
-        accountingEntryId: entryId,
+        recognizedAmount: amount.toFixed(2),
+        recognitionCreditsTotal: total,
+        recognitionCreditsConsumed: total,
+        recognizedEntryId: invoice.recognizedEntryId ?? firstEntryId,
+        accountingEntryId: triggerEntryId ?? firstEntryId ?? invoice.accountingEntryId,
       })
       .where(eq(financialRecordsTable.id, invoice.id));
 
     return {
       recognized: true,
-      entryId,
-      shareAmount: share,
-      recognitionCreditsTotal: creditsTotal,
-      recognitionCreditsConsumed: newConsumed,
+      entryId: triggerEntryId ?? firstEntryId!,
+      shareAmount: shareBase,
+      recognitionCreditsTotal: total,
+      recognitionCreditsConsumed: total,
     };
   });
 }

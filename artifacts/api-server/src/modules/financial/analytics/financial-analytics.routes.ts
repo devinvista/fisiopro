@@ -288,7 +288,7 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
       : planActiveCond;
 
     const [mrrRow] = await db
-      .select({ mrr: sql<number>`COALESCE(SUM(COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric), 0)` })
+      .select({ mrr: sql<number>`COALESCE(SUM(GREATEST(0, COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric - COALESCE(${treatmentPlanProceduresTable.discount}, 0)::numeric)), 0)` })
       .from(treatmentPlanProceduresTable)
       .innerJoin(treatmentPlansTable, eq(treatmentPlansTable.id, treatmentPlanProceduresTable.treatmentPlanId))
       .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))

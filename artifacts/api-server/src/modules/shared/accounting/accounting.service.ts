@@ -1,4 +1,4 @@
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   accountingAccountsTable,
   accountingJournalEntriesTable,
@@ -456,4 +456,66 @@ export async function getAccountingBalances(input: { clinicId?: number | null; p
     .innerJoin(accountingAccountsTable, eq(accountingJournalLinesTable.accountId, accountingAccountsTable.id))
     .where(and(...conditions))
     .groupBy(accountingAccountsTable.code, accountingAccountsTable.type);
+}
+
+/**
+ * Retorna o saldo de Adiantamentos de Clientes (2.1.1) filtrado pela
+ * COMPETÊNCIA do mês selecionado.
+ *
+ * Para entradas do tipo `deferred_receivable` (geradas no aceite do plano),
+ * todos os meses futuros são lançados no mesmo dia (entry_date = data do
+ * aceite). Por isso, a data de competência é lida da `due_date` do
+ * `financial_record` vinculado, não da `entry_date` do lançamento.
+ *
+ * Para todos os demais lançamentos de 2.1.1 (reconhecimento de receita por
+ * sessão, depósitos de carteira, estornos, etc.) a competência é a própria
+ * `entry_date` — que já representa o dia em que o evento ocorreu.
+ *
+ * Resultado: COALESCE(fr.due_date, aje.entry_date) BETWEEN startDate AND endDate.
+ *
+ * Usa SQL raw via db.execute para garantir que o COALESCE entre duas colunas
+ * de tabelas diferentes seja gerado corretamente (evita ambiguidade no ORM).
+ */
+export async function getCustomerAdvancesByCompetence(input: {
+  clinicId?: number | null;
+  startDate: string;
+  endDate: string;
+}): Promise<number> {
+  let queryText: string;
+  let params: (string | number)[];
+
+  if (input.clinicId != null) {
+    queryText = `
+      SELECT
+        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
+      FROM accounting_journal_lines ajl
+      JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
+      JOIN accounting_accounts aa ON aa.id = ajl.account_id
+      LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
+      WHERE aje.status = 'posted'
+        AND aa.code = '2.1.1'
+        AND aje.clinic_id = $1
+        AND COALESCE(fr.due_date, aje.entry_date) BETWEEN $2 AND $3
+    `;
+    params = [input.clinicId, input.startDate, input.endDate];
+  } else {
+    queryText = `
+      SELECT
+        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
+      FROM accounting_journal_lines ajl
+      JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
+      JOIN accounting_accounts aa ON aa.id = ajl.account_id
+      LEFT JOIN financial_records fr ON fr.id = aje.financial_record_id
+      WHERE aje.status = 'posted'
+        AND aa.code = '2.1.1'
+        AND COALESCE(fr.due_date, aje.entry_date) BETWEEN $1 AND $2
+    `;
+    params = [input.startDate, input.endDate];
+  }
+
+  const result = await pool.query<{ advances: string }>(queryText, params);
+  const row = result.rows[0];
+  return Math.max(0, Number(row?.advances ?? 0));
 }

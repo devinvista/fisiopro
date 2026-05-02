@@ -198,7 +198,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
             value={formatCurrency(customerAdvances)}
             icon={<PiggyBank className="w-4 h-4" />}
             accentColor="#14b8a6"
-            sub="Passivo com pacientes"
+            sub="Passivo com pacientes (competência do mês)"
           />
         </div>
       )}
