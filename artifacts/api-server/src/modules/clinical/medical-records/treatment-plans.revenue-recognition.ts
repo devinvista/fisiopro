@@ -238,21 +238,24 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       };
     }
 
-    // ── Se consumed > 0 a fatura foi reconhecida em bulk na 1ª sessão ───────
-    // Esta sessão não tem fragmenta (criada depois do bulk? edge case).
-    // Retorna no-op — a receita do mês já foi 100% reconhecida.
+    // ── Guard: bloqueia somente quando 100% reconhecida (consumed >= total) ──
+    // Modelo antigo (per-sessão incremental) gravava consumed=N e total=M com
+    // N < M; o guard antigo (`consumed > 0`) bloqueava erroneamente sessões
+    // restantes. Agora só retorna no-op quando consumed atingiu o total
+    // armazenado, permitindo que registros parcialmente reconhecidos sejam
+    // completados pelo bulk path abaixo.
     const consumed = invoice.recognitionCreditsConsumed ?? 0;
-    if (consumed > 0) {
+    const storedTotal = invoice.recognitionCreditsTotal ?? null;
+    if (storedTotal !== null && consumed >= storedTotal) {
       return {
         recognized: false,
-        reason: "Receita já reconhecida em bulk na 1ª sessão do mês",
-        recognitionCreditsTotal: invoice.recognitionCreditsTotal ?? undefined,
+        reason: "Receita já 100% reconhecida",
+        recognitionCreditsTotal: storedTotal,
         recognitionCreditsConsumed: consumed,
       };
     }
 
-    // ── 1ª sessão do mês: dispara reconhecimento proporcional para TODAS ────
-    // Busca todas as sessões não-canceladas do mês ligadas a esta fatura.
+    // ── Busca todas as sessões não-canceladas do mês ligadas a esta fatura ──
     let allAppointments = await fetchInvoiceAppointments(
       tx as unknown as Tx,
       {
@@ -303,24 +306,45 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       .limit(1);
     const isP3Mode = !!hasDeferred;
 
-    // ── Cria uma fragmenta proporcional para cada sessão do mês ─────────────
+    // ── Separa appointments com fragmenta existente dos que ainda precisam ──
+    // Necessário para: (a) idempotência por sessão no bulk, (b) compatibilidade
+    // com registros parcialmente reconhecidos pelo modelo antigo (per-sessão).
     let firstEntryId: number | null = null;
     let triggerEntryId: number | null = null;
     let totalPosted = 0;
 
-    for (let i = 0; i < allAppointments.length; i++) {
-      const appt = allAppointments[i];
-      const isLast = i === allAppointments.length - 1;
-      // Última fragmenta absorve centavos de arredondamento.
+    const toCreate: ApptRow[] = [];
+    for (const appt of allAppointments) {
+      const existing = await findExistingFragmentForAppointment(
+        tx as unknown as Tx,
+        invoice.id,
+        appt.id,
+      );
+      if (existing) {
+        // Acumula o valor já postado para manter cálculo de arredondamento correto.
+        totalPosted = round2(totalPosted + Number(existing.amount));
+        if (firstEntryId === null) firstEntryId = existing.id;
+        if (appt.id === input.appointmentId) triggerEntryId = existing.id;
+      } else {
+        toCreate.push(appt);
+      }
+    }
+
+    // ── Cria fragmentas apenas para appointments ainda sem reconhecimento ────
+    for (let i = 0; i < toCreate.length; i++) {
+      const appt = toCreate[i];
+      const isLast = i === toCreate.length - 1;
+      // Última fragmenta nova absorve centavos de arredondamento restante.
       const share = isLast ? round2(amount - totalPosted) : shareBase;
       if (share <= 0) continue;
 
+      const apptIndex = allAppointments.findIndex(a => a.id === appt.id);
       const entryBase = {
         clinicId: invoice.clinicId ?? null,
         entryDate: appt.date,             // competência = data da PRÓPRIA sessão
         amount: share,
         description:
-          `Receita ${i + 1}/${total} — fatura #${invoice.id} — sessão #${appt.id} — ${invoice.description}`,
+          `Receita ${apptIndex + 1}/${total} — fatura #${invoice.id} — sessão #${appt.id} — ${invoice.description}`,
         sourceType: "financial_record" as const,
         sourceId: invoice.id,
         patientId: invoice.patientId ?? null,
