@@ -198,6 +198,7 @@ export async function acceptPlanFinancials(
         const avulsoProcedureId = item.procedureId;
         if (!avulsoProcedureId) continue;
 
+        const durationMonths = plan.durationMonths ?? 12;
         const unit = Number(item.unitPrice ?? 0);
         // item.discount armazena o desconto TOTAL do plano (desconto/sessão ×
         // sessões estimadas), NÃO o desconto unitário. Isso é a convenção do
@@ -205,7 +206,7 @@ export async function acceptPlanFinancials(
         // recuperar o desconto por sessão antes de calcular o preço efetivo.
         const totalDiscount = Math.max(0, Number(item.discount ?? 0));
         const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
-        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * 4 * (durationMonths ?? 12)));
+        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * 4 * durationMonths));
         const unitDiscount = totalDiscount / estimatedTotalSessions;
         const unitEffective = Math.max(0, unit - unitDiscount);
         if (unitEffective <= 0) continue;
@@ -230,7 +231,6 @@ export async function acceptPlanFinancials(
           packageBillingDay: null,
         });
         const planStart = plan.startDate ?? now.iso;
-        const durationMonths = plan.durationMonths ?? 12;
 
         // Para avulsos usamos a conta de receita por sessão (4.1.1) por
         // padrão, com fallback se o procedimento tiver sub-conta dedicada.

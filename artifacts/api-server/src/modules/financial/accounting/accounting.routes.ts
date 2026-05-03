@@ -320,7 +320,7 @@ router.get(
       LIMIT 200
     `);
 
-    const appointments = (rows as any[]).map((r) => ({
+    const appointments = (rows as unknown as any[]).map((r) => ({
       appointmentId: Number(r.appointment_id),
       appointmentDate: r.appointment_date,
       monthlyInvoiceId: Number(r.monthly_invoice_id),
@@ -375,7 +375,7 @@ router.post(
       LIMIT 200
     `);
 
-    const pending = rows as Array<{
+    const pending = (rows as unknown) as Array<{
       appointment_id: unknown;
       appointment_date: unknown;
       monthly_invoice_id: unknown;
@@ -476,7 +476,7 @@ router.get(
       ORDER BY p.name ASC, fr.id ASC
     `);
 
-    const invoices = (rows as any[]).map((r) => ({
+    const invoices = (rows as unknown as any[]).map((r) => ({
       id:                       Number(r.id),
       amount:                   Number(r.amount ?? 0),
       recognizedAmount:         Number(r.recognized_amount ?? 0),
@@ -564,7 +564,7 @@ router.get(
           AND a.date <  (${monthStart}::date + INTERVAL '1 month')
           AND a.status <> 'cancelado'
         ORDER BY a.date ASC, a.id ASC
-      `)) as any[];
+      `)) as unknown as any[];
     } else {
       apptRows = (await db.execute(sql`
         SELECT
@@ -595,7 +595,7 @@ router.get(
         WHERE a.monthly_invoice_id = ${invoiceId}
           AND a.status <> 'cancelado'
         ORDER BY a.date ASC, a.id ASC
-      `)) as any[];
+      `)) as unknown as any[];
     }
 
     const fragments = (apptRows as any[]).map((r) => ({
