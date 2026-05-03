@@ -222,7 +222,9 @@ export function TreatmentPlanItemsSection({
       return { gross, discount, net: Math.max(0, gross - discount), sessions: 0 };
     }
     const isAvulso = !item.packageId;
-    const unitP = Number(item.price ?? 0);
+    // Para avulso usa o preço negociado (unitPrice) quando disponível;
+    // caso contrário recai sobre o preço de catálogo (price).
+    const unitP = Number(item.unitPrice ?? item.price ?? 0);
     // Avulso sem totalSessions fixo → usa a previsão (sessões/sem × semanas
     // de vigência, ou contagem real pelos weekDays se já materializado).
     const sessions = item.totalSessions != null

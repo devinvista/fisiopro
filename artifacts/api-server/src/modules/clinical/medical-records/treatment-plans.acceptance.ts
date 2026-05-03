@@ -206,13 +206,17 @@ export async function acceptPlanFinancials(
         // recuperar o desconto por sessão antes de calcular o preço efetivo.
         const totalDiscount = Math.max(0, Number(item.discount ?? 0));
         const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
-        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * 4 * durationMonths));
+        // Usa dias de calendário reais (igual ao weeksInValidityPeriod do frontend)
+        // para que a estimativa de sessões totais bata com o desconto armazenado.
+        const planStart = plan.startDate ?? now.iso;
+        const [psy, psm, psd] = planStart.split("-").map(Number);
+        const planTotalDays =
+          (Date.UTC(psy, psm - 1 + durationMonths, psd) - Date.UTC(psy, psm - 1, psd)) /
+          (1000 * 60 * 60 * 24);
+        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * planTotalDays / 7));
         const unitDiscount = totalDiscount / estimatedTotalSessions;
         const unitEffective = Math.max(0, unit - unitDiscount);
         if (unitEffective <= 0) continue;
-
-        const sessionsPerMonth = Math.max(1, Math.round(sessionsPerWeek * 4));
-        const monthlyAmount = unitEffective * sessionsPerMonth;
 
         const [avulsoProcedure] = await tx
           .select({
@@ -230,7 +234,6 @@ export async function acceptPlanFinancials(
           planMonthlyDueDay: plan.monthlyDueDay,
           packageBillingDay: null,
         });
-        const planStart = plan.startDate ?? now.iso;
 
         // Para avulsos usamos a conta de receita por sessão (4.1.1) por
         // padrão, com fallback se o procedimento tiver sub-conta dedicada.
@@ -244,6 +247,14 @@ export async function acceptPlanFinancials(
         for (let m = 0; m < durationMonths; m++) {
           const itemMonthRef = planMonthRefOf(planStart, m);
           const dueDate = planInstallmentDueDate(planStart, billingDay, m);
+
+          // Calcula sessões do mês usando dias de calendário reais do mês
+          // (em vez do fixo × 4), para que meses com 28/29/30/31 dias
+          // gerem valores proporcionais ao número de semanas daquele mês.
+          const [mY, mM] = itemMonthRef.split("-").map(Number);
+          const daysInMonth = new Date(Date.UTC(mY, mM, 0)).getUTCDate();
+          const sessionsInMonth = Math.max(1, Math.round(sessionsPerWeek * daysInMonth / 7));
+          const monthlyAmount = unitEffective * sessionsInMonth;
 
           // Idempotência: 1 fatura por (plano, item, mês de competência).
           const [exists] = await tx
@@ -271,7 +282,7 @@ export async function acceptPlanFinancials(
                 description:
                   `Avulsos do plano #${planId} — ${avulsoProcedure.name} — ` +
                   `${patientName} — ${itemMonthRef.slice(0, 7)} ` +
-                  `(${sessionsPerMonth}× R$${unitEffective.toFixed(2)})`,
+                  `(${sessionsInMonth}× R$${unitEffective.toFixed(2)})`,
                 category: avulsoProcedure.category,
                 patientId: plan.patientId,
                 procedureId: avulsoProcedureId,
@@ -284,7 +295,7 @@ export async function acceptPlanFinancials(
                 planMonthRef: itemMonthRef,
                 priceSource: "plano_avulso_estimado",
                 originalUnitPrice: avulsoProcedure.price,
-                recognitionCreditsTotal: sessionsPerMonth,
+                recognitionCreditsTotal: sessionsInMonth,
                 recognitionCreditsConsumed: 0,
                 recognizedAmount: "0",
               })
