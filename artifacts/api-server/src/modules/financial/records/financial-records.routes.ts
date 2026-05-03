@@ -21,7 +21,6 @@ const listRecordsQuerySchema = listQuerySchema.extend({
 });
 import {
   allocateReceivable,
-  postReceivableRevenue,
   postReceivableSettlement,
   postReversal,
 } from "../../shared/accounting/accounting.service.js";
@@ -535,9 +534,8 @@ router.patch("/records/:id/estorno", requirePermission("financial.write"), async
 
 /**
  * Lista o histórico de estornos da clínica.
- * Filtra registros com `reversedAt IS NOT NULL` (ou seja, que passaram pelo
- * fluxo de estorno auditado a partir da Sprint 3 T9). Inclui o nome do usuário
- * que aplicou o estorno e o nome do paciente impactado.
+ * Filtra registros com `reversedAt IS NOT NULL` (fluxo de estorno auditado).
+ * Inclui o nome do usuário que aplicou o estorno e o nome do paciente impactado.
  */
 router.get("/records/reversals", requirePermission("financial.read"), async (req: AuthRequest, res) => {
   try {
@@ -742,7 +740,7 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
       return;
     }
 
-    // Receita sem lançamento contábil (estado intermediário/legado): soft delete simples.
+    // Receita sem lançamento contábil (sem entry de recebível): soft delete simples.
     await db
       .update(financialRecordsTable)
       .set({ status: "estornado" })

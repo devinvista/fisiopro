@@ -1,5 +1,5 @@
 /**
- * Sprint 4 — Fechamento mensal de itens avulsos do plano de tratamento.
+ * Fechamento mensal de itens avulsos do plano de tratamento.
  *
  * Quando um item do plano usa `avulsoBillingMode='mensalConsolidado'`,
  * cada sessão realizada gera um lançamento detalhado pendente
@@ -108,13 +108,12 @@ export async function closeAvulsoMonth(
     //  - sem parent (não consolidados ainda)
     //  - tipo crédito a receber/pendenteFatura (sessão avulsa)
     //  - dueDate dentro do mês de competência (ou planMonthRef se preenchido)
-    // Sprint 4 (B3) — A competência correta é o mês da SESSÃO
-    // (`appointments.date`), NÃO o `dueDate` (que é appointmentDate + N dias
-    // de prazo da clínica e portanto vaza para o mês seguinte para sessões
-    // dos últimos dias). Para registros novos, `planMonthRef` já vem
-    // preenchido por `appointments.billing.ts`. Para registros legados sem
-    // `planMonthRef`, fazemos o JOIN com `appointments` e filtramos pela
-    // data da sessão.
+    // A competência correta é o mês da SESSÃO (`appointments.date`), NÃO o
+    // `dueDate` (que é appointmentDate + N dias de prazo e vaza para o mês
+    // seguinte nas sessões dos últimos dias). Para registros com `planMonthRef`
+    // preenchido usamos esse campo diretamente; para registros históricos sem
+    // `planMonthRef`, fazemos JOIN com `appointments` e filtramos pela data
+    // da sessão.
     const candidatesRows = await tx
       .select({
         record: financialRecordsTable,

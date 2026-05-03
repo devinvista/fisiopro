@@ -229,7 +229,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         </div>
       )}
 
-      {/* ── MRR & Pacotes Recorrentes (Sprint 5) ── */}
+      {/* ── MRR & Pacotes Recorrentes ── */}
       <div>
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
           <Repeat className="w-3 h-3" /> Receita Recorrente (Pacotes Mensais)

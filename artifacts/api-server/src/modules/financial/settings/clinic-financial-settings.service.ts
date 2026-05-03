@@ -1,5 +1,5 @@
 /**
- * Serviço de leitura/escrita de `clinic_financial_settings` (Sprint 2 — T5).
+ * Serviço de leitura/escrita de `clinic_financial_settings`.
  *
  * Encapsula a leitura com fallback em `clinics.default_due_days` (compat com
  * clínicas que ainda não criaram a linha de settings).

@@ -1,5 +1,5 @@
 /**
- * Sprint 15 (F5) — Hook para reservar slots do plano antes do aceite.
+ * Hook para reservar slots do plano antes do aceite.
  *
  * Combina o preview da agenda (`/preview-appointments`) + scheduleId/procedureId
  * dos items + endpoint POST /holds para reservar os horários por TTL=15min.

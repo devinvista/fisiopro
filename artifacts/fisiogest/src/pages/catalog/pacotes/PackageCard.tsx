@@ -20,9 +20,9 @@ export function PackageCard({
   onDelete: (pkg: PackageItem) => void;
 }) {
   const isMensal = pkg.packageType === "mensal";
-  // Sprint 5: templates "faturaConsolidada" foram descontinuados; quando o
-  // backend ainda devolver algum legado, renderizamos como mensalidade
-  // legada (badge âmbar) para deixar claro que não pode mais ser editado.
+  // Templates "faturaConsolidada" foram descontinuados; quando o backend
+  // devolver registros históricos, renderizamos como mensalidade histórica
+  // (badge âmbar) para indicar que não pode mais ser editado.
   const isLegacyFatura = (pkg.packageType as string) === "faturaConsolidada";
   const ModalIcon = MODALIDADE_CONFIG[pkg.procedureModalidade]?.icon ?? User;
   const modalidadeLabel = MODALIDADE_CONFIG[pkg.procedureModalidade]?.label ?? pkg.procedureModalidade;

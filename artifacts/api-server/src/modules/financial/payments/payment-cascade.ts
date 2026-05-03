@@ -1,29 +1,25 @@
 /**
- * Sprint 4 — Cascateamento de pagamento de faturas consolidadoras (`parent`)
- * para suas linhas-filhas (`parent_record_id`).
+ * Cascateamento de pagamento de faturas consolidadoras (`parent`) para suas
+ * linhas-filhas (`parent_record_id`).
  *
- * Hoje há dois tipos de "fatura agrupadora" usando o padrão `parent_record_id`:
+ * Dois tipos de "fatura agrupadora" usam o padrão `parent_record_id`:
  *
  * 1) `faturaMensalAvulso` (`closeAvulsoMonth`) — agrupa N `creditoAReceber`
- *    de sessões avulsas do mês de um plano. Por construção,
- *    `parent.amount = SUM(filhos.amount)`. Cada filho JÁ reconheceu
- *    receita no momento da sessão (D: Recebíveis / C: Receita), então o
- *    parent NÃO deve re-reconhecer (evita receita dobrada).
+ *    de sessões avulsas do mês. `parent.amount = SUM(filhos.amount)`. Cada
+ *    filho já reconheceu receita na sessão (D: Recebíveis / C: Receita), então
+ *    o parent NÃO deve re-reconhecer (evita receita dobrada).
  *
- *    Tratamento correto no pagamento do parent:
+ *    Tratamento correto ao pagar o parent:
  *      • posta UM `postReceivableSettlement` para `parent.amount`
- *        (D: Caixa / C: Recebíveis) — feito pelo handler do payment loop;
- *      • aloca o pagamento contra o `recognizedEntryId` de CADA filho
- *        (em vez do parent, que não tem reconhecimento próprio);
- *      • marca todos os filhos como `pago` em cascata (mesmos
- *        `paymentDate`, `paymentMethod`, `settlementEntryId`).
+ *        (D: Caixa / C: Recebíveis) — feito pelo payment loop;
+ *      • aloca contra o `recognizedEntryId` de CADA filho (o parent não
+ *        tem reconhecimento próprio);
+ *      • marca todos os filhos como `pago` em cascata.
  *
- * 2) `faturaPlano` com filhos `creditoAReceber` (Sprint 3) — o `parent.amount`
- *    é apenas a mensalidade fixa do plano; os filhos têm valor próprio (sessões
- *    avulsas extras). NÃO há cascade automático nesse caso: cada filho continua
- *    como recebível independente e é processado nas iterações subsequentes do
- *    payment loop. O `parent_record_id` aqui serve apenas para agrupamento
- *    visual / extrato unificado do mês.
+ * 2) `faturaPlano` com filhos `creditoAReceber` — `parent.amount` é a
+ *    mensalidade fixa do plano; os filhos têm valor próprio (sessões avulsas).
+ *    Sem cascade automático: cada filho é processado pelo payment loop. O
+ *    `parent_record_id` serve apenas para agrupamento visual/extrato mensal.
  *
  * Esta função cobre exclusivamente o caso (1).
  */

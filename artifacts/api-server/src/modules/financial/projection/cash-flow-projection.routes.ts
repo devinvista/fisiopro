@@ -1,5 +1,5 @@
 /**
- * cash-flow-projection.routes — Sprint 3 — T7
+ * cash-flow-projection.routes
  *
  * GET /api/financial/cash-flow-projection?days=30
  *

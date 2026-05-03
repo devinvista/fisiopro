@@ -19,13 +19,13 @@ export interface Clinic {
   autoConfirmHours?: number | null;
   noShowFeeEnabled?: boolean;
   noShowFeeAmount?: string | null;
-  /** Sprint 5 — janela em horas para considerar um cancelamento "fora do prazo". */
+  /** Janela em horas para considerar um cancelamento "fora do prazo". */
   cancellationWindowHours?: number | null;
-  /** Sprint 5 — política aplicada quando o cancelamento é dentro da janela. */
+  /** Política aplicada quando o cancelamento ocorre dentro da janela. */
   lateCancellationPolicy?: "creditoNormal" | "semCredito" | "taxa" | null;
 }
 
-/** Sprint 2 — T5: configurações financeiras da clínica. */
+/** Configurações financeiras da clínica. */
 export interface ClinicFinancialSettings {
   clinicId: number;
   monthlyExpenseBudget: number | null;

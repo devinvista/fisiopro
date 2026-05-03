@@ -14,7 +14,7 @@ export const RECEIVABLE_TYPES = [
 // Tipos que NÃO entram no sumário de receita por competência:
 //  - depositoCarteira / pagamento: caixa, não receita
 //  - vendaPacote: passivo (Adiantamentos), receita só na execução
-//  - faturaConsolidada (legado) e faturaMensalAvulso (Sprint 4): são
+//  - faturaConsolidada (descontinuado) e faturaMensalAvulso: são
 //    "agrupadores"; a receita já foi reconhecida nos filhos individuais
 //    e contar o parent provocaria dupla contagem.
 const NON_COMPETENCY_REVENUE_TYPES = [

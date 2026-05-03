@@ -32,8 +32,8 @@ export const procedureFormSchema = z
     onlineBookingEnabled: z.boolean(),
     monthlyPrice: z.string().optional(),
     billingDay: z.string().optional(),
-    // Sprint 3 T8 — sub-conta contábil de receita para este procedimento.
-    // string vazia → null no payload (usa conta padrão 4.1.1/4.1.2).
+    // Sub-conta contábil de receita para este procedimento.
+    // String vazia → null no payload (usa conta padrão 4.1.1/4.1.2).
     accountingAccountId: z.string().optional(),
   })
   .superRefine((data, ctx) => {

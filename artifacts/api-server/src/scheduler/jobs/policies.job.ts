@@ -12,7 +12,7 @@ export const autoConfirmJob: JobOpts = {
 export const endOfDayJob: JobOpts = {
   name: "endOfDay",
   cronExpr: "0 22 * * *", // 22:00 BRT
-  // Sprint 3 — End-of-day combinado: políticas + expiração de créditos.
+  // End-of-day combinado: políticas + expiração de créditos.
   run: async () => {
     const policy = await runEndOfDayPolicies();
     const credits = await expireSessionCredits();

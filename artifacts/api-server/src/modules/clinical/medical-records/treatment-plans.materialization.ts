@@ -38,7 +38,6 @@ import {
 } from "@workspace/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
-  postReceivableRevenue,
   resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import {
@@ -46,7 +45,7 @@ import {
   resolveMonthlyDueDay,
 } from "./treatment-plans.billing-dates.js";
 
-// ─── Sprint 1/2 — Resolução de política de crédito do plano ─────────────────
+// ─── Resolução de política de crédito do plano ───────────────────────────────
 //
 // Hierarquia para `paymentMode` e `monthlyCreditValidityDays`:
 //   1. override no `treatment_plans` (campo do plano)
@@ -112,16 +111,14 @@ interface PlanItem {
   // Pacote mensalidade: valor mensal contratado vive em `packages.monthly_price`.
   // Usado como fallback quando o item não tem `unitMonthlyPrice` próprio.
   packageMonthlyPrice: string | null;
-  // Sprint 1/2 — política de crédito do pacote (defaults para o pool mensal)
   packagePaymentMode: string | null;
   packageMonthlyCreditValidityDays: number | null;
 }
 
 /**
  * Resolve o tipo (kind) efetivo do item, derivando dos campos legados quando
- * o `kind` ainda não foi preenchido (planos pré-Sprint 2). Mantido em paralelo
- * com `treatment-plans.acceptance.ts/resolveItemKind` para evitar import
- * circular.
+ * `kind` não está preenchido (retrocompatibilidade). Mantido em paralelo com
+ * `treatment-plans.acceptance.ts/resolveItemKind` para evitar import circular.
  */
 function resolveItemKind(
   item: Pick<PlanItem, "kind" | "packageId" | "packageType">,
@@ -319,15 +316,14 @@ async function defaultScheduleId(clinicId: number | null): Promise<number> {
 /**
  * Materializa o plano de tratamento.
  *
- * @deprecated Sprint 15 (F6) — chamada **standalone** está depreciada para
- * o fluxo de aceite. Use `acceptAndMaterializePlan` (em `treatment-plans
- * .atomic.ts`), que orquestra aceite + materialização atomicamente com
- * rollback compensatório. `materializeTreatmentPlan` segue exportada e
- * suportada porque (a) é o building block interno do orquestrador e (b)
- * ainda é usada pelo endpoint de **reparo** `POST /api/treatment-plans
- * /:planId/materialize` para casos em que o materialize falhou e precisa
- * ser re-executado manualmente sem refazer o aceite. Não criar novos
- * callers.
+ * Uso preferencial: `acceptAndMaterializePlan` (em `treatment-plans.atomic.ts`),
+ * que orquestra aceite + materialização atomicamente com rollback compensatório.
+ *
+ * Esta função permanece exportada porque:
+ *   (a) é o building block interno do orquestrador; e
+ *   (b) é usada pelo endpoint de reparo `POST /api/treatment-plans/:planId/materialize`
+ *       para re-materializar sem refazer o aceite.
+ * Novos callers de fluxo de aceite devem usar `acceptAndMaterializePlan`.
  */
 export async function materializeTreatmentPlan(
   planId: number,
@@ -431,7 +427,7 @@ export async function materializeTreatmentPlan(
   let monthsCoveredCount = 0;
   let totalContracted = 0;
 
-  // Sprint 2 — política de crédito efetiva (plano sobrescreve pacote).
+  // Política de crédito efetiva (plano sobrescreve pacote).
   const effectivePaymentMode = resolvePaymentMode(
     plan.paymentMode,
     null, // resolvido por item abaixo (cada item pode ter pacote diferente)
@@ -674,7 +670,7 @@ export async function materializeTreatmentPlan(
           appointmentsCreated += datesToInsert.length;
         }
 
-        // ── Sprint 2 — Pool mensal de créditos ────────────────────────────
+        // ── Pool mensal de créditos ───────────────────────────────────────
         // Cria 1 linha em session_credits para representar o saldo
         // contratado deste mês×item. Quantity = nº de sessões previstas.
         // Status:
@@ -960,10 +956,10 @@ export async function dematerializeTreatmentPlan(
     // entries são apenas reconhecimento de receita futura — apagar não
     // afeta caixa.
     if (pendingIds.length > 0) {
-      // Sprint 2 — Limpa o pool mensal vinculado às faturas que serão
-      // apagadas. Apenas créditos que NUNCA foram consumidos (usedQuantity=0
-      // E sem appointment vinculado) podem ser removidos. Os demais são
-      // marcados como `estornado` para preservar histórico contábil.
+      // Limpa o pool mensal vinculado às faturas que serão apagadas.
+      // Apenas créditos que NUNCA foram consumidos (usedQuantity=0 e sem
+      // appointment vinculado) podem ser removidos. Os demais são marcados
+      // como `estornado` para preservar histórico contábil.
       const poolRows = await tx
         .select({
           id: sessionCreditsTable.id,
@@ -1038,7 +1034,7 @@ export async function dematerializeTreatmentPlan(
 }
 
 /**
- * Sprint 2 — Trigger pós-pagamento de fatura mensal de plano.
+ * Trigger pós-pagamento de fatura mensal de plano.
  *
  * Quando uma `financial_records` com `transactionType='faturaPlano'` muda
  * para `status='pago'`, promovemos o pool mensal correspondente:
@@ -1069,7 +1065,7 @@ export async function promotePrepaidCreditsForFinancialRecord(
 }
 
 /**
- * Sprint 2 — Reverso de pagamento.
+ * Reverso de pagamento de fatura mensal de plano.
  *
  * Quando uma fatura mensal `faturaPlano` é estornada/cancelada após paga,
  * volta o pool de `disponivel` → `pendentePagamento` apenas para créditos

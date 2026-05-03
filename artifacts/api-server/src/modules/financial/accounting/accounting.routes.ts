@@ -1,5 +1,5 @@
 /**
- * accounting.routes — Sprint 3 T8 (Categorização contábil por procedimento).
+ * accounting.routes — Categorização contábil por procedimento.
  *
  * Endpoints:
  *  - GET    /accounting/accounts              → lista contas contábeis (system + clínica)

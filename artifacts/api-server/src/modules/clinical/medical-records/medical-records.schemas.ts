@@ -97,14 +97,14 @@ export const createTreatmentPlanSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate deve estar no formato YYYY-MM-DD").optional().nullable(),
   durationMonths: z.number().int().min(1).max(60).optional().nullable(),
   responsibleProfessional: z.string().max(200).optional().nullable(),
-  // ── Sprint 1 — Política de crédito (override do pacote) ─────────────────
+  // ── Política de crédito (override do pacote) ─────────────────────────────
   paymentMode: z.enum(["prepago", "postpago"]).optional().nullable(),
   monthlyCreditValidityDays: z.number().int().min(0).max(365).optional().nullable(),
   replacementCreditValidityDays: z.number().int().min(1).max(365).optional().nullable(),
-  // ── Sprint 4 — Modo de cobrança de itens avulsos ────────────────────────
+  // ── Modo de cobrança de itens avulsos ────────────────────────────────────
   avulsoBillingMode: z.enum(["porSessao", "mensalConsolidado"]).optional(),
   avulsoBillingDay: z.number().int().min(1).max(28).optional().nullable(),
-  // ── Sprint Financeiro 9 (P1) — vencimento da mensalidade ────────────────
+  // ── Vencimento da mensalidade ────────────────────────────────────────────
   // Dia (1..28) escolhido pelo paciente para vencimento das faturas mensais
   // (item recorrenteMensal). Se null, herda do `billingDay` do pacote.
   monthlyDueDay: z.number().int().min(1).max(28).optional().nullable(),

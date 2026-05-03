@@ -119,10 +119,10 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
       .orderBy(sql`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0) DESC`)
       .limit(1);
 
-    // MRR — soma das mensalidades dos itens recorrentes em planos vigente+aceito
-    // (Sprint 5+): fonte oficial é treatment_plan_procedures.kind='recorrenteMensal'.
-    // Para itens legados sem `kind` preenchido, derivamos via packages.package_type
-    // ('mensal' ou 'faturaConsolidada' — descontinuado, ainda existe em dados antigos).
+    // MRR — soma das mensalidades dos itens recorrentes em planos vigente+aceito.
+    // Fonte: treatment_plan_procedures.kind='recorrenteMensal'. Para itens sem
+    // `kind` preenchido (retrocompatibilidade), deriva via packages.package_type
+    // ('mensal' ou 'faturaConsolidada' — descontinuado, ainda presente em dados históricos).
     const isRecurringItem = or(
       eq(treatmentPlanProceduresTable.kind, "recorrenteMensal"),
       and(
@@ -151,8 +151,7 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
     const mrr = Number(recurringItems[0]?.mrr ?? 0);
     const activeRecurringCount = Number(recurringItems[0]?.count ?? 0);
 
-    // Cobranças mensais pendentes do plano (faturaPlano) — substitui o antigo
-    // filtro por subscriptionId (pré-Sprint 1, agora vazio na maioria das clínicas).
+    // Cobranças mensais pendentes do plano (faturaPlano + faturaConsolidada histórica).
     const RECURRING_BILLING_TYPES = ["faturaPlano", "faturaConsolidada"] as const;
     const pendingRecurringWhere = cc
       ? and(cc, eq(financialRecordsTable.status, "pendente"), inArray(financialRecordsTable.transactionType, RECURRING_BILLING_TYPES as unknown as string[]))
@@ -183,9 +182,9 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
         revenue: Number(c.revenue),
       })),
       mrr,
-      // Sprint 5: "activeSubscriptions" é mantido no payload para compat com a
-      // UI atual (chips em LancamentosTab), mas representa itens recorrentes do
-      // plano de tratamento (kind='recorrenteMensal').
+      // "activeSubscriptions" mantido por retrocompatibilidade com a UI
+      // (chips em LancamentosTab); representa itens recorrentes do plano
+      // (kind='recorrenteMensal').
       activeSubscriptions: activeRecurringCount,
       pendingSubscriptionCharges: {
         count: Number(pendingRecurringRecords[0]?.count ?? 0),

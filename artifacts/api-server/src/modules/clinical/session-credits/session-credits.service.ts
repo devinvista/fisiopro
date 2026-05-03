@@ -1,5 +1,5 @@
 /**
- * session-credits service — Sprint 3
+ * session-credits service
  *
  * Funções de negócio sobre `session_credits`:
  *

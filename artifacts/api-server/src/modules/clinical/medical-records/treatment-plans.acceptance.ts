@@ -1,8 +1,8 @@
 /**
- * Sprint 2 — Aceitação financeira de plano de tratamento.
+ * Aceitação financeira de plano de tratamento.
  *
- * Quando o paciente aceita formalmente o plano, o sistema gera APENAS o
- * necessário para "fechar a venda":
+ * Quando o paciente aceita formalmente o plano, gera APENAS o necessário
+ * para "fechar a venda":
  *
  *   - Itens `pacoteSessoes` (kind ou packageType="sessoes"): cria uma
  *     `vendaPacote` em `financial_records` (status=pendente) + N créditos
@@ -10,20 +10,17 @@
  *     conforme paymentMode do plano/pacote).
  *
  *   - Itens `recorrenteMensal` (kind ou packageType="mensal"): cria a
- *     `faturaPlano` do MÊS CORRENTE apenas (próximas serão geradas mês a mês
- *     pelo job de billing — Sprint 3). Status `pendente`, dueDate no
+ *     `faturaPlano` do MÊS CORRENTE apenas; as seguintes são geradas
+ *     pelo job diário `monthlyPlanBilling`. Status `pendente`, dueDate no
  *     billingDay do pacote (clamped ao último dia do mês).
  *
- *   - Itens `avulso` (sem packageId): nenhum efeito agora — cobrança ocorre
+ *   - Itens `avulso` (sem packageId): nenhum efeito — cobrança ocorre
  *     na conclusão de cada atendimento.
  *
- * NÃO cria `appointments`. A geração da agenda continua sendo a ação
- * operacional `materializeTreatmentPlan` (separada e a ser substituída por
- * grade lazy no Sprint 4).
+ * NÃO cria `appointments`. A geração da agenda é feita pelo orquestrador
+ * atômico `acceptAndMaterializePlan`.
  *
- * Idempotência: opera em transação e usa o mesmo princípio do `acceptedAt`
- * — invocar duas vezes com o plano já aceito não duplica registros (a função
- * é chamada uma única vez, do `acceptPatientTreatmentPlan`).
+ * Idempotente: invocar duas vezes com o plano já aceito não duplica registros.
  */
 import { db } from "@workspace/db";
 import {
@@ -77,8 +74,8 @@ interface PlanItem {
 }
 
 /**
- * Resolve o tipo (kind) de um item, derivando dos campos legados quando o
- * `kind` ainda não foi preenchido (planos pré-Sprint 2).
+ * Resolve o tipo (kind) de um item, derivando dos campos legados quando
+ * `kind` não está preenchido (retrocompatibilidade).
  */
 export function resolveItemKind(item: {
   kind: string | null;

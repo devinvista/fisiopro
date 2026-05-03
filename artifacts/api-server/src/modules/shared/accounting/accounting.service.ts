@@ -268,9 +268,9 @@ export async function postDeferredReceivable(input: Omit<JournalEntryInput, "lin
  * (passivo). A receita só é reconhecida no consumo (D: Adiantamentos /
  * C: Receita) via `postWalletUsage` na 1ª confirmação.
  *
- * NOTA (P3): apenas usado em **modelo legado** (planos sem
- * `deferred_receivable` postado no aceite). Em planos P3 o pagamento
- * é settlement puro (`postReceivableSettlement`).
+ * NOTA: usado em planos sem `deferred_receivable` postado no aceite. Para
+ * planos com recebível diferido, o pagamento é settlement puro via
+ * `postReceivableSettlement`.
  */
 export async function postCashAdvance(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string }, tx: Tx = db) {
   return createJournalEntry({

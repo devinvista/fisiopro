@@ -1,5 +1,5 @@
 /**
- * Sprint 3 — Geração lazy das faturas mensais de plano de tratamento.
+ * Geração lazy das faturas mensais de plano de tratamento.
  *
  * O aceite (`acceptPlanFinancials`) cria APENAS a fatura do mês corrente.
  * As próximas são geradas pelo job diário deste módulo:
@@ -23,11 +23,11 @@
  *     colidir com `withPackageBillingLock`.
  *
  * Não toca em `appointments`/`session_credits`. Reconhecimento de receita
- * permanece em `recognizeMonthlyInvoiceRevenue` (chamado na 1ª sessão do
- * mês). Quando uma `faturaPlano` é gerada para um mês onde já existem
- * appointments materializados (planos legados), back-linkamos
- * `monthlyInvoiceId` nos appointments do mês para que o reconhecimento
- * funcione.
+ * é disparado por `recognizeMonthlyInvoiceRevenuePartial` (chamado na 1ª
+ * sessão confirmada do mês, via `applyBillingRules`). Quando uma
+ * `faturaPlano` é gerada para um mês onde já existem appointments
+ * materializados, back-linkamos `monthlyInvoiceId` nos appointments do
+ * mês para que o reconhecimento funcione corretamente.
  */
 import { db } from "@workspace/db";
 import {
@@ -69,7 +69,7 @@ export interface MonthlyPlanBillingResult {
 export interface RunMonthlyPlanBillingOpts {
   /**
    * Quantos dias ANTES do `billingDay` do pacote já podemos gerar a fatura
-   * do mês corrente. Default: 5 (regra Sprint 3 — D-5).
+   * do mês corrente. Default: 5 (D-5: 5 dias antes do billingDay).
    * Não afeta gap-fill de meses passados (sempre permitido).
    */
   toleranceDays?: number;
@@ -615,11 +615,10 @@ async function persistRunLog(
   durationMs: number,
 ): Promise<void> {
   try {
-    // O schema atual de `billing_run_logs` é compartilhado por todos os
-    // jobs e não tem coluna para distinguir o nome do job nem para
-    // payload livre. Para Sprint 3, registramos a execução com a
-    // marca `[monthlyPlanBilling]` no `triggeredBy` para que a UI de
-    // logs fique distinguível sem alteração de schema.
+    // O schema de `billing_run_logs` é compartilhado por todos os jobs e
+    // não tem coluna para o nome do job nem para payload livre. Usamos o
+    // prefixo `[monthlyPlanBilling]` no `triggeredBy` para distinguir
+    // entradas na UI sem alterar schema.
     void today;
     void durationMs;
     await db.insert(billingRunLogsTable).values({

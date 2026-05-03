@@ -1,8 +1,7 @@
 /**
  * PlanScheduleEditor — editor de agenda do plano (etapa "Agenda" do wizard).
- * Sprint 15 (F7): renomeado a partir de `AcceptanceScheduleEditor` quando
- * o fluxo v1 foi removido. Montado pelo `StepAgenda` em `TreatmentPlanTab`
- * antes do aceite, e também depois do início do plano para reconfigurar.
+ * Montado pelo `StepAgenda` em `TreatmentPlanTab` antes do aceite, e também
+ * depois do início do plano para reconfigurar.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";

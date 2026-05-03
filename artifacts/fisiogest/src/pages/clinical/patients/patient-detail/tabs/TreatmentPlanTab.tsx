@@ -55,8 +55,7 @@ import { ContractPreviewDialog } from "./treatment-plan/ContractPreviewDialog";
 //   4. CONTRATO  — paciente assina e o plano é materializado na MESMA
 //                   transação (endpoint /accept-and-materialize).
 //
-// Sprint 15 (F7): o fluxo legado v1 (3 etapas com aceite separado da
-// materialização) foi removido — todas as clínicas usam o wizard v2.
+// Todas as clínicas usam o wizard v2 (aceite + materialização atômica).
 // ───────────────────────────────────────────────────────────────────────────
 
 export function TreatmentPlanTab({ patientId, patient }: { patientId: number; patient?: PatientBasic }) {
@@ -86,7 +85,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   // Marca quando o usuário salvou as configs de cobrança (libera Agenda).
   // Não persistido no servidor — heurística local para guiar o stepper.
   const [billingConfigured, setBillingConfigured] = useState(false);
-  // Sprint 15 (F5) — hold de slots: TTL configurável + expiresAt devolvido pelo POST /holds.
+  // Hold de slots: TTL configurável + expiresAt devolvido pelo POST /holds.
   const [holdTtlMinutes, setHoldTtlMinutes] = useState(30);
   const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
 
@@ -1131,9 +1130,9 @@ function StepAgenda({
   const { toast } = useToast();
   const [reserving, setReserving] = useState(false);
 
-  // Sprint 15 (F5) — Ao avançar para Contrato, reservamos os slots pelo
-  // TTL configurado via POST /holds. Em conflito (409), abortamos e mostramos
-  // a lista para o usuário ajustar a agenda.
+  // Ao avançar para Contrato, reservamos os slots pelo TTL configurado via
+  // POST /holds. Em conflito (409), abortamos e mostramos a lista para o
+  // usuário ajustar a agenda.
   async function handleAdvance() {
     if (isStarted) {
       onAdvance();

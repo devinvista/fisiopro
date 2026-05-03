@@ -13,16 +13,16 @@
  *   • A fatura mensal nasce `pendente` na materialização, sem journal.
  *   • Na 1ª confirmação de sessão (compareceu/concluido) do mês:
  *       1. Snapshota `recognitionCreditsTotal` = nº de appointments
- *          materializados (status NOT IN 'cancelado') ligados à fatura.
- *       2. Posta `share = remaining = amount` inteiro (D Adiantamentos / C Receita
- *          em modo P3, ou D Recebíveis / C Receita em modo legado pendente).
- *       3. Define `recognizedAmount = amount` e `recognitionCreditsConsumed = 1`.
- *   • Cada confirmação subsequente é no-op (remaining = 0, retorna cedo).
+ *          não-cancelados ligados à fatura.
+ *       2. Posta fragmentas de `amount / N` para CADA sessão (D Adiantamentos
+ *          / C Receita em modo P3 com deferred_receivable, ou D Recebíveis /
+ *          C Receita para faturas sem adiantamento pré-pago).
+ *       3. Define `recognizedAmount = amount` e `recognitionCreditsConsumed = total`.
+ *   • Cada confirmação subsequente é no-op (fragmenta já existe por idempotência).
  *   • Cancelamentos/faltas NÃO estornam receita — geram crédito de sessão
  *     para o paciente, vinculado ao fato gerador original.
- *   • `endOfMonthRevenueClosure` é no-op para faturas já 100% reconhecidas;
- *     funciona como safety net para faturas sem nenhuma sessão confirmada
- *     (residual reconhecido ao final do mês por competência).
+ *   • `runEndOfMonthRevenueClosure` é safety net para faturas com créditos
+ *     restantes ao fim do mês (appropriação residual por competência).
  *
  * **Idempotência:**
  *   • Por sessão: busca journal entry existente para
@@ -31,10 +31,11 @@
  *   • Por fatura: advisory lock `pg_advisory_xact_lock(invoiceId)` serializa
  *     reconhecimentos concorrentes da MESMA fatura.
  *
- * **Modelo LEGADO (preservado, sem migração):**
+ * **Guard de retrocompatibilidade:**
  *   • Faturas com `recognizedEntryId IS NOT NULL` e
- *     `recognitionCreditsTotal IS NULL` foram reconhecidas antes desta versão.
- *     O serviço detecta esse estado e retorna no-op — não re-reconhecemos.
+ *     `recognitionCreditsTotal IS NULL` foram reconhecidas por modelo anterior
+ *     (reconhecimento integral sem pool). O serviço detecta esse sentinel e
+ *     retorna no-op — não re-reconhecemos registros históricos.
  */
 import { db } from "@workspace/db";
 import {
@@ -175,8 +176,8 @@ async function findExistingFragmentForAppointment(
  *   • Por sessão: `(financialRecordId, appointmentId)` → no-op se já postado.
  *   • Por fatura: `pg_advisory_xact_lock(invoiceId)` → serializa concorrência.
  *
- * Modelo LEGADO: faturas com `recognizedEntryId IS NOT NULL` e
- *   `recognitionCreditsTotal IS NULL` são no-op (não re-reconhecemos).
+ * Retrocompatibilidade: faturas com `recognizedEntryId IS NOT NULL` e
+ *   `recognitionCreditsTotal IS NULL` são no-op (guardião de registros históricos).
  *
  * O parâmetro `_tx` é mantido por retrocompatibilidade mas ignorado — a
  * função sempre gerencia sua própria transação para acoplar o advisory lock.
@@ -212,11 +213,14 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     const amount = Number(invoice.amount);
     if (amount <= 0) return { recognized: false, reason: "Valor zero" };
 
-    // ── Modelo LEGADO: já reconhecido integralmente antes desta versão ──────
+    // ── Guard de retrocompatibilidade: fatura reconhecida antes do pool fracionado ──
+    // Sentinel: `recognizedEntryId` populado + `recognitionCreditsTotal` NULL
+    // indica que o reconhecimento integral foi feito por versão anterior do
+    // serviço (sem pool de créditos). Não re-reconhecemos registros históricos.
     if (invoice.recognizedEntryId != null && invoice.recognitionCreditsTotal == null) {
       return {
         recognized: false,
-        reason: "Receita já reconhecida (modelo legado integral)",
+        reason: "Receita já reconhecida (reconhecimento integral histórico)",
         entryId: invoice.recognizedEntryId,
       };
     }
@@ -239,11 +243,9 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     }
 
     // ── Guard: bloqueia somente quando 100% reconhecida (consumed >= total) ──
-    // Modelo antigo (per-sessão incremental) gravava consumed=N e total=M com
-    // N < M; o guard antigo (`consumed > 0`) bloqueava erroneamente sessões
-    // restantes. Agora só retorna no-op quando consumed atingiu o total
-    // armazenado, permitindo que registros parcialmente reconhecidos sejam
-    // completados pelo bulk path abaixo.
+    // Retorna no-op apenas quando `consumed` atingiu `total`, permitindo que
+    // registros parcialmente reconhecidos (migração de dados) sejam completados
+    // pelo bulk path abaixo.
     const consumed = invoice.recognitionCreditsConsumed ?? 0;
     const storedTotal = invoice.recognitionCreditsTotal ?? null;
     if (storedTotal !== null && consumed >= storedTotal) {
@@ -290,8 +292,10 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       );
     }
 
-    // P3: aceite já postou D 1.1.2 / C 2.1.1 → fragmentas consomem adiantamento.
-    // Legado pendente: fragmentas geram recebível + receita (D 1.1.2 / C 4.1.2).
+    // P3 (deferred_receivable existe): aceite já postou D 1.1.2 / C 2.1.1 →
+    // fragmentas consomem o adiantamento (D 2.1.1 / C 4.1.x).
+    // Sem adiantamento (faturas sem pré-pagamento): fragmentas geram recebível
+    // + receita (D 1.1.2 / C 4.1.x).
     const [hasDeferred] = await tx
       .select({ id: accountingJournalEntriesTable.id })
       .from(accountingJournalEntriesTable)
@@ -307,8 +311,8 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     const isP3Mode = !!hasDeferred;
 
     // ── Separa appointments com fragmenta existente dos que ainda precisam ──
-    // Necessário para: (a) idempotência por sessão no bulk, (b) compatibilidade
-    // com registros parcialmente reconhecidos pelo modelo antigo (per-sessão).
+    // Necessário para: (a) idempotência por sessão no bulk,
+    // (b) completar registros parcialmente reconhecidos em migrações de dados.
     let firstEntryId: number | null = null;
     let triggerEntryId: number | null = null;
     let totalPosted = 0;
@@ -390,16 +394,3 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
   });
 }
 
-/**
- * Alias retrocompatível para call sites pré-P2. Delega para o algoritmo
- * fracionado — faturas legadas (sentinel populado, pool NULL) continuam
- * sendo no-op como antes.
- *
- * @deprecated Use `recognizeMonthlyInvoiceRevenuePartial` em código novo.
- */
-export async function recognizeMonthlyInvoiceRevenue(
-  input: RecognizeRevenueInput,
-  _tx: Tx = db,
-): Promise<RecognizeRevenueResult> {
-  return recognizeMonthlyInvoiceRevenuePartial(input, _tx);
-}

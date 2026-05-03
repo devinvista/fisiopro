@@ -142,7 +142,7 @@ export async function runEndOfMonthRevenueClosure(
         }
         if (invoice.recognitionCreditsTotal == null) {
           result.skipped++;
-          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "modelo legado" });
+          result.details.push({ invoiceId: inv.id, status: "skipped", reason: "sem pool de créditos (registro histórico)" });
           return;
         }
         const consumed = invoice.recognitionCreditsConsumed ?? 0;
@@ -205,12 +205,11 @@ export async function runEndOfMonthRevenueClosure(
           eventType: "end_of_month_closure",
         };
 
-        // Sprint Financeiro 14 (Hardening) — Detecção do modo P3/P4.
-        // Em P3/P4 o aceite postou D 1.1.2 / C 2.1.1 (`deferred_receivable`)
-        // pelo total da fatura. Logo o "recebível" e o "adiantamento" já
-        // existem antes do consumo. O resíduo do mês deve consumir do
-        // adiantamento (D 2.1.1 / C 4.1.x), nunca criar um novo recebível
-        // (que seria postReceivableRevenue: D 1.1.2 / C 4.1.x → recebível duplicado).
+        // Detecção do modo pré-pago (deferred_receivable):
+        // Se o aceite postou D 1.1.2 / C 2.1.1 (`deferred_receivable`),
+        // o recebível e o adiantamento já existem antes do consumo.
+        // O resíduo deve consumir do adiantamento (D 2.1.1 / C 4.1.x).
+        // Sem deferred_receivable: cria recebível + receita (D 1.1.2 / C 4.1.x).
         const [hasDeferred] = await tx
           .select({ id: accountingJournalEntriesTable.id })
           .from(accountingJournalEntriesTable)
@@ -225,11 +224,11 @@ export async function runEndOfMonthRevenueClosure(
 
         let entryId: number;
         if (isP3Mode || invoice.status === "pago") {
-          // P3/P4 ou paga via legado cash-advance → consome do adiantamento.
+          // Pré-pago ou já paga: consome do adiantamento (D 2.1.1 / C 4.1.x).
           const entry = await postWalletUsage(baseEntry as any, tx as any);
           entryId = entry.id;
         } else {
-          // Legado pendente sem deferred → ainda gera recebível + receita.
+          // Pós-pago sem adiantamento: cria recebível + receita (D 1.1.2 / C 4.1.x).
           const entry = await postReceivableRevenue(baseEntry as any, tx as any);
           entryId = entry.id;
         }

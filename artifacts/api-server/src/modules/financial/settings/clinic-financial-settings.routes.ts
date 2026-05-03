@@ -1,5 +1,5 @@
 /**
- * GET / PUT  /api/clinics/current/financial-settings   (Sprint 2 — T5)
+ * GET / PUT  /api/clinics/current/financial-settings
  *
  * Permissão: `settings.manage` (mesma da edição de clínica).
  * Feature gate: `financial.view.budget` — porque essas configurações alimentam

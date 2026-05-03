@@ -1,5 +1,5 @@
 /**
- * Sprint 3 — Endpoints de extrato de créditos do paciente.
+ * Endpoints de extrato de créditos do paciente.
  */
 import { Router } from "express";
 import type { Request, Response } from "express";

@@ -1,5 +1,5 @@
 /**
- * Sprint 15 (F5) — Sistema de holds para slots da agenda do plano.
+ * Sistema de holds para slots da agenda do plano.
  *
  * Entre o passo "Agenda" e o "Contrato + aceite atômico", o paciente/operador
  * escolhe horários que ainda não viraram appointments reais. Este módulo

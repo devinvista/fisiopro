@@ -61,7 +61,7 @@ function addDaysISO(dateISO: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// ─── Sprint 5 — Política de cancelamento (janela) ────────────────────────────
+// ─── Política de cancelamento com janela de antecedência ─────────────────────
 //
 // Resolve a política aplicável a um cancelamento:
 //   • janela = `clinics.cancellation_window_hours` (default 24)
@@ -251,7 +251,7 @@ export async function applyBillingRules(
       return;
     }
 
-    // ── Sprint 5 — Cancelamento em plano materializado ───────────────────
+    // ── Cancelamento em plano materializado ──────────────────────────────
     // Cancelamentos respeitam a janela `cancellationWindowHours` da clínica.
     // Quando dentro da janela e a política for `semCredito`/`taxa`, NÃO gera
     // o crédito de reposição padrão (e taxa fica para o roadmap futuro).
@@ -337,8 +337,7 @@ export async function applyBillingRules(
   }
 
   // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias).
-  // Lê de `clinic_financial_settings` (Sprint 2 — T5); o serviço faz fallback
-  // automático para `clinics.default_due_days` se a linha de settings não existir.
+  // Fallback automático para `clinics.default_due_days` quando não há settings.
   let clinicDueDays = 3;
   if (resolvedClinicId) {
     const settings = await getClinicFinancialSettings(resolvedClinicId);
@@ -359,10 +358,9 @@ export async function applyBillingRules(
     treatmentPlanId: priceResolution.treatmentPlanId,
   };
 
-  // Sprint 3 T8 — Categorização contábil por procedimento.
-  // Se o procedimento tem uma sub-conta de receita configurada
-  // (`procedures.accounting_account_id`), resolvemos o código aqui e propagamos
-  // para todos os postings de receita (a receber, carteira, crédito de pacote).
+  // Categorização contábil por procedimento.
+  // Se o procedimento tem sub-conta de receita (`procedures.accounting_account_id`),
+  // resolve o código e propaga para todos os postings de receita.
   // Fallback automático para a conta padrão (`4.1.1`/`4.1.2`) quando ausente.
   const procedureRevenueAccountCode = await resolveAccountCodeById(
     (procedure as any).accountingAccountId ?? null,
@@ -390,7 +388,12 @@ export async function applyBillingRules(
       console.error("[applyBillingRules] failed to create auto evolution:", err);
     }
 
-    // ── Priority 1: fatura consolidada via patient_packages (recurrenceType='faturaConsolidada')
+    // ── Priority 1 (retrocompatibilidade): faturaConsolidada via patient_packages ──
+    // O tipo `faturaConsolidada` foi descontinuado da UI; novos planos usam
+    // `faturaPlano` via materialização. Este bloco preserva o comportamento
+    // para pacientes com `patient_packages.recurrenceType='faturaConsolidada'`
+    // já existentes no banco (dados históricos migrados ou criados por acesso
+    // direto). Não cria novos registros deste tipo para planos novos.
     {
       const pkgConditions: any[] = [
         eq(patientPackagesTable.patientId, patientId),
@@ -681,24 +684,19 @@ export async function applyBillingRules(
           .limit(1);
 
         if (existing.length === 0) {
-          // Sprint 3 — Roll-up de avulsos no mês: se o paciente está num plano
-          // aceito (`treatmentPlanId` veio da resolução de preço) e existe uma
-          // `faturaPlano` para o mês de competência da sessão, esta linha vira
-          // FILHA dela (mesmo `parent_record_id`). Quando a fatura mensal for
-          // paga, todos os filhos são marcados em cascata pelo handler de
-          // pagamento (Sprint 4 do refator). Se não há `faturaPlano` (plano só
-          // com itens avulso), `parentRecordId` fica null e o item será
-          // consolidado depois por `closeAvulsoMonth` em `faturaMensalAvulso`.
+          // Roll-up de avulsos: quando o paciente está num plano aceito, vincula
+          // esta linha à `faturaPlano` do mês (`parent_record_id`). Ao pagar a
+          // fatura mensal, todos os filhos são marcados em cascata. Sem
+          // `faturaPlano` (plano só com itens avulso), `parentRecordId` fica null
+          // e o item é consolidado por `closeAvulsoMonth` em `faturaMensalAvulso`.
           let parentRecordId: number | null = null;
           const apptMonthRef = priceResolution.treatmentPlanId
             ? monthRangeFromDate(appointmentDate).startDate
             : null;
           if (priceResolution.treatmentPlanId) {
-            // Sprint 3 — busca determinística do parent: ordena por id ASC para
-            // que execuções concorrentes sempre escolham o MESMO parent quando
-            // existirem múltiplas `faturaPlano` no mesmo mês (caso raro de
-            // plano com vários procedimentos `recorrenteMensal`, geradas em
-            // tempos diferentes pelo job `monthlyPlanBilling`).
+            // Busca determinística do parent: ordena por id ASC para que
+            // execuções concorrentes sempre escolham o MESMO parent quando
+            // houver múltiplas `faturaPlano` no mesmo mês.
             const [parentInvoice] = await tx
               .select({ id: financialRecordsTable.id })
               .from(financialRecordsTable)
@@ -727,10 +725,10 @@ export async function applyBillingRules(
             dueDate:         dueDatePorSessao,
             clinicId:        resolvedClinicId,
             parentRecordId,
-            // Sprint 3/4 — sempre persiste a competência quando o lançamento
-            // é de um plano (com OU sem parent). Sem isso, a consolidação
-            // mensal de avulsos (`closeAvulsoMonth`) precisa cair no
-            // fallback de `dueDate`, que vaza para o mês seguinte (B3).
+            // Sempre persiste a competência para lançamentos de plano (com ou
+            // sem parent). Sem isso, a consolidação mensal de avulsos
+            // (`closeAvulsoMonth`) cai no fallback de `dueDate`, que vaza
+            // para o mês seguinte em sessões dos últimos dias.
             ...(apptMonthRef ? { planMonthRef: apptMonthRef } : {}),
             ...priceAuditFields,
           }).returning();
@@ -910,7 +908,7 @@ export async function applyBillingRules(
 
   // ── BILLING: absence/cancellation on monthly plan → generate limited session credit ─────────
   if (absenceCreditStatuses.includes(newStatus) && !absenceCreditStatuses.includes(oldStatus) && !confirmedStatuses.includes(oldStatus)) {
-    // Sprint 5 — janela de cancelamento (apenas para "cancelado").
+    // Verifica janela de cancelamento (apenas para "cancelado").
     const lateDecision =
       newStatus === "cancelado"
         ? await resolveCancellationDecision(

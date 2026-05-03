@@ -1,27 +1,17 @@
 /**
- * Sprint 15 (F1) — Orquestrador atômico de aceite + materialização.
+ * Orquestrador atômico de aceite + materialização.
  *
- * Encapsula o novo fluxo onde:
+ * Fluxo: itens → cobrança → AGENDA → CONTRATO → ACEITE → materialização atômica
  *
- *   itens → cobrança → AGENDA → CONTRATO → ACEITE → materialização atômica
- *
- * Em vez de o aceite contábil acontecer ANTES da escolha de horários
- * (fluxo legado, vide `medical-records.service.ts/acceptPatientTreatmentPlan`),
- * este orquestrador garante que:
- *
- *   1) o plano só é aceito se a agenda já estiver configurada (validação prévia);
- *   2) aceite + materialização rodam em sequência e, em caso de falha do
- *      segundo passo, o aceite é REVERTIDO (rollback explícito) — restaurando
- *      o plano ao estado de "rascunho".
- *
- * Endpoints legados (`POST /accept` + `POST /materialize`) continuam funcionando
- * para backward compatibility — esta é uma camada NOVA, não um retrofit.
+ * O plano só é aceito se a agenda já estiver configurada (validação prévia).
+ * Aceite + materialização rodam em sequência e, em caso de falha do segundo
+ * passo, o aceite é REVERTIDO (rollback explícito) — restaurando o plano ao
+ * estado de "rascunho".
  *
  * Idempotência:
  *   - Se o plano já foi aceito E materializado, retorna o estado atual sem
  *     reprocessar (200 OK). Não lança.
- *   - Se aceito mas não materializado (estado intermediário do fluxo legado),
- *     apenas materializa.
+ *   - Se aceito mas não materializado (estado transitório), apenas materializa.
  */
 import { db } from "@workspace/db";
 import {
@@ -306,7 +296,7 @@ export async function acceptAndMaterializePlan(
     );
   }
 
-  // 1b) Sprint 15 (F5) — Conflitos com holds vivos de OUTROS planos.
+  // 1b) Conflitos com holds vivos de OUTROS planos.
   //
   // Detectamos ANTES de aceitar/materializar para falhar com 409 sem ter
   // que rodar o rollback caro do `dematerializeTreatmentPlan`. Holds de

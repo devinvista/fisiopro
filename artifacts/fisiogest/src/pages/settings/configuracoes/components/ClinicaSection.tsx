@@ -183,7 +183,7 @@ export function ClinicaSection() {
       ...formData,
       cancellationPolicyHours: formData.cancellationPolicyHours !== "" ? Number(formData.cancellationPolicyHours) : null,
       autoConfirmHours: formData.autoConfirmHours !== "" ? Number(formData.autoConfirmHours) : null,
-      // Sprint 5 — janela é notNull no DB; só envia quando preenchido
+      // Janela é notNull no DB; só envia quando preenchido.
       cancellationWindowHours:
         formData.cancellationWindowHours !== "" ? Number(formData.cancellationWindowHours) : undefined,
       lateCancellationPolicy: formData.lateCancellationPolicy,
@@ -512,7 +512,7 @@ export function ClinicaSection() {
               </div>
             )}
 
-            {/* Sprint 5 — Janela operacional de crédito por cancelamento */}
+            {/* Janela operacional de crédito por cancelamento */}
             <div className="space-y-3 rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-3">
               <div>
                 <p className="text-sm font-medium">Janela de cancelamento (regra de crédito)</p>

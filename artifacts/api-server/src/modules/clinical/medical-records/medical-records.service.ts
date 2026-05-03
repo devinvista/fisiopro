@@ -305,7 +305,7 @@ export async function updatePatientTreatmentPlanById(
   data: Record<string, unknown>,
   ctx: AuthCtx,
 ) {
-  // Sprint 2 — após aceite, só campos "soft" continuam editáveis (status, notas).
+  // Após aceite, só campos "soft" continuam editáveis (status, notas).
   // Mudar valores comerciais exige `renegotiate`, que cria um novo plano versionado.
   const existing = await repo.getTreatmentPlan(planId, patientId);
   if (!existing) throw HttpError.notFound("Plano de tratamento não encontrado");
@@ -410,7 +410,7 @@ export async function updatePatientTreatmentPlanById(
   return plan;
 }
 
-// ─── Treatment Plan: aceitação (Sprint 2) ─────────────────────────────────────
+// ─── Treatment Plan: aceitação ────────────────────────────────────────────────
 
 /**
  * Estrutura do snapshot gravado em `treatment_plans.frozen_prices_json` no aceite.
@@ -441,7 +441,7 @@ function toMoney(n: number): string {
 }
 
 /**
- * Trilha LGPD do aceite — Sprint 2.
+ * Trilha LGPD do aceite.
  * `via='presencial'` é o aceite presencial autenticado pelo profissional.
  * `via='link'` é o aceite remoto via token público pelo paciente.
  * `via='legado'` é reservado a aceites históricos sem captura de IP.
@@ -463,21 +463,18 @@ export interface AcceptanceTrailInput {
  * uma "venda formal". A partir do aceite, alterações comerciais (preço, desconto, itens)
  * exigem renegociação (versionamento via `parent_plan_id`).
  *
- * Sprint 2: o aceite agora também dispara a "venda" (faturas + créditos via
- * `acceptPlanFinancials`). NÃO cria appointments — a materialização da agenda
- * permanece como ação operacional separada.
+ * O aceite dispara a "venda" (faturas + créditos via `acceptPlanFinancials`).
+ * NÃO cria appointments — a materialização da agenda é feita pelo orquestrador
+ * atômico `acceptAndMaterializePlan` (em `treatment-plans.atomic.ts`).
  *
- * Status aceitos como ponto de partida: `rascunho` (novo domínio) ou `ativo`
- * (legado, mantido por compat). O aceite promove `rascunho → vigente`.
+ * Status aceitos como ponto de partida: `rascunho` ou `vigente`/`ativo`
+ * (retrocompatibilidade). O aceite promove `rascunho → vigente`.
  *
  * Idempotente: chamar duas vezes não duplica o snapshot.
  *
- * @deprecated Sprint 15 (F6) — preferir `acceptAndMaterializePlan` (em
- * `treatment-plans.atomic.ts`), que aceita E materializa numa transação
- * compensatória. Esta função permanece exportada e funcional pois ainda é
- * o building block usado internamente pelo orquestrador atômico, mas
- * **callers externos** (rotas HTTP, jobs) devem migrar para o fluxo v2.
- * Remoção planejada após 90 dias com 100% das clínicas em v2 (rollout F6).
+ * Uso interno: building block do orquestrador `acceptAndMaterializePlan`.
+ * Callers externos devem usar `acceptAndMaterializePlan` para aceitar e
+ * materializar em uma única transação compensatória.
  */
 export async function acceptPatientTreatmentPlan(
   patientId: number,
@@ -573,9 +570,9 @@ export async function acceptPatientTreatmentPlan(
   );
   if (!updated) throw HttpError.notFound("Plano de tratamento não encontrado");
 
-  // Sprint 2: dispara o efeito financeiro do aceite (faturas + créditos),
-  // sem criar appointments. Falhas aqui derrubam o aceite (transação no
-  // próprio módulo). Se nenhum item for elegível, retorna zeros sem erro.
+  // Dispara o efeito financeiro do aceite (faturas + créditos), sem criar
+  // appointments. Falhas aqui derrubam o aceite (transação no próprio módulo).
+  // Se nenhum item for elegível, retorna zeros sem erro.
   let financials: Awaited<ReturnType<typeof acceptPlanFinancials>> | null = null;
   try {
     financials = await acceptPlanFinancials(planId);

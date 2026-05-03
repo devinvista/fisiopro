@@ -2,7 +2,7 @@ import { runMonthlyPlanBilling } from "../../modules/financial/billing/monthly-p
 import type { JobOpts } from "../registerJob.js";
 
 /**
- * Sprint 3 — geração lazy das faturas mensais de plano de tratamento.
+ * Geração lazy das faturas mensais de plano de tratamento.
  *
  * Roda diariamente às 06:30 BRT (logo após o `consolidatedBilling`).
  * Para cada plano `vigente`/`ativo` com itens `recorrenteMensal`:

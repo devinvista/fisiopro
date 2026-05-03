@@ -8,15 +8,15 @@ import { apiFetchJson } from "@/lib/api";
 import { formatCurrency } from "../../utils/format";
 
 /**
- * RecurringPackageSection (Sprint 1 — substituto de SubscriptionsSection)
+ * RecurringPackageSection
  *
  * Lista os pacotes recorrentes do paciente lendo direto de
  * `GET /api/patients/:patientId/packages` e filtrando por `recurrenceStatus`.
  *
  * Não permite criação direta nesta tela: o fluxo correto é criar um pacote
  * mensal na tela de Pacotes do paciente, que popula automaticamente os
- * campos de recorrência. Templates do tipo `faturaConsolidada` (legado) ainda
- * são exibidos quando existem em bases pré-Sprint 5, com badge "Mensal (legado)".
+ * campos de recorrência. Templates do tipo `faturaConsolidada` (descontinuado)
+ * são exibidos com badge "Mensal (legado)" quando existirem em dados históricos.
  */
 type PatientPackage = {
   id: number;
@@ -43,7 +43,7 @@ type PatientPackage = {
 
 function recurrenceLabel(type: string | null): { label: string; color: string } {
   if (type === "faturaConsolidada") {
-    // Sprint 5: descontinuado — exibido apenas para dados legados.
+    // Descontinuado — exibido apenas para dados históricos.
     return { label: "Mensal (legado)", color: "bg-amber-50 text-amber-700 border-amber-200" };
   }
   return { label: "Mensalidade", color: "bg-blue-50 text-blue-700 border-blue-200" };

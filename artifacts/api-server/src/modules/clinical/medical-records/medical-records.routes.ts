@@ -166,13 +166,11 @@ router.delete("/treatment-plans/:planId", requirePermission("medical.write"), as
   res.status(204).send();
 }));
 
-// Sprint 15 (F7) — Aceite + materialização ATÔMICA (único fluxo suportado).
+// Aceite + materialização atômica (único fluxo suportado).
 //
-// O endpoint legado `POST /treatment-plans/:planId/accept` foi removido na
-// Sprint 15 (F7) — todas as clínicas operam no fluxo atômico desde a
-// migration 0019. O paciente já configurou agenda + cobrança ANTES de
-// assinar; este endpoint substitui o par (POST /accept + POST /materialize)
-// por uma única operação com rollback explícito em caso de falha.
+// O paciente configura agenda + cobrança ANTES de assinar. Este endpoint
+// substitui o par (POST /accept + POST /materialize) por uma única operação
+// com rollback explícito em caso de falha.
 //
 // Body: { signature, acceptedClauseCodes[], materializeOpts? }
 // 400 → validação prévia falhou (faltam horários/agenda em algum item).
@@ -215,14 +213,9 @@ router.post(
   }),
 );
 
-// Sprint 15 (F2) — Validação pré-aceite. UI usa para mostrar checklist do
-// que ainda falta (agenda, horário, cobrança) antes de habilitar o botão
-// "Assinar e iniciar plano".
-//
-// Resposta inclui também `clauses` (cláusulas ativas da clínica) para a UI
-// renderizar checkboxes — sem isso o front-end não saberia quais cláusulas
-// precisam vir marcadas no `acceptedClauseCodes` do POST e o aceite falharia
-// com 400 `clause_required_missing` mesmo o usuário tendo passado a validação.
+// Validação pré-aceite: retorna checklist do que falta configurar (agenda,
+// horário, cobrança) e as cláusulas ativas da clínica para renderização
+// dos checkboxes obrigatórios antes do aceite.
 router.get(
   "/treatment-plans/:planId/atomic-validation",
   requirePermission("medical.read"),
@@ -257,11 +250,9 @@ router.get(
   }),
 );
 
-// Sprint 15 (F4) — Preview da agenda do plano antes do aceite.
-//
-// Read-only: enumera as consultas que serão criadas pela materialização sem
-// persistir nada. Usado pelo editor do plano para mostrar o calendário em
-// tempo real conforme a agenda é configurada (e pelo aceite público v2).
+// Preview da agenda do plano antes do aceite.
+// Read-only: enumera as consultas que seriam criadas pela materialização
+// sem persistir nada. Usado pelo editor para mostrar o calendário em tempo real.
 router.get(
   "/treatment-plans/:planId/preview-appointments",
   requirePermission("medical.read"),
@@ -273,9 +264,9 @@ router.get(
   }),
 );
 
-// Sprint 15 (F5) — Slot holds (TTL padrão 30min). Reserva os horários
-// escolhidos pelo operador no editor de agenda enquanto o paciente caminha
-// para o aceite, impedindo que outro plano roube o slot.
+// Slot holds (TTL padrão 30min). Reserva os horários escolhidos no editor
+// de agenda enquanto o paciente caminha para o aceite, impedindo que outro
+// plano roube o slot.
 //
 // POST: cria/renova hold. Body `{ slots: [{itemId,date,startTime,endTime,scheduleId,procedureId}], ttlMinutes? }`.
 //   - 200 com `{ ok, planId, slots, expiresAt, ttlSecondsRemaining }`.
@@ -339,7 +330,7 @@ router.get(
   }),
 );
 
-// Sprint 2 — gera (ou reaproveita) um link público de aceite, válido por 7 dias.
+// Gera (ou reaproveita) um link público de aceite, válido por 7 dias.
 // Retorna a URL absoluta (montada com APP_PUBLIC_URL ou Origin do request).
 router.post(
   "/treatment-plans/:planId/public-link",
@@ -363,8 +354,8 @@ router.post(
   }),
 );
 
-// Sprint 2 — renegociação de plano aceito:
-// cria nova versão (parent_plan_id), clona procedimentos, encerra o anterior.
+// Renegociação de plano aceito: cria nova versão (parent_plan_id), clona
+// procedimentos, encerra o anterior.
 // Body opcional: campos top-level a sobrescrever (frequency, estimatedSessions, startDate, etc).
 router.post(
   "/treatment-plans/:planId/renegotiate",
@@ -409,7 +400,7 @@ router.post(
   }),
 );
 
-// Sprint 4 — Fechamento mensal de itens avulsos do plano.
+// Fechamento mensal de itens avulsos do plano.
 // Body opcional `{ ref: 'YYYY-MM' }`; querystring `?ref=YYYY-MM`; padrão: mês atual.
 router.post(
   "/treatment-plans/:planId/close-month",

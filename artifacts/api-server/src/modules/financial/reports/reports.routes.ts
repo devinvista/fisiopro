@@ -398,8 +398,8 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         eq(accountingJournalEntriesTable.status, "posted"),
       ].filter(Boolean) as any[]));
 
-    // Estornos PARCIAIS (Sprint 14): D 2.1.1 / C 1.1.2 com eventType
-    // `deferred_receivable_partial_reversal` → cancelam o saldo restante
+    // Estornos PARCIAIS: D 2.1.1 / C 1.1.2 com eventType
+    // `deferred_receivable_partial_reversal` — cancelam o saldo restante
     // sem desfazer o entry original (que segue posted).
     const [accDeferredPartialReversed] = await db
       .select({

@@ -81,8 +81,8 @@ function normalizeStartTimesByDay(
   return { ok: true, value: JSON.stringify(cleaned) };
 }
 
-// Sprint 2 — após o aceite, o "carrinho" do plano vira venda formal e fica
-// imutável em campos comerciais. Itens só podem mudar campos operacionais
+// Após o aceite, o "carrinho" do plano vira venda formal e fica imutável em
+// campos comerciais. Itens só podem mudar campos operacionais
 // (agenda/profissional/notas). Adição/remoção de itens fica bloqueada — para
 // isso o usuário deve usar a renegociação (que cria nova versão do plano).
 async function getPlanAcceptedAt(planId: number): Promise<Date | null> {
@@ -315,7 +315,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
       return;
     }
 
-    // Sprint 2 — bloqueio pós-aceite: o "carrinho" do plano fica congelado.
+    // Bloqueio pós-aceite: o "carrinho" do plano fica congelado.
     if (planExists.acceptedAt) {
       res.status(409).json({
         error: "plan_already_accepted",
@@ -410,10 +410,10 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
       return;
     }
 
-    // Sprint 2 — após aceite, só campos operacionais (agenda/profissional/notas)
-    // continuam editáveis. Mudar identidade do item ou valores comerciais
-    // exige renegociação. No-ops (mesmo valor) são silenciosamente aceitos
-    // para o frontend poder reenviar o objeto inteiro sem ser bloqueado.
+    // Após aceite, só campos operacionais (agenda/profissional/notas) continuam
+    // editáveis. Mudar identidade do item ou valores comerciais exige
+    // renegociação. No-ops (mesmo valor) são silenciosamente aceitos para que
+    // o frontend possa reenviar o objeto inteiro sem ser bloqueado.
     const ctx = await getItemAndPlanAcceptedAt(id);
     if (!ctx) {
       res.status(404).json({ error: "Not Found" });
@@ -573,7 +573,7 @@ router.delete("/:id", requirePermission("medical.write"), async (req: AuthReques
       return;
     }
 
-    // Sprint 2 — bloqueio pós-aceite: itens vendidos não podem ser removidos
+    // Bloqueio pós-aceite: itens vendidos não podem ser removidos
     // (impacto contábil/financeiro). Use renegociação para refazer o plano.
     const ctx = await getItemAndPlanAcceptedAt(id);
     if (!ctx) {

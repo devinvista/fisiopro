@@ -1,5 +1,5 @@
 /**
- * Sprint 15 (F5) — Limpeza periódica de holds expirados.
+ * Limpeza periódica de holds expirados.
  *
  * Holds expirados NÃO bloqueiam (queries de conflito filtram por
  * `expires_at > now()`), então este job é puramente higiene de dados:

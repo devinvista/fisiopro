@@ -118,7 +118,7 @@ router.get(
   }),
 );
 
-// ─── Sprint 2 — Aceite público de plano de tratamento via token ──────────────
+// ─── Aceite público de plano de tratamento via token ─────────────────────────
 //
 // GET  /api/public/treatment-plans/by-token/:token                          → snapshot do plano
 // POST /api/public/treatment-plans/by-token/:token/accept-and-materialize   → consome o token
@@ -126,9 +126,6 @@ router.get(
 // Sem auth: a posse do token é a credencial. Status do token (`valid|expired|
 // used|not_found`) é refletido em códigos HTTP distintos para a UI exibir
 // mensagens claras.
-//
-// Sprint 15 (F7) — o endpoint legado `POST .../accept` foi removido. Todas
-// as clínicas operam no fluxo atômico desde a migration 0019.
 router.get(
   "/treatment-plans/by-token/:token",
   handle(async (req, res) => {
@@ -150,17 +147,15 @@ router.get(
     if (!snapshot) {
       throw new PublicError(404, "not_found", "Plano não encontrado.");
     }
-    // Sprint 15 (F4) — evita revalidações divergentes em proxies/CDN. O
-    // snapshot público é dinâmico (status + agenda) e nunca deve ser cacheado.
+    // Snapshot público é dinâmico (status + agenda) — nunca deve ser cacheado.
     res.setHeader("Cache-Control", "no-store");
     res.json({ ...snapshot, expiresAt: lookup.tokenRow!.expiresAt.toISOString() });
   }),
 );
 
-// Sprint 15 (F2) — Aceite + materialização ATÔMICA via link público.
-// Mesmo contrato do endpoint presencial mas sem auth: posse do token
-// é a credencial. Em caso de validação prévia falha (faltam horários
-// configurados pela clínica), devolve 400 detalhado para a UI orientar
+// Aceite + materialização atômica via link público.
+// Sem auth: posse do token é a credencial. Em caso de falha de validação
+// (faltam horários configurados), devolve 400 detalhado para orientar
 // o paciente a contatar a clínica.
 router.post(
   "/treatment-plans/by-token/:token/accept-and-materialize",

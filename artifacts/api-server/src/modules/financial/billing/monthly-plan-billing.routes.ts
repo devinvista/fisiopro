@@ -1,5 +1,5 @@
 /**
- * Endpoints HTTP para o job `monthlyPlanBilling` (Sprint 3+).
+ * Endpoints HTTP para o job `monthlyPlanBilling`.
  *
  * Permite à UI exibir status do último run, próximas cobranças (faturas que
  * serão geradas nos próximos 7 dias) e disparar execução manual do job.

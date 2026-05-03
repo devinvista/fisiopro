@@ -160,9 +160,9 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
 
       let remaining = numAmount;
       let primaryEntryId: number | null = null;
-      // Sprint 4 — IDs de filhos cascateados nesta transação. Quando uma
-      // `faturaMensalAvulso` é paga, marcamos seus filhos como `pago` em
-      // bloco; eles ainda aparecem em `pendingRecords` (snapshot anterior),
+      // IDs de filhos cascateados nesta transação. Quando uma
+      // `faturaMensalAvulso` é paga, marcamos seus filhos em bloco;
+      // eles ainda aparecem em `pendingRecords` (snapshot anterior),
       // então pulamos para não dupli-settlear.
       const cascadedChildIds = new Set<number>();
 
@@ -173,17 +173,13 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
         let receivableEntryId = pending.accountingEntryId ?? pending.recognizedEntryId;
 
         // ── faturaPlano paga ANTES da 1ª sessão do mês ───────────────────
-        // **Sprint Financeiro 12 (P3) — branching por modo:**
-        //
-        //   • **P3 (deferred_receivable já postado no aceite)**: o recebível
-        //     (1.1.2) e o adiantamento (2.1.1) já existem desde o aceite. O
-        //     pagamento aqui é apenas um SETTLEMENT puro: D 1.1.1 / C 1.1.2,
-        //     alocado contra o `deferred_receivable.id`. O 2.1.1 NÃO é tocado
-        //     aqui — só desce sessão a sessão (P2).
-        //
-        //   • **Legado (sem deferred_receivable)**: comportamento histórico —
-        //     `postCashAdvance` (D 1.1.1 / C 2.1.1) e a receita só nasce na
-        //     primeira sessão consumida.
+        // Branching por modo de pagamento:
+        //   • Com deferred_receivable (pré-pago): o recebível (1.1.2) e o
+        //     adiantamento (2.1.1) já existem desde o aceite. O pagamento é
+        //     apenas SETTLEMENT puro — D Caixa / C Recebíveis. O adiantamento
+        //     (2.1.1) é consumido sessão a sessão no reconhecimento de receita.
+        //   • Sem deferred_receivable (pós-pago/histórico): D Caixa / C
+        //     Adiantamentos — a receita nasce na 1ª sessão confirmada.
         const isFaturaPlanoPrepaid =
           pending.transactionType === "faturaPlano" && !receivableEntryId;
 
@@ -228,7 +224,7 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
               allocatedAt: today,
             }, tx as any);
           } else {
-            // Legado: D Caixa / C Adiantamentos (pendente de reconhecer).
+            // Sem adiantamento pré-pago: D Caixa / C Adiantamentos (pós-pago).
             const advanceEntry = await postCashAdvance({
               clinicId: pending.clinicId ?? req.clinicId ?? null,
               entryDate: today,
@@ -260,18 +256,15 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
           continue;
         }
 
-        // ── faturaMensalAvulso (consolidador, Sprint 4) ──────────────────
-        // Os filhos JÁ reconheceram receita ao serem materializados (sessão
-        // confirmada). O parent NÃO tem receita própria — apenas posta o
-        // settlement (D Caixa / C Recebíveis) e aloca contra o
-        // `recognizedEntryId` de cada filho. Em seguida cascateia o status
-        // `pago` para os filhos. Pagamento parcial não cascateia.
+        // ── faturaMensalAvulso (consolidador de avulsos do mês) ─────────
+        // Os filhos (sessões avulsas) já reconheceram receita individualmente.
+        // O parent não tem receita própria — posta apenas o settlement
+        // (D Caixa / C Recebíveis) e cascateia `pago` para os filhos.
+        // Pagamento parcial não cascateia.
         if (pending.transactionType === "faturaMensalAvulso") {
-          // Sprint 4 (B2) — Pagamento parcial NÃO cascateia, e tampouco posta
-          // settlement no parent. O parent é apenas um "agrupador" sem receita
-          // própria; quem carrega o recebível contabilmente são os filhos.
-          // Pulamos o parent e deixamos o loop alocar contra os filhos
-          // individualmente (cada filho tem seu `recognizedEntryId`).
+          // Pagamento parcial NÃO cascateia: o parent é apenas um agrupador
+          // sem receita própria. Cada filho carrega seu `recognizedEntryId`.
+          // Pulamos o parent e deixamos o loop alocar contra os filhos.
           if (allocationAmount < Number(pending.amount)) {
             continue;
           }
@@ -319,13 +312,11 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
           continue;
         }
 
-        // PR-FIN6-3 (B5): vendaPacote SEM accountingEntryId é um caso legado
-        // (registro criado fora do fluxo `postPackageSale`). Antes, o código
-        // pulava a recognition mas seguia para `postReceivableSettlement`,
-        // gerando D Caixa / C Recebíveis sem saldo de Recebíveis prévio →
-        // recebível negativo. Agora, redirecionamos para `postCashAdvance`
-        // (D Caixa / C Adiantamentos), que é a contabilização correta de uma
-        // venda de pacote: passivo até a execução das sessões.
+        // vendaPacote SEM accountingEntryId: registro criado fora do fluxo
+        // `postPackageSale` (dados históricos). Usar `postCashAdvance`
+        // (D Caixa / C Adiantamentos) — correto para venda de pacote,
+        // que é passivo até a execução das sessões. Evita recebível negativo
+        // que ocorreria com `postReceivableSettlement` sem entry prévio.
         if (!receivableEntryId && pending.transactionType === "vendaPacote") {
           const advanceEntry = await postCashAdvance({
             clinicId: pending.clinicId ?? req.clinicId ?? null,
@@ -359,6 +350,8 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
           continue;
         }
 
+        // Registro sem entry de recebível (dados históricos sem contabilização
+        // prévia): cria o recebível agora antes de liquidar.
         if (!receivableEntryId && pending.transactionType !== "vendaPacote") {
           const recognitionEntry = await postReceivableRevenue({
             clinicId: pending.clinicId ?? req.clinicId ?? null,
@@ -411,9 +404,8 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
             .update(financialRecordsTable)
             .set({ status: "pago", paymentDate: today, paymentMethod: paymentMethod || null, settlementEntryId: paymentEntry.id })
             .where(eq(financialRecordsTable.id, pending.id));
-          // Sprint 2 — Trigger pós-pagamento de plano: promove pool mensal
-          // `pendentePagamento` → `disponivel` quando a fatura faturaPlano
-          // (modo prepago) é integralmente paga.
+          // Pós-pagamento de faturaPlano prepago: promove pool mensal
+          // `pendentePagamento` → `disponivel`.
           if (pending.transactionType === "faturaPlano") {
             const { promotePrepaidCreditsForFinancialRecord } =
               await import("../../clinical/medical-records/treatment-plans.materialization.js");

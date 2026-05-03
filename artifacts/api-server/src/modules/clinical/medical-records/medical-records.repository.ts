@@ -148,7 +148,7 @@ export async function deleteTreatmentPlan(planId: number, patientId: number) {
   return true;
 }
 
-// ─── Treatment Plan: aceitação (Sprint 2) ─────────────────────────────────────
+// ─── Treatment Plan: aceitação ────────────────────────────────────────────────
 
 /**
  * Lê os procedimentos do plano para gerar o snapshot de preços no aceite.
@@ -202,7 +202,7 @@ export async function cloneTreatmentPlanProcedures(
 
 /**
  * Trilha LGPD do aceite: capturada do request (presencial) ou do paciente
- * (link público). Sprint 2.
+ * (link público).
  */
 export interface AcceptanceTrail {
   signature?: string | null;

@@ -1,10 +1,10 @@
 /**
- * FinanceiroSection — Sprint 2 — T5
+ * FinanceiroSection — configurações financeiras da clínica.
  *
  * Permite a clínica configurar:
  *  - Meta mensal de receita
  *  - Orçamento total mensal de despesa
- *  - Reserva mínima de caixa (alerta no fluxo projetado — Sprint 3 T7)
+ *  - Reserva mínima de caixa (alerta no fluxo projetado)
  *  - Prazo padrão de vencimento de recebíveis por sessão
  *
  * Endpoint: GET/PUT  /api/clinics/current/financial-settings
@@ -174,7 +174,7 @@ export function FinanceiroSection() {
               value={form.cashReserveTarget}
               onChange={(e) => setForm((p) => ({ ...p, cashReserveTarget: e.target.value }))}
             />
-            <p className="text-xs text-muted-foreground">Linha de alerta no fluxo de caixa projetado. Em desenvolvimento (Sprint 3).</p>
+            <p className="text-xs text-muted-foreground">Linha de alerta no fluxo de caixa projetado.</p>
           </div>
         </CardContent>
       </Card>

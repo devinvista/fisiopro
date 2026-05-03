@@ -116,8 +116,8 @@ export default function Procedimentos() {
     queryFn: () => apiFetch<Procedure[]>(url),
   });
 
-  // Sprint 3 T8 — Sub-contas contábeis disponíveis para vincular ao procedimento.
-  // Só busca se a clínica tem o feature `financial.view.accounting` (gating do endpoint).
+  // Sub-contas contábeis disponíveis para vincular ao procedimento.
+  // Só busca se a clínica tem o feature `financial.view.accounting`.
   const { data: accountingData } = useQuery<{ accounts: Array<{ id: number; code: string; name: string; type: string }> }>({
     queryKey: ["accounting-accounts"],
     queryFn: () => apiFetch("/api/financial/accounting/accounts"),

@@ -27,7 +27,7 @@ type ProcedureFormState = {
   onlineBookingEnabled: boolean;
   monthlyPrice?: string;
   billingDay?: string;
-  // Sprint 3 T8 — id (string) da sub-conta contábil de receita.
+  // Sub-conta contábil de receita para este procedimento.
   // "" → conta padrão (4.1.1/4.1.2).
   accountingAccountId?: string;
 };

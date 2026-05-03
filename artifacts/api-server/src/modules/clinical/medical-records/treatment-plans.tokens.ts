@@ -1,5 +1,5 @@
 /**
- * Sprint 2 — Tokens públicos de aceite de plano de tratamento.
+ * Tokens públicos de aceite de plano de tratamento.
  *
  * Permite gerar uma URL única (válida por 7 dias) que o paciente abre num
  * navegador externo (sem login) para revisar e aceitar o plano. O token é
@@ -198,9 +198,9 @@ export interface PublicPlanSnapshotClause {
 }
 
 /**
- * Sprint 15 (F4) — preview da agenda (consultas que serão criadas pela
- * materialização). Vazio quando a clínica ainda não configurou agenda nos
- * itens; a UI usa isso para exibir aviso e bloquear o aceite.
+ * Preview da agenda (consultas que serão criadas pela materialização).
+ * Vazio quando a clínica ainda não configurou agenda nos itens; a UI
+ * usa isso para exibir aviso e bloquear o aceite.
  */
 export interface PublicPlanAppointmentPreview {
   date: string;
@@ -239,15 +239,15 @@ export interface PublicPlanSnapshot {
   contractClauses: PublicPlanSnapshotClause[];
   acceptedClauses: PublicPlanSnapshotClause[] | null;
   /**
-   * Sprint 15 (F4) — consultas que serão criadas ao materializar o plano.
+   * Consultas que serão criadas ao materializar o plano.
    * Vazio quando a clínica ainda não configurou agenda em nenhum item; a UI
    * exibe aviso "aguardando configuração da agenda" e bloqueia o aceite.
    */
   appointmentsPreview: PublicPlanAppointmentPreview[];
   /**
-   * Sprint 15 (F4) — IDs dos itens que ainda não produziram preview por
-   * falta de agenda (dias da semana, horário ou schedule). Usado pela UI
-   * pública para explicar quais itens estão pendentes.
+   * IDs dos itens que ainda não produziram preview por falta de agenda
+   * (dias da semana, horário ou schedule). Usado pela UI pública para
+   * explicar quais itens estão pendentes.
    */
   itemsWithoutSchedule: number[];
 }
@@ -414,9 +414,9 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     };
   });
 
-  // Sprint 15 (F4) — preview da agenda (lista de consultas a serem criadas).
+  // Preview da agenda (lista de consultas a serem criadas).
   // Vazio quando a clínica ainda não configurou agenda; a UI usa isso para
-  // exibir aviso e bloquear o aceite v2.
+  // exibir aviso e bloquear o aceite.
   let previewAppointments: PublicPlanAppointmentPreview[] = [];
   let itemsWithoutSchedule: number[] = [];
   try {

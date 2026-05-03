@@ -1,5 +1,5 @@
 /**
- * Sprint 15 (F4) — Preview de appointments do plano de tratamento.
+ * Preview de appointments do plano de tratamento.
  *
  * Função pura/read-only que enumera todas as consultas que seriam criadas
  * por `materializeTreatmentPlan` SEM persistir nada. Reutiliza os helpers

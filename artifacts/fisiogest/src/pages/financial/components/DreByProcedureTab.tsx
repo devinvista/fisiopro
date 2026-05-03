@@ -1,5 +1,5 @@
 /**
- * DreByProcedureTab — Sprint 3 T8 (Categorização contábil por procedimento).
+ * DreByProcedureTab — Categorização contábil por procedimento.
  *
  * Mostra a receita reconhecida no período agrupada por procedimento, com
  * a sub-conta contábil em que cada receita foi creditada.

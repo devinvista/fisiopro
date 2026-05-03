@@ -1,6 +1,5 @@
 /**
- * CashFlowTab — Sprint 3 — T7
- * Aba "Fluxo de Caixa Projetado" do módulo financeiro.
+ * CashFlowTab — Aba "Fluxo de Caixa Projetado" do módulo financeiro.
  *
  * Renderiza:
  *   • KPIs (saldo inicial, entradas/saídas previstas, saldo final, menor saldo)

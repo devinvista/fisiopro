@@ -276,9 +276,9 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
       getMonthlyFinancials(ps, pe),
     ]);
 
-    // MRR — Sprint 5+: lê de treatment_plan_procedures (kind='recorrenteMensal'
-    // ou kind IS NULL com package_type mensal/faturaConsolidada para legado),
-    // em planos vigente/ativo já aceitos.
+    // MRR — lê de treatment_plan_procedures (kind='recorrenteMensal'
+    // ou kind IS NULL com package_type mensal/faturaConsolidada para registros
+    // históricos), em planos vigente/ativo já aceitos.
     const isRecurringItem = or(
       eq(treatmentPlanProceduresTable.kind, "recorrenteMensal"),
       and(
@@ -308,7 +308,7 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
       : eq(recurringExpensesTable.isActive, true);
 
     const recurringRows = await db.select().from(recurringExpensesTable).where(recCond);
-    // Cada despesa recorrente pode ter `monthlyBudget` próprio (Sprint 2 — T5).
+    // Cada despesa recorrente pode ter `monthlyBudget` próprio.
     // Quando ausente, calculamos a partir de `amount` ajustado pela frequência.
     const recurringEstimatedExpenses = recurringRows.reduce((sum, r) => {
       if (r.monthlyBudget !== null && r.monthlyBudget !== undefined) {
@@ -321,7 +321,7 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
     }, 0);
 
     // Se a clínica configurou metas explícitas em `clinic_financial_settings`,
-    // elas têm prioridade sobre o cálculo implícito (Sprint 2 — T5).
+    // elas têm prioridade sobre o cálculo implícito.
     const financialSettings = clinicId ? await getClinicFinancialSettings(clinicId) : null;
     const configuredExpenseBudget = financialSettings?.monthlyExpenseBudget ?? null;
     const configuredRevenueGoal = financialSettings?.monthlyRevenueGoal ?? null;

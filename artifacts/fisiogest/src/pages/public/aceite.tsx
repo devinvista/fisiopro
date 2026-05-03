@@ -124,7 +124,6 @@ interface PublicPlanSnapshot {
   clinic: PublicPlanClinic | null;
   contractClauses: PublicContractClause[];
   acceptedClauses: PublicAcceptedClause[];
-  // Sprint 15 — agenda real exibida antes do aceite atômico.
   appointmentsPreview?: PublicAppointmentPreview[];
   itemsWithoutSchedule?: number[];
 }
@@ -296,8 +295,8 @@ export default function AceitePage() {
   );
   const allRequiredAccepted = requiredClauseCodes.every((c) => acceptedClauseCodes.has(c));
 
-  // Sprint 15 — aceite atômico: requer agenda preview não-vazia para liberar
-  // o botão. A clínica precisa configurar dias/horários antes do paciente assinar.
+  // Aceite atômico: requer agenda preview não-vazia. A clínica precisa configurar
+  // dias/horários antes do paciente assinar.
   const previewAppointments = snapshot?.appointmentsPreview ?? [];
   const needsSchedule = previewAppointments.length === 0;
 
@@ -456,8 +455,7 @@ export default function AceitePage() {
         </section>
       )}
 
-      {/* Sprint 15 — Sua agenda (preview real das consultas).
-          Renderizado antes da assinatura para o paciente conferir. */}
+      {/* Sua agenda (preview das consultas) — renderizado antes da assinatura. */}
       {!isAccepted && (
         <section className="mt-6 rounded-xl border border-blue-200 bg-blue-50/40 p-5">
           <div className="flex items-center gap-2 mb-3">
