@@ -174,13 +174,22 @@ export async function closeAvulsoMonth(
         // Usa ao menos 1 sessão para não zerar a fatura (sessões reais podem
         // ser 0 se nenhuma foi realizada ainda — nesse caso mantém a estimativa).
         const realCredits = confirmedSessions > 0 ? confirmedSessions : estimatedCredits;
-        const realAmount = unitEffective * Math.max(1, realCredits);
+        const newTotal = Math.max(1, realCredits);
+        const realAmount = unitEffective * newTotal;
+
+        // consumed não pode superar o novo total (constraint DB).
+        // recognized_amount deve ser proporcional ao consumed.
+        const prevConsumed = Number(est.recognitionCreditsConsumed ?? 0);
+        const newConsumed = Math.min(prevConsumed, newTotal);
+        const newRecognized = unitEffective * newConsumed;
 
         await tx
           .update(financialRecordsTable)
           .set({
             amount: realAmount.toFixed(2),
-            recognitionCreditsTotal: Math.max(1, realCredits),
+            recognitionCreditsTotal: newTotal,
+            recognitionCreditsConsumed: newConsumed,
+            recognizedAmount: newRecognized.toFixed(2),
             priceSource: confirmedSessions > 0 ? "fechar_mes_confirmado" : "plano_avulso_estimado",
           } as any)
           .where(eq(financialRecordsTable.id, est.id));
