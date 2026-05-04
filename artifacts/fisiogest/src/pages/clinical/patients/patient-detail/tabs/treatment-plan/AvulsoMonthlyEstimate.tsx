@@ -73,8 +73,10 @@ export function AvulsoMonthlyEstimate({ planItems, durationMonths, planStartDate
           const sessions = Math.max(1, plannedSessionsForItem(i, planStartDate, durationMonths));
           const disc = Number(i.discount ?? 0);
           const net = Math.max(0, unit * sessions - disc);
+          const unitEffective = sessions > 0 ? net / sessions : unit;
           const isEst = isPlannedEstimate(i, planStartDate, durationMonths);
           const label = i.packageName ?? i.procedureName ?? "—";
+          const hasDiscount = disc > 0;
           return (
             <div
               key={i.id}
@@ -83,7 +85,10 @@ export function AvulsoMonthlyEstimate({ planItems, durationMonths, planStartDate
               <span className="text-slate-700 truncate max-w-[60%]">
                 {label}
                 <span className="text-slate-400 font-normal">
-                  {" "}· {sessions} sess.{isEst ? " (est.)" : ""} × {fmtCur(unit)}
+                  {" "}· {sessions} sess.{isEst ? " (est.)" : ""} × {fmtCur(unitEffective)}
+                  {hasDiscount && (
+                    <span className="line-through ml-1 text-slate-300">{fmtCur(unit)}</span>
+                  )}
                 </span>
               </span>
               <span className="font-medium text-slate-700">{fmtCur(net)}</span>
