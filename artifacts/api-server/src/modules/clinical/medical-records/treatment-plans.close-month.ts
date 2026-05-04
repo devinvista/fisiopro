@@ -78,7 +78,7 @@ export async function closeAvulsoMonth(
         and(
           eq(financialRecordsTable.transactionType, "faturaMensalAvulso"),
           eq(financialRecordsTable.treatmentPlanId, planId),
-          eq(financialRecordsTable.planMonthRef, normalizedRef),
+          sql`${financialRecordsTable.planMonthRef} = ${normalizedRef}::date`,
         ),
       )
       .limit(1);
@@ -108,7 +108,7 @@ export async function closeAvulsoMonth(
         and(
           eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
           eq(financialRecordsTable.treatmentPlanId, planId),
-          eq(financialRecordsTable.planMonthRef, normalizedRef),
+          sql`${financialRecordsTable.planMonthRef} = ${normalizedRef}::date`,
           sql`${financialRecordsTable.priceSource} = 'fechar_mes_confirmado'`,
         ),
       );
@@ -138,7 +138,7 @@ export async function closeAvulsoMonth(
         and(
           eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
           eq(financialRecordsTable.treatmentPlanId, planId),
-          eq(financialRecordsTable.planMonthRef, normalizedRef),
+          sql`${financialRecordsTable.planMonthRef} = ${normalizedRef}::date`,
           sql`${financialRecordsTable.status} NOT IN ('pago','cancelado','estornado')`,
         ),
       );
