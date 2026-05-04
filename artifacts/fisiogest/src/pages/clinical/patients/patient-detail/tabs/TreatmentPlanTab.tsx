@@ -1439,6 +1439,7 @@ function StepContrato({
           <AvulsoMonthlyEstimate
             planItems={planItems as any}
             durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+            planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
           />
 
           {form.avulsoBillingMode === "mensalConsolidado" && (

@@ -24,11 +24,14 @@ export function CloseMonthBlock({ patientId, planId, onClosed }: Props) {
         "POST", {},
       );
       if (res?.alreadyClosed) {
-        toast({ title: "Mês já fechado", description: `Fatura #${res.financialRecordId} já existe.` });
+        toast({ title: "Mês já fechado", description: `Fatura #${res.invoiceId ?? res.financialRecordId} já existe.` });
       } else {
+        const modeLabel = res?.mode === "pregen_updated"
+          ? "Estimativa atualizada com sessões reais"
+          : "Fatura consolidada criada";
         toast({
           title: "Mês fechado!",
-          description: `Fatura consolidada criada: R$ ${Number(res?.amount ?? 0).toFixed(2)} — ${res?.sessionsCount ?? 0} sessão(ões).`,
+          description: `${modeLabel}: R$ ${Number(res?.totalAmount ?? res?.amount ?? 0).toFixed(2)} — ${res?.sessionsCount ?? res?.itemsConsolidated ?? 0} sessão(ões).`,
         });
       }
       onClosed();

@@ -1,29 +1,26 @@
 /**
  * Fechamento mensal de itens avulsos do plano de tratamento.
  *
- * Quando um item do plano usa `avulsoBillingMode='mensalConsolidado'`,
- * cada sessão realizada gera um lançamento detalhado pendente
- * (`creditoAReceber` ou similar) com `treatmentPlanId` preenchido. No
- * fechamento do mês (manual ou automático), agrupamos todos os
- * lançamentos pendentes do plano dentro do mês de competência em uma
- * única `faturaMensalAvulso` (parent), e linkamos os itens via
- * `parent_record_id`.
+ * Suporta dois fluxos distintos:
  *
- * A fatura agrupadora (`parentRecordId = null`, `transactionType =
- * 'faturaMensalAvulso'`) tem:
- *   - `amount` = SUM(filhos.amount)
- *   - `dueDate` = `avulsoBillingDay` do plano (ou padrão da clínica)
- *   - `status` = 'pendente'
- *   - `description` = "Fatura mensal de avulsos — paciente — YYYY-MM"
+ * 1. Fluxo legado (sessões cobradas individualmente via billing de agendamento):
+ *    Cada sessão realizada gera um lançamento `creditoAReceber`/`pendenteFatura`.
+ *    O fechar-mês agrupa esses lançamentos em uma `faturaMensalAvulso`.
  *
- * Idempotência: se já existe `faturaMensalAvulso` para o plano no mês
- * referenciado, retorna a fatura existente sem criar duplicada.
+ * 2. Fluxo pré-gerado (aceite contábil antecipado — Sprint Financeiro 13/P4):
+ *    O aceite cria faturas estimadas `faturaPlanoAvulsoMensal` (1/mês por item).
+ *    O fechar-mês atualiza essas faturas com a contagem REAL de sessões
+ *    confirmadas nos agendamentos do mês, corrigindo o valor estimado.
+ *
+ * Idempotência: re-chamar fechar-mês para um mês já fechado retorna a fatura
+ * existente sem criar/atualizar nada.
  */
 import { db } from "@workspace/db";
 import {
   appointmentsTable,
   financialRecordsTable,
   treatmentPlansTable,
+  treatmentPlanProceduresTable,
   patientsTable,
   clinicsTable,
 } from "@workspace/db";
@@ -31,11 +28,13 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 export interface CloseMonthResult {
   planId: number;
-  monthRef: string; // YYYY-MM-01
+  monthRef: string;
   invoiceId: number;
   itemsConsolidated: number;
+  sessionsCount: number;
   totalAmount: string;
   alreadyClosed: boolean;
+  mode: "pregen_updated" | "consolidated" | "already_closed";
 }
 
 function lastDayOfMonth(year: number, month: number): number {
@@ -43,8 +42,6 @@ function lastDayOfMonth(year: number, month: number): number {
 }
 
 function monthBounds(monthRef: string): { start: string; end: string } {
-  // monthRef esperado YYYY-MM ou YYYY-MM-DD; sempre normalizamos para o
-  // primeiro dia do mês.
   const [y, m] = monthRef.slice(0, 7).split("-").map(Number);
   if (!y || !m) throw new Error(`monthRef inválido: ${monthRef}`);
   const last = lastDayOfMonth(y, m);
@@ -73,8 +70,8 @@ export async function closeAvulsoMonth(
   const normalizedRef = monthStart;
 
   return await db.transaction(async (tx) => {
-    // Idempotência: já existe fatura agrupadora para este plano/mês?
-    const [existing] = await tx
+    // ─── Idempotência global: faturaMensalAvulso já existe? ───────────────────
+    const [existingConsolidated] = await tx
       .select()
       .from(financialRecordsTable)
       .where(
@@ -86,34 +83,100 @@ export async function closeAvulsoMonth(
       )
       .limit(1);
 
-    if (existing) {
-      // Conta filhos vinculados para retorno informativo.
+    if (existingConsolidated) {
       const [{ count: childCount }] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(financialRecordsTable)
-        .where(eq(financialRecordsTable.parentRecordId, existing.id));
+        .where(eq(financialRecordsTable.parentRecordId, existingConsolidated.id));
       return {
         planId,
         monthRef: normalizedRef,
-        invoiceId: existing.id,
+        invoiceId: existingConsolidated.id,
         itemsConsolidated: Number(childCount),
-        totalAmount: String(existing.amount),
+        sessionsCount: Number(childCount),
+        totalAmount: String(existingConsolidated.amount),
         alreadyClosed: true,
+        mode: "already_closed",
       };
     }
 
-    // Pega lançamentos pendentes/avulsos do plano no mês:
-    //  - vinculados ao plano (treatmentPlanId)
-    //  - status='pendente'
-    //  - sem parent (não consolidados ainda)
-    //  - tipo crédito a receber/pendenteFatura (sessão avulsa)
-    //  - dueDate dentro do mês de competência (ou planMonthRef se preenchido)
-    // A competência correta é o mês da SESSÃO (`appointments.date`), NÃO o
-    // `dueDate` (que é appointmentDate + N dias de prazo e vaza para o mês
-    // seguinte nas sessões dos últimos dias). Para registros com `planMonthRef`
-    // preenchido usamos esse campo diretamente; para registros históricos sem
-    // `planMonthRef`, fazemos JOIN com `appointments` e filtramos pela data
-    // da sessão.
+    // ─── Fluxo pré-gerado: faturaPlanoAvulsoMensal existe para este mês? ─────
+    // Verifica se o aceite criou faturas estimadas. Se sim, atualiza com a
+    // contagem REAL de sessões confirmadas nos agendamentos.
+    const pregenEstimates = await tx
+      .select()
+      .from(financialRecordsTable)
+      .where(
+        and(
+          eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+          eq(financialRecordsTable.treatmentPlanId, planId),
+          eq(financialRecordsTable.planMonthRef, normalizedRef),
+          sql`${financialRecordsTable.status} NOT IN ('pago','cancelado','estornado')`,
+        ),
+      );
+
+    if (pregenEstimates.length > 0) {
+      let totalRealAmount = 0;
+      let totalConfirmedSessions = 0;
+
+      for (const est of pregenEstimates) {
+        // Conta sessões REAIS confirmadas para este item do plano neste mês.
+        // Usa treatmentPlanProcedureId para correlacionar ao item correto.
+        const sessionRows = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(appointmentsTable)
+          .where(
+            and(
+              eq(appointmentsTable.treatmentPlanProcedureId, est.treatmentPlanProcedureId!),
+              sql`${appointmentsTable.date} BETWEEN ${monthStart}::date AND ${monthEnd}::date`,
+              sql`${appointmentsTable.status} IN ('realizado','confirmado','presente','concluido','atendido')`,
+            ),
+          );
+        const confirmedSessions = Number(sessionRows[0]?.count ?? 0);
+
+        // Recupera unitEffective a partir dos dados armazenados.
+        // amount = unitEffective × recognitionCreditsTotal (estimado).
+        // Se recognitionCreditsTotal é null/0, usa amount como valor fixo.
+        const estimatedCredits = Number(est.recognitionCreditsTotal ?? 0);
+        const storedAmount = Number(est.amount ?? 0);
+        const unitEffective = estimatedCredits > 0
+          ? storedAmount / estimatedCredits
+          : storedAmount;
+
+        // Usa ao menos 1 sessão para não zerar a fatura (sessões reais podem
+        // ser 0 se nenhuma foi realizada ainda — nesse caso mantém a estimativa).
+        const realCredits = confirmedSessions > 0 ? confirmedSessions : estimatedCredits;
+        const realAmount = unitEffective * Math.max(1, realCredits);
+
+        await tx
+          .update(financialRecordsTable)
+          .set({
+            amount: realAmount.toFixed(2),
+            recognitionCreditsTotal: Math.max(1, realCredits),
+            priceSource: confirmedSessions > 0 ? "fechar_mes_confirmado" : "plano_avulso_estimado",
+          } as any)
+          .where(eq(financialRecordsTable.id, est.id));
+
+        totalRealAmount += realAmount;
+        totalConfirmedSessions += confirmedSessions;
+      }
+
+      // Retorna a primeira fatura atualizada como referência (todas são por item).
+      return {
+        planId,
+        monthRef: normalizedRef,
+        invoiceId: pregenEstimates[0].id,
+        itemsConsolidated: pregenEstimates.length,
+        sessionsCount: totalConfirmedSessions,
+        totalAmount: totalRealAmount.toFixed(2),
+        alreadyClosed: false,
+        mode: "pregen_updated",
+      };
+    }
+
+    // ─── Fluxo legado: consolida lançamentos de sessões individuais ───────────
+    // Busca registros `creditoAReceber`/`pendenteFatura` (billing de agendamento)
+    // pendentes e sem parent para o plano neste mês.
     const candidatesRows = await tx
       .select({
         record: financialRecordsTable,
@@ -166,24 +229,16 @@ export async function closeAvulsoMonth(
         .from(clinicsTable)
         .where(eq(clinicsTable.id, plan.clinicId))
         .limit(1);
-      // PR-FIN8-4 (B11): usar o defaultDueDays real da clínica (era hardcoded 10)
       dueDay = clinic?.defaultDueDays ?? 10;
     }
     if (dueDay == null) dueDay = 10;
     const dueDayClamped = Math.min(Math.max(1, dueDay), lastDay);
-    // Vencimento no mês SEGUINTE ao mês de competência.
     const dueY = m === 12 ? y + 1 : y;
     const dueM = m === 12 ? 1 : m + 1;
     const dueLastDay = lastDayOfMonth(dueY, dueM);
     const realDueDay = Math.min(dueDayClamped, dueLastDay);
     const dueDate = `${dueY}-${String(dueM).padStart(2, "0")}-${String(realDueDay).padStart(2, "0")}`;
 
-    // Cria a fatura agrupadora.
-    // PR-FIN8-2 (B11): a categoria da mãe agora é constante "Fatura mensal"
-    // (em vez de pegar a categoria do primeiro filho, que poderia divergir
-    // quando o plano tem >1 procedimento de categorias diferentes). O
-    // detalhamento por procedimento permanece nos filhos — o DRE-by-procedure
-    // continua puxando deles, não da mãe.
     const childCategories = Array.from(
       new Set(candidates.map((c) => c.category).filter(Boolean) as string[]),
     );
@@ -208,10 +263,6 @@ export async function closeAvulsoMonth(
       })
       .returning({ id: financialRecordsTable.id });
 
-    // Vincula os filhos. NÃO mudamos o status dos filhos (continuam
-    // contabilmente válidos como recebíveis individuais), apenas marcamos
-    // o `parentRecordId`. Quando a fatura agrupadora for paga, o handler
-    // de pagamento marcará os filhos como pagos em cascata.
     const childIds = candidates.map((r) => r.id);
     await tx
       .update(financialRecordsTable)
@@ -223,8 +274,10 @@ export async function closeAvulsoMonth(
       monthRef: normalizedRef,
       invoiceId: invoice.id,
       itemsConsolidated: candidates.length,
+      sessionsCount: candidates.length,
       totalAmount: total.toFixed(2),
       alreadyClosed: false,
+      mode: "consolidated",
     };
   });
 }

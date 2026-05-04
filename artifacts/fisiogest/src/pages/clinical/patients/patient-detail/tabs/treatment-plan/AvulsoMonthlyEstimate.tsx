@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { TrendingUp, Info } from "lucide-react";
 import { fmtCur } from "../../utils/format";
+import { plannedSessionsForItem, isPlannedEstimate } from "../../utils/sessionCount";
 
 type PlanItem = {
   id: number;
@@ -10,6 +11,7 @@ type PlanItem = {
   packageType?: string | null;
   sessionsPerWeek?: number | null;
   totalSessions?: number | null;
+  weekDays?: string | string[] | null;
   unitPrice?: string | number | null;
   price?: string | number | null;
   discount?: string | number | null;
@@ -18,14 +20,19 @@ type PlanItem = {
 interface Props {
   planItems: PlanItem[];
   durationMonths: number;
+  planStartDate?: string | null;
 }
 
 /**
  * Estima quanto, mês a mês, o paciente deve pagar pelos procedimentos
  * AVULSOS (sem packageId) ou pacotes "sessões" (não recorrentes mensais).
  * Pacotes mensais já viraram parcelas fixas no PlanInstallmentsPanel.
+ *
+ * Usa `plannedSessionsForItem` para a contagem de sessões — a mesma
+ * função usada ao salvar o desconto — garantindo que `disc` e `sessions`
+ * sejam sempre compatíveis e o valor líquido seja correto.
  */
-export function AvulsoMonthlyEstimate({ planItems, durationMonths }: Props) {
+export function AvulsoMonthlyEstimate({ planItems, durationMonths, planStartDate }: Props) {
   const avulsoItems = useMemo(
     () => planItems.filter((i) => i.packageType !== "mensal"),
     [planItems],
@@ -35,7 +42,9 @@ export function AvulsoMonthlyEstimate({ planItems, durationMonths }: Props) {
 
   const total = avulsoItems.reduce((sum, i) => {
     const unit = Number(i.unitPrice ?? i.price ?? 0);
-    const sessions = Number(i.totalSessions ?? 1);
+    // Usa a MESMA função usada ao armazenar o desconto total para que
+    // `sessions` e `disc` sejam coerentes: disc = unitDisc × sessions.
+    const sessions = Math.max(1, plannedSessionsForItem(i, planStartDate, durationMonths));
     const disc = Number(i.discount ?? 0);
     return sum + Math.max(0, unit * sessions - disc);
   }, 0);
@@ -61,9 +70,10 @@ export function AvulsoMonthlyEstimate({ planItems, durationMonths }: Props) {
       <div className="space-y-1 text-xs">
         {avulsoItems.map((i) => {
           const unit = Number(i.unitPrice ?? i.price ?? 0);
-          const sessions = Number(i.totalSessions ?? 1);
+          const sessions = Math.max(1, plannedSessionsForItem(i, planStartDate, durationMonths));
           const disc = Number(i.discount ?? 0);
           const net = Math.max(0, unit * sessions - disc);
+          const isEst = isPlannedEstimate(i, planStartDate, durationMonths);
           const label = i.packageName ?? i.procedureName ?? "—";
           return (
             <div
@@ -73,7 +83,7 @@ export function AvulsoMonthlyEstimate({ planItems, durationMonths }: Props) {
               <span className="text-slate-700 truncate max-w-[60%]">
                 {label}
                 <span className="text-slate-400 font-normal">
-                  {" "}· {sessions} sess. × {fmtCur(unit)}
+                  {" "}· {sessions} sess.{isEst ? " (est.)" : ""} × {fmtCur(unit)}
                 </span>
               </span>
               <span className="font-medium text-slate-700">{fmtCur(net)}</span>
