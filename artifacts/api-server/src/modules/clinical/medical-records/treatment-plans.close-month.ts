@@ -100,6 +100,34 @@ export async function closeAvulsoMonth(
       };
     }
 
+    // ─── Idempotência pré-gerado: mês já foi fechado (fechar_mes_confirmado)? ─
+    const pregenAlreadyClosed = await tx
+      .select()
+      .from(financialRecordsTable)
+      .where(
+        and(
+          eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+          eq(financialRecordsTable.treatmentPlanId, planId),
+          eq(financialRecordsTable.planMonthRef, normalizedRef),
+          sql`${financialRecordsTable.priceSource} = 'fechar_mes_confirmado'`,
+        ),
+      );
+
+    if (pregenAlreadyClosed.length > 0) {
+      const totalAmount = pregenAlreadyClosed.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+      const totalSessions = pregenAlreadyClosed.reduce((s, r) => s + Number(r.recognitionCreditsTotal ?? 0), 0);
+      return {
+        planId,
+        monthRef: normalizedRef,
+        invoiceId: pregenAlreadyClosed[0].id,
+        itemsConsolidated: pregenAlreadyClosed.length,
+        sessionsCount: totalSessions,
+        totalAmount: totalAmount.toFixed(2),
+        alreadyClosed: true,
+        mode: "already_closed",
+      };
+    }
+
     // ─── Fluxo pré-gerado: faturaPlanoAvulsoMensal existe para este mês? ─────
     // Verifica se o aceite criou faturas estimadas. Se sim, atualiza com a
     // contagem REAL de sessões confirmadas nos agendamentos.
