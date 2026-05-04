@@ -1442,11 +1442,17 @@ function StepContrato({
             isMaterialized={true}
           />
 
-          <AvulsoMonthlyEstimate
-            planItems={planItems as any}
-            durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-            planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-          />
+          {/* Em modo mensalConsolidado as faturas reais já constam nas parcelas acima
+              (PlanInstallmentsPanel). Exibir a estimativa junto causaria divergência
+              de valores — o componente usa fronteira de data diferente do backend
+              (startDate + N meses vs planMonthRefOf), gerando totais distintos. */}
+          {form.avulsoBillingMode !== "mensalConsolidado" && (
+            <AvulsoMonthlyEstimate
+              planItems={planItems as any}
+              durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+              planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+            />
+          )}
 
           {form.avulsoBillingMode === "mensalConsolidado" && (
             <CloseMonthBlock

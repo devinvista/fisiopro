@@ -67,12 +67,17 @@ export function generateContractHTML(
       ? plannedSessionsForItem(item, plan.startDate, plan.durationMonths)
       : (item.totalSessions ?? (isAvulso ? 1 : 0));
     const disc = Number(item.discount ?? 0);
-    const unitP = Number(item.price ?? 0);
+    // Usa o preço negociado (unitPrice) quando disponível, com fallback para
+    // o preço de catálogo (price) — mesma lógica do `calcItemTotal` da UI
+    // (`TreatmentPlanItemsSection.tsx`) e do `AvulsoMonthlyEstimate`. Usar
+    // somente `item.price` causava divergência entre o contrato impresso e os
+    // valores reais cobrados/exibidos na tela.
+    const unitP = Number(item.unitPrice ?? item.price ?? 0);
     // Para itens mensais, usar `monthlyPrice` quando disponível e cair de
     // volta para `price` (mesmo comportamento do `calcItemTotal` da UI viva
     // em `TreatmentPlanItemsSection.tsx`). Sem o fallback, itens cuja
     // mensalidade vem do campo `unitPrice` apareciam como R$ 0,00.
-    const unitM = isMensal ? Number(item.monthlyPrice ?? item.price ?? 0) : 0;
+    const unitM = isMensal ? Number(item.monthlyPrice ?? item.unitPrice ?? item.price ?? 0) : 0;
 
     const gross = isMensal
       ? unitM
