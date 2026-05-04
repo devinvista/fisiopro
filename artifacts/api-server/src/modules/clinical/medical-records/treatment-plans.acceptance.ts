@@ -284,7 +284,7 @@ export async function acceptPlanFinancials(
         if (!avulsoProcedure) continue;
 
         const billingDay = resolveMonthlyDueDay({
-          planMonthlyDueDay: plan.monthlyDueDay,
+          planMonthlyDueDay: plan.avulsoBillingDay ?? plan.monthlyDueDay,
           packageBillingDay: null,
         });
 
