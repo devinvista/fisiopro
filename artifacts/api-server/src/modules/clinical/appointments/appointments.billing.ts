@@ -199,9 +199,12 @@ export async function applyBillingRules(
       }
 
       // ── Reconhecimento de receita por entrega ───────────────────────────
-      // Esta é a 1ª confirmação do mês? Se sim, reconhece a receita
-      // INTEGRAL da fatura mensal. Idempotente — chamadas subsequentes
-      // do mesmo mês são no-op (recognizedEntryId já preenchido).
+      // mensalConsolidado: reconhece a fatura mensal estimada (faturaPlanoAvulsoMensal)
+      // na 1ª confirmação do mês. Idempotente.
+      //
+      // porSessao: não há fatura mensal pré-criada → monthlyInvoiceId é null.
+      // Neste caso NÃO retornamos — o código cai para o billing por sessão
+      // padrão (Priority 2) logo abaixo do bloco `if (planProcId)`.
       const monthlyInvoiceId: number | null =
         (details as any).monthlyInvoiceId ?? null;
       if (monthlyInvoiceId) {
@@ -217,11 +220,10 @@ export async function applyBillingRules(
             err,
           );
         }
+        return; // mensalConsolidado: encerrado aqui
       }
-      return;
-    }
-
-    if (absenceSet.includes(newStatus) && !absenceSet.includes(oldStatus)) {
+      // porSessao: não retorna — cai para per-session billing abaixo
+    } else if (absenceSet.includes(newStatus) && !absenceSet.includes(oldStatus)) {
       // Falta em plano materializado SEMPRE gera crédito de sessão (a vaga
       // foi paga, o paciente tem direito a remarcar). Não há estorno.
       const { sessionCreditsTable: scTable } = await import("@workspace/db");
@@ -249,13 +251,11 @@ export async function applyBillingRules(
         });
       }
       return;
-    }
-
     // ── Cancelamento em plano materializado ──────────────────────────────
     // Cancelamentos respeitam a janela `cancellationWindowHours` da clínica.
     // Quando dentro da janela e a política for `semCredito`/`taxa`, NÃO gera
     // o crédito de reposição padrão (e taxa fica para o roadmap futuro).
-    if (newStatus === "cancelado" && (oldStatus === "agendado" || oldStatus === "confirmado")) {
+    } else if (newStatus === "cancelado" && (oldStatus === "agendado" || oldStatus === "confirmado")) {
       const startTime = (details as any).startTime ?? null;
       const decision = await resolveCancellationDecision(
         resolvedClinicId,
@@ -318,8 +318,6 @@ export async function applyBillingRules(
         }
       }
       return;
-    }
-
     // ── Modelo "1ª sessão = 100%": SEM estorno em planos materializados ──────
     //
     // A receita mensal é reconhecida INTEGRALMENTE na 1ª confirmação do mês
@@ -328,12 +326,14 @@ export async function applyBillingRules(
     // a receita NÃO é estornada, pois o vínculo é com o mês/fatura, não com
     // a sessão individual. Créditos de sessão garantem o direito do paciente
     // à reposição sem impacto no resultado contábil do mês.
-    if (!confirmedSet.includes(newStatus) && confirmedSet.includes(oldStatus)) {
+    } else if (!confirmedSet.includes(newStatus) && confirmedSet.includes(oldStatus)) {
       return; // no-op — receita permanece reconhecida pela competência do mês
+    } else if (!confirmedSet.includes(newStatus)) {
+      // Outros status (agendado→agendado etc.) — no-op.
+      return;
     }
-
-    // Outros status (agendado→agendado etc.) — no-op.
-    return;
+    // Chegando aqui: confirmado sem fatura mensal (avulsoBillingMode=porSessao).
+    // Cai para o billing por sessão padrão abaixo.
   }
 
   // Busca prazo de vencimento configurado pela clínica (padrão: 3 dias).

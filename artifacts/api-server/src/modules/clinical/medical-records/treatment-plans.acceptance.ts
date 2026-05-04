@@ -219,17 +219,23 @@ export async function acceptPlanFinancials(
     for (const item of items) {
       const kind = resolveItemKind(item);
 
-      // ─── Avulso (Sprint Financeiro 13 — P4) ─────────────────────────────
-      // Avulsos vinculados ao plano agora geram aceite contábil antecipado:
-      // estimamos `sessões/mês = sessionsPerWeek × 4` e criamos 1 fatura
-      // mensal estimada por (item, mês de competência) com `transactionType =
-      // 'faturaPlanoAvulsoMensal'`. Cada fatura postа `D 1.1.2 / C 2.1.1`
-      // pelo total mensal (preço × sessões estimadas). A apropriação ocorre
-      // por sessão consumida via `recognizeMonthlyInvoiceRevenuePartial`
-      // (fragmento P3-style → `postWalletUsage`).
+      // ─── Avulso ──────────────────────────────────────────────────────────
+      // Há dois modos de cobrança para itens avulso (plan.avulsoBillingMode):
+      //
+      //   "porSessao"       — nenhum efeito no aceite. A fatura é gerada
+      //                       individualmente quando cada atendimento é
+      //                       concluído (via applyBillingRules → priority 2).
+      //
+      //   "mensalConsolidado" — aceite contábil antecipado: estimamos
+      //                       `sessões/mês` e criamos 1 fatura mensal por
+      //                       (item, mês de competência) com transactionType =
+      //                       'faturaPlanoAvulsoMensal'. A apropriação ocorre
+      //                       por sessão consumida via recognizeMonthlyInvoiceRevenuePartial.
       //
       // Itens sem `procedureId` ou `unitPrice` ≤ 0 → skip (input incompleto).
       if (kind === "avulso") {
+        // porSessao: sem efeito no aceite — cobrança ocorre por atendimento.
+        if ((plan.avulsoBillingMode ?? "porSessao") !== "mensalConsolidado") continue;
         const avulsoProcedureId = item.procedureId;
         if (!avulsoProcedureId) continue;
 
