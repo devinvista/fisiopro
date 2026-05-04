@@ -394,7 +394,14 @@ export async function applyBillingRules(
     // para pacientes com `patient_packages.recurrenceType='faturaConsolidada'`
     // já existentes no banco (dados históricos migrados ou criados por acesso
     // direto). Não cria novos registros deste tipo para planos novos.
-    {
+    //
+    // BUG-FIX: agendamentos de planos materializados (planProcId preenchido)
+    // com avulsoBillingMode='porSessao' caíam aqui erroneamente porque
+    // resolveEffectivePrice devolvia 'plano_mensal_proporcional' (item num
+    // pacote mensal), fazendo o Priority 1 auto-criar uma faturaConsolidada e
+    // retornar antes do Priority 2 (creditoAReceber). Planos materializados
+    // devem pular o Priority 1 e ir direto ao Priority 2 (porSessao).
+    if (!planProcId) {
       const pkgConditions: any[] = [
         eq(patientPackagesTable.patientId, patientId),
         eq(patientPackagesTable.procedureId, procedureId),
