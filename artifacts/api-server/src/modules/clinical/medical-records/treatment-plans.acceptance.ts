@@ -60,9 +60,10 @@ interface PlanItem {
   unitMonthlyPrice: string | null;
   discount: string | null;
   totalSessions: number | null;
-  // Sprint Financeiro 13 (P4) — estimativa de sessões mensais para avulsos
-  // do plano. Usa o `sessionsPerWeek` do item (ou 1 default).
   sessionsPerWeek: number | null;
+  // Dias da semana configurados pelo usuário na etapa de agenda (ex: ["monday","wednesday"]).
+  // Quando presentes, permite contar sessões reais por mês de calendário.
+  weekDays: string | null;
   packageType: string | null;
   packageBillingDay: number | null;
   packageProcedureId: number | null;
@@ -127,6 +128,7 @@ async function loadAcceptanceItems(planId: number): Promise<PlanItem[]> {
       discount: treatmentPlanProceduresTable.discount,
       totalSessions: treatmentPlanProceduresTable.totalSessions,
       sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
+      weekDays: treatmentPlanProceduresTable.weekDays,
       packageType: packagesTable.packageType,
       packageBillingDay: packagesTable.billingDay,
       packageProcedureId: packagesTable.procedureId,
@@ -137,6 +139,39 @@ async function loadAcceptanceItems(planId: number): Promise<PlanItem[]> {
     .from(treatmentPlanProceduresTable)
     .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
     .where(eq(treatmentPlanProceduresTable.treatmentPlanId, planId));
+}
+
+/**
+ * Conta quantas ocorrências dos `weekDays` caem no intervalo [startISO, endExclISO).
+ * Usado para calcular sessões reais por mês de calendário em avulsos.
+ */
+function countSessionsInRange(
+  startISO: string,
+  endExclISO: string,
+  weekDays: string[],
+): number {
+  if (weekDays.length === 0) return 0;
+  const WEEKDAY_INDEX: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+  };
+  const targets = new Set(
+    weekDays.map((d) => WEEKDAY_INDEX[d]).filter((n) => n !== undefined),
+  );
+  if (targets.size === 0) return 0;
+
+  const [sy, sm, sd] = startISO.split("-").map(Number);
+  const [ey, em, ed] = endExclISO.split("-").map(Number);
+  const start = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+
+  let count = 0;
+  const cur = new Date(start);
+  while (cur < end) {
+    if (targets.has(cur.getUTCDay())) count++;
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return count;
 }
 
 /**
@@ -201,20 +236,38 @@ export async function acceptPlanFinancials(
         const durationMonths = plan.durationMonths ?? 12;
         const unit = Number(item.unitPrice ?? 0);
         // item.discount armazena o desconto TOTAL do plano (desconto/sessão ×
-        // sessões estimadas), NÃO o desconto unitário. Isso é a convenção do
+        // sessões totais), NÃO o desconto unitário. Isso é a convenção do
         // formulário de itens (TreatmentPlanItemsSection.tsx). Precisamos
         // recuperar o desconto por sessão antes de calcular o preço efetivo.
         const totalDiscount = Math.max(0, Number(item.discount ?? 0));
         const sessionsPerWeek = Math.max(1, item.sessionsPerWeek ?? 1);
-        // Usa dias de calendário reais (igual ao weeksInValidityPeriod do frontend)
-        // para que a estimativa de sessões totais bata com o desconto armazenado.
         const planStart = plan.startDate ?? now.iso;
-        const [psy, psm, psd] = planStart.split("-").map(Number);
-        const planTotalDays =
-          (Date.UTC(psy, psm - 1 + durationMonths, psd) - Date.UTC(psy, psm - 1, psd)) /
-          (1000 * 60 * 60 * 24);
-        const estimatedTotalSessions = Math.max(1, Math.round(sessionsPerWeek * planTotalDays / 7));
-        const unitDiscount = totalDiscount / estimatedTotalSessions;
+        const planEnd = planMonthRefOf(planStart, durationMonths); // "YYYY-MM-01" do mês após o último
+
+        // Resolve os dias da semana configurados na etapa de agenda.
+        // Se `weekDays` estiver preenchido (caso normal do accept-and-materialize),
+        // contamos as sessões reais por mês usando o calendário — igual ao que
+        // `materializeTreatmentPlan` vai criar. Sem weekDays, estimamos via spw × semanas.
+        const parsedWeekDays: string[] = (() => {
+          if (!item.weekDays) return [];
+          try {
+            const parsed = JSON.parse(item.weekDays);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch { return []; }
+        })();
+        const hasRealWeekDays = parsedWeekDays.length > 0;
+
+        // Sessões totais do plano — para recuperar o desconto unitário.
+        const totalSessions = hasRealWeekDays
+          ? Math.max(1, countSessionsInRange(planStart, planEnd, parsedWeekDays))
+          : (() => {
+              const [psy, psm, psd] = planStart.split("-").map(Number);
+              const planTotalDays =
+                (Date.UTC(psy, psm - 1 + durationMonths, psd) - Date.UTC(psy, psm - 1, psd)) /
+                (1000 * 60 * 60 * 24);
+              return Math.max(1, Math.round(sessionsPerWeek * planTotalDays / 7));
+            })();
+        const unitDiscount = totalDiscount / totalSessions;
         const unitEffective = Math.max(0, unit - unitDiscount);
         if (unitEffective <= 0) continue;
 
@@ -246,14 +299,21 @@ export async function acceptPlanFinancials(
 
         for (let m = 0; m < durationMonths; m++) {
           const itemMonthRef = planMonthRefOf(planStart, m);
+          const nextMonthRef = planMonthRefOf(planStart, m + 1);
           const dueDate = planInstallmentDueDate(planStart, billingDay, m);
 
-          // Calcula sessões do mês usando dias de calendário reais do mês
-          // (em vez do fixo × 4), para que meses com 28/29/30/31 dias
-          // gerem valores proporcionais ao número de semanas daquele mês.
-          const [mY, mM] = itemMonthRef.split("-").map(Number);
-          const daysInMonth = new Date(Date.UTC(mY, mM, 0)).getUTCDate();
-          const sessionsInMonth = Math.max(1, Math.round(sessionsPerWeek * daysInMonth / 7));
+          // Sessões reais do mês: usa os weekDays configurados na etapa de agenda
+          // para contar exatamente quantas ocorrências caem neste mês do calendário —
+          // clipadas ao período real do plano. Sem weekDays (raro), recai na estimativa.
+          const monthStart = itemMonthRef > planStart ? itemMonthRef : planStart;
+          const monthEnd = nextMonthRef < planEnd ? nextMonthRef : planEnd;
+          const sessionsInMonth = hasRealWeekDays
+            ? Math.max(1, countSessionsInRange(monthStart, monthEnd, parsedWeekDays))
+            : (() => {
+                const [mY, mM] = itemMonthRef.split("-").map(Number);
+                const daysInMonth = new Date(Date.UTC(mY, mM, 0)).getUTCDate();
+                return Math.max(1, Math.round(sessionsPerWeek * daysInMonth / 7));
+              })();
           const monthlyAmount = unitEffective * sessionsInMonth;
 
           // Idempotência: 1 fatura por (plano, item, mês de competência).
