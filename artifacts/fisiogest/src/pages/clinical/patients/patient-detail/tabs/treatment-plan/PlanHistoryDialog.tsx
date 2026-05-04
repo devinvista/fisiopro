@@ -28,17 +28,22 @@ export function PlanHistoryDialog({
     const c = { todos: plans.length, ativo: 0, concluido: 0, cancelado: 0 };
     for (const p of plans) {
       const s = (p.status as string) ?? "ativo";
-      if (s === "ativo") c.ativo += 1;
+      // "vigente", "rascunho" e "suspenso" agrupados sob "ativo" para exibição.
+      if (s === "ativo" || s === "vigente" || s === "rascunho" || s === "suspenso") c.ativo += 1;
       else if (s === "concluido") c.concluido += 1;
       else if (s === "cancelado") c.cancelado += 1;
     }
     return c;
   }, [plans]);
 
+  const ACTIVE_PLAN_STATUSES = ["ativo", "vigente", "rascunho", "suspenso"] as const;
+
   const sorted = useMemo(() => {
     const filtered = filter === "todos"
       ? plans
-      : plans.filter((p) => (p.status ?? "ativo") === filter);
+      : filter === "ativo"
+        ? plans.filter((p) => ACTIVE_PLAN_STATUSES.includes((p.status ?? "ativo") as any))
+        : plans.filter((p) => (p.status ?? "ativo") === filter);
     return [...filtered].sort((a, b) => {
       const da = a.startDate ? new Date(a.startDate).getTime() : 0;
       const db = b.startDate ? new Date(b.startDate).getTime() : 0;

@@ -216,7 +216,7 @@ describe("cancelTreatmentPlan — recalculate (Sprint Financeiro 13/P4)", () => 
     for (const ins of inserts) {
       expect(ins.transactionType).toBe("priceDifference");
       expect(ins.amount).toBe("40.00");
-      expect(ins.priceSource).toBe("preco_tabela");
+      expect(ins.priceSource).toBe("tabela");
     }
   });
 

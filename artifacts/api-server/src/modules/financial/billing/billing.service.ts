@@ -27,7 +27,7 @@ export interface BillingResult {
 }
 
 interface BillingDetail {
-  subscriptionId: number;
+  packageId: number;
   source: "patient_package";
   patientName: string;
   procedureName: string;
@@ -128,7 +128,7 @@ export async function runBilling(options: {
       if (!billingDay || !monthlyAmount) {
         result.skipped++;
         result.details.push({
-          subscriptionId: pkg.id,
+          packageId: pkg.id,
           source: "patient_package",
           patientName,
           procedureName,
@@ -145,7 +145,7 @@ export async function runBilling(options: {
           const effective = effectiveBillingDay(billingDay, year, month);
           result.skipped++;
           result.details.push({
-            subscriptionId: pkg.id,
+            packageId: pkg.id,
             source: "patient_package",
             patientName,
             procedureName,
@@ -174,7 +174,7 @@ export async function runBilling(options: {
         if (existing.length > 0) {
           result.skipped++;
           result.details.push({
-            subscriptionId: pkg.id,
+            packageId: pkg.id,
             source: "patient_package",
             patientName,
             procedureName,
@@ -189,7 +189,7 @@ export async function runBilling(options: {
         if (dryRun) {
           result.generated++;
           result.details.push({
-            subscriptionId: pkg.id,
+            packageId: pkg.id,
             source: "patient_package",
             patientName,
             procedureName,
@@ -251,7 +251,7 @@ export async function runBilling(options: {
         if (txOutcome.duplicate) {
           result.skipped++;
           result.details.push({
-            subscriptionId: pkg.id,
+            packageId: pkg.id,
             source: "patient_package",
             patientName,
             procedureName,
@@ -266,7 +266,7 @@ export async function runBilling(options: {
         result.generated++;
         result.recordIds.push(txOutcome.recordId);
         result.details.push({
-          subscriptionId: pkg.id,
+          packageId: pkg.id,
           source: "patient_package",
           patientName,
           procedureName,
@@ -283,7 +283,7 @@ export async function runBilling(options: {
       } catch (err) {
         result.errors++;
         result.details.push({
-          subscriptionId: pkg.id,
+          packageId: pkg.id,
           source: "patient_package",
           patientName,
           procedureName,

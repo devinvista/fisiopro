@@ -43,7 +43,14 @@ export const financialRecordsTable = pgTable("financial_records", {
   recognitionCreditsTotal: integer("recognition_credits_total"),
   recognitionCreditsConsumed: integer("recognition_credits_consumed").notNull().default(0),
   // ── Auditoria de preço (Sprint 1) ─────────────────────────────────────────
-  // Origem do valor cobrado: "tabela" | "override_clinica" | "plano_tratamento"
+  // Origem do valor cobrado. Valores possíveis:
+  //   "tabela"                    — preço da tabela do procedimento (inclui
+  //                                 ajustes de diferença de preço no cancelamento)
+  //   "override_clinica"          — preço override configurado na clínica
+  //   "plano_tratamento"          — preço definido por item do plano (avulso/sessoes)
+  //   "plano_mensal_proporcional" — mensalidade proporcional de item mensal
+  //   "plano_avulso_estimado"     — estimativa gerada no aceite do plano avulso
+  //   "fechar_mes_confirmado"     — fatura ajustada no fechamento mensal
   priceSource: text("price_source"),
   // Preço de tabela vigente no momento do lançamento — útil para auditoria
   // fiscal e para mostrar o desconto efetivamente aplicado.

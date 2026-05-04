@@ -121,13 +121,16 @@ export const treatmentPlansTable = pgTable("treatment_plans", {
   // faturas geradas). Idempotência: se preenchido, não materializa de novo.
   materializedAt: timestamp("materialized_at"),
   responsibleProfessional: text("responsible_professional"),
-  // Status do plano. Domínio aceito pelo backend:
-  //   - "ativo"      : sinônimo histórico de "vigente" (mantido para compat).
-  //   - "rascunho"   : recém-criado, ainda não aceito pelo paciente.
-  //   - "vigente"    : aceito e em execução (novo nome após Sprint 2).
-  //   - "encerrado"  : finalizado normalmente (substitui "concluido" gradualmente).
-  //   - "concluido"  : alias legado de "encerrado".
-  //   - "cancelado"  : cancelado antes/depois do aceite.
+  // Status do plano. Domínio aceito pelo backend (ver shared-constants TREATMENT_PLAN_STATUSES):
+  //   - "rascunho"  : recém-criado, ainda não aceito pelo paciente.
+  //   - "ativo"     : sinônimo histórico de "vigente" (mantido para compatibilidade).
+  //   - "vigente"   : aceito e em execução (nome canônico após Sprint 2).
+  //   - "suspenso"  : pausado temporariamente (sem cancelar).
+  //   - "concluido" : finalizado normalmente (alta ao paciente).
+  //   - "cancelado" : cancelado antes ou depois do aceite.
+  // Nota: planos aceitos que chegaram como "ativo" permanecem "ativo" (não são
+  // promovidos para "vigente"). Apenas planos criados como "rascunho" são
+  // promovidos para "vigente" no aceite (medical-records.repository.ts).
   status: text("status").notNull().default("ativo"),
   // Sprint 2 — aceite formal do plano (vira "venda"):
   // após aceito, alterar preço/itens passa a exigir renegociação (versionar via parent_plan_id).

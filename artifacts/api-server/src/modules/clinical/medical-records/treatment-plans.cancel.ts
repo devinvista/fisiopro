@@ -394,7 +394,7 @@ export async function cancelTreatmentPlan(
                 dueDate: today,
                 treatmentPlanId: planId,
                 treatmentPlanProcedureId: item.itemId,
-                priceSource: "preco_tabela",
+                priceSource: "tabela",
                 originalUnitPrice: String(tablePrice),
               } as any)
               .returning({ id: financialRecordsTable.id });

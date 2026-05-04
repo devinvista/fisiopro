@@ -157,7 +157,7 @@ export async function closeAvulsoMonth(
             and(
               eq(appointmentsTable.treatmentPlanProcedureId, est.treatmentPlanProcedureId!),
               sql`${appointmentsTable.date} BETWEEN ${monthStart}::date AND ${monthEnd}::date`,
-              sql`${appointmentsTable.status} IN ('realizado','confirmado','presente','concluido','atendido')`,
+              sql`${appointmentsTable.status} IN ('compareceu','concluido')`,
             ),
           );
         const confirmedSessions = Number(sessionRows[0]?.count ?? 0);

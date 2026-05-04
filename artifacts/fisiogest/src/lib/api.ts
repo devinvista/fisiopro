@@ -16,15 +16,6 @@ const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 /** Base path para chamadas REST. Ex.: "" em dev/raiz ou "/fisiogest" em deploy. */
 export const API_BASE = BASE.replace(/\/[^/]+$/, "");
 
-/**
- * Compatibilidade: alguns componentes legados ainda chamam `getAuthToken()`.
- * Com o JWT em cookie httpOnly, o token não é mais acessível pelo JS — sempre
- * retornamos `null`. Esses chamadores devem migrar para `apiFetch*`.
- */
-export function getAuthToken(): string | null {
-  return null;
-}
-
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const target = `${name}=`;

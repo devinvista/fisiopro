@@ -93,12 +93,29 @@ export const PACKAGE_PAYMENT_STATUS_LABELS: Record<PackagePaymentStatus, string>
 export const MAX_PLAN_DURATION_MONTHS = 24;
 
 // ─── Planos de tratamento (treatment_plans) ──────────────────────────────────
+// Domínio completo de status dos planos:
+//   "rascunho"  — recém-criado, ainda não aceito pelo paciente.
+//   "ativo"     — sinônimo histórico de "vigente" (mantido para compat).
+//   "vigente"   — aceito e em execução (nome canônico a partir do Sprint 2).
+//   "suspenso"  — pausado temporariamente sem cancelar.
+//   "concluido" — finalizado normalmente (alta ao paciente).
+//   "cancelado" — cancelado antes ou depois do aceite.
 
-export const TREATMENT_PLAN_STATUSES = ["ativo", "concluido", "cancelado"] as const;
+export const TREATMENT_PLAN_STATUSES = [
+  "rascunho",
+  "ativo",
+  "vigente",
+  "suspenso",
+  "concluido",
+  "cancelado",
+] as const;
 export type TreatmentPlanStatus = (typeof TREATMENT_PLAN_STATUSES)[number];
 
 export const TREATMENT_PLAN_STATUS_LABELS: Record<TreatmentPlanStatus, string> = {
+  rascunho:  "Rascunho",
   ativo:     "Ativo",
+  vigente:   "Vigente",
+  suspenso:  "Suspenso",
   concluido: "Concluído",
   cancelado: "Cancelado",
 };
