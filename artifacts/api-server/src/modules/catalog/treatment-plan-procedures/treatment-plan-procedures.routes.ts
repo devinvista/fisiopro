@@ -161,6 +161,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
           notes: treatmentPlanProceduresTable.notes,
           weekDays: treatmentPlanProceduresTable.weekDays,
           defaultStartTime: treatmentPlanProceduresTable.defaultStartTime,
+          startTimesByDay: treatmentPlanProceduresTable.startTimesByDay,
           defaultProfessionalId: treatmentPlanProceduresTable.defaultProfessionalId,
           scheduleId: treatmentPlanProceduresTable.scheduleId,
           sessionDurationMinutes: treatmentPlanProceduresTable.sessionDurationMinutes,
