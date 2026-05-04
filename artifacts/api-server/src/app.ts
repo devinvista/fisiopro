@@ -129,6 +129,10 @@ if (process.env.NODE_ENV === "production") {
   // Resolve o diretório da SPA tentando vários caminhos comuns,
   // para funcionar tanto rodando do raiz do projeto quanto do bundle.
   const candidates = [
+    // ZIP de produção: public/ ao lado do dist/index.cjs ou na raiz
+    path.resolve(__dirname, "public"),
+    path.resolve(process.cwd(), "public"),
+    // Estrutura monorepo (desenvolvimento / Replit)
     path.resolve(process.cwd(), "artifacts/fisiogest/dist/public"),
     path.resolve(__dirname, "../artifacts/fisiogest/dist/public"),
     path.resolve(__dirname, "../../artifacts/fisiogest/dist/public"),

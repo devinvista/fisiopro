@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "1HdQAu08mQQxVdgo7hXgn"
+uri = "file://fisiogest-pro.zip"
+type = "unspecified"
+title = "FisioGest Pro — Produção (Hostinger)"
