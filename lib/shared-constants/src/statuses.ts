@@ -88,6 +88,10 @@ export const PACKAGE_PAYMENT_STATUS_LABELS: Record<PackagePaymentStatus, string>
   cancelado: "Cancelado",
 };
 
+// ─── Vigência de planos de tratamento ────────────────────────────────────────
+
+export const MAX_PLAN_DURATION_MONTHS = 24;
+
 // ─── Planos de tratamento (treatment_plans) ──────────────────────────────────
 
 export const TREATMENT_PLAN_STATUSES = ["ativo", "concluido", "cancelado"] as const;

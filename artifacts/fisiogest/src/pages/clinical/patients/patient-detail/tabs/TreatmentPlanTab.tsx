@@ -12,11 +12,13 @@ import {
   Activity, Sparkles, CalendarRange, AlertTriangle, Clock, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { MAX_PLAN_DURATION_MONTHS } from "@workspace/shared-constants";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useToast } from "@/lib/toast";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
@@ -864,24 +866,28 @@ function StepItens({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-slate-600">Vigência</Label>
-            <Select
-              value={String(form.durationMonths ?? 12)}
-              onValueChange={(v) => updateForm({ durationMonths: Number(v) })}
-            >
-              <SelectTrigger className="bg-white border-slate-200 h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 6, 12, 24, 36].map((m) => (
-                  <SelectItem key={m} value={String(m)}>
-                    {m} {m === 1 ? "mês" : "meses"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs text-slate-600">
+              Vigência (meses)
+            </Label>
+            <div className="relative">
+              <Input
+                type="number"
+                min={1}
+                max={MAX_PLAN_DURATION_MONTHS}
+                className="bg-white border-slate-200 h-10 pr-16"
+                value={form.durationMonths ?? 12}
+                onChange={(e) => {
+                  const raw = Number(e.target.value);
+                  const clamped = Math.min(Math.max(1, raw), MAX_PLAN_DURATION_MONTHS);
+                  updateForm({ durationMonths: clamped });
+                }}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                {(form.durationMonths ?? 12) === 1 ? "mês" : "meses"}
+              </span>
+            </div>
             <p className="text-[11px] text-slate-400">
-              Define até quando consultas e parcelas mensais serão geradas.
+              Informe de 1 a {MAX_PLAN_DURATION_MONTHS} meses. Define até quando consultas e parcelas mensais serão geradas.
             </p>
           </div>
         </div>

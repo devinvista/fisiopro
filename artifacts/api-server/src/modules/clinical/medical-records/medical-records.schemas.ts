@@ -95,7 +95,7 @@ export const createTreatmentPlanSchema = z.object({
   estimatedSessions: z.number().int().positive().optional().nullable(),
   status: treatmentPlanStatusEnum.default("ativo"),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate deve estar no formato YYYY-MM-DD").optional().nullable(),
-  durationMonths: z.number().int().min(1).max(60).optional().nullable(),
+  durationMonths: z.number().int().min(1).max(24).optional().nullable(),
   responsibleProfessional: z.string().max(200).optional().nullable(),
   // ── Política de crédito (override do pacote) ─────────────────────────────
   paymentMode: z.enum(["prepago", "postpago"]).optional().nullable(),
