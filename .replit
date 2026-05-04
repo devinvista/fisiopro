@@ -22,11 +22,7 @@ env = { "CI" = "true" }
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
+externalPort = 80
 
 [[ports]]
 localPort = 8081
@@ -40,6 +36,9 @@ DATABASE_URL = "postgresql://neondb_owner:npg_reJWXCu5S4yY@ep-ancient-wave-ac5u4
 CLOUDINARY_URL = "cloudinary://531994692338197:5BA95Y2ONBVgWfQUPuD81o_tmZM@dqsg4f7uv"
 ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OjMyMDA5MGU2LWU4YzUtNGZhYS04MzU0LWVkYTEzYjYyNzYxMzo6JGFhY2hfOTg0YzE2YTktNzQyYS00OTY4LTk0MGEtMTcwZGY2MzUxMzI5"
 ASAAS_WEBHOOK_TOKEN= "whsec_3MuteylBKb1QRx"
+NODE_ENV = "development"
+LOG_LEVEL = "info"
+API_PORT = "8080"
 
 
 [workflows]

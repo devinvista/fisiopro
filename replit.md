@@ -111,6 +111,28 @@ Any runtime, framework, or package manager dependency added to the project **MUS
 - **Sentry**: Optional integration.
 - **Scheduler**: Each CRON job is instrumented with duration logging and exception capture.
 
+## Replit Environment
+
+**Running on Replit** — pnpm monorepo migrated and confirmed working.
+
+**Workflow:** `Start application` runs `pnpm run dev`, which:
+1. Builds shared libs (`tsc --build`)
+2. Starts API server on port **8080** via `tsx`
+3. Starts mockup sandbox on port **8081**
+4. Starts React/Vite frontend on port **5000** (Replit webview)
+
+**Environment Variables (set in Replit Secrets / shared env):**
+- `DATABASE_URL` — Neon PostgreSQL connection string
+- `JWT_SECRET` — JWT signing key
+- `CLOUDINARY_URL` — Cloudinary media storage
+- `ASAAS_API_KEY` — Asaas billing integration
+- `ASAAS_WEBHOOK_TOKEN` — Asaas webhook validation
+- `NODE_ENV`, `LOG_LEVEL`, `API_PORT` — runtime config
+
+**Authentication:** Custom JWT + httpOnly cookie. No Replit Auth or third-party OIDC used. Login/register/logout via `/api/auth/*`.
+
+**Deployment:** `pnpm run build` then `pnpm run start` (runs `node artifacts/api-server/dist/index.cjs` which serves the built SPA from `artifacts/fisiogest/dist/public`).
+
 ## External Dependencies
 
 - **PostgreSQL**: Primary database.
