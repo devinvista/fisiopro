@@ -1,6 +1,6 @@
 /**
  * billingDateUtils — helpers puros e testáveis usados pelos serviços de
- * cobrança (billingService e consolidatedBillingService).
+ * cobrança (billingService e monthlyPlanBillingService).
  *
  * Mantemos estes helpers isolados em um módulo sem dependências de banco
  * para que sejam fáceis de cobrir com testes unitários.

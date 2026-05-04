@@ -98,6 +98,8 @@ function resolveItemKind(item: PlanItem): ItemKind {
   if (item.kind === "pacoteSessoes") return "pacoteSessoes";
   if (item.kind === "avulso") return "avulso";
   if (item.packageId != null) {
+    // 'faturaConsolidada' é fallback para itens criados antes de `kind`
+    // ser preenchido (dados históricos). Novos itens sempre têm `kind` definido.
     if (item.packageType === "mensal" || item.packageType === "faturaConsolidada") {
       return "recorrenteMensal";
     }

@@ -4,7 +4,7 @@ import type { JobOpts } from "../registerJob.js";
 /**
  * Geração lazy das faturas mensais de plano de tratamento.
  *
- * Roda diariamente às 06:30 BRT (logo após o `consolidatedBilling`).
+ * Roda diariamente às 06:30 BRT.
  * Para cada plano `vigente`/`ativo` com itens `recorrenteMensal`:
  *  - garante a fatura do mês corrente em D-5 do `billingDay`;
  *  - preenche meses passados ausentes em ordem (gap-fill).

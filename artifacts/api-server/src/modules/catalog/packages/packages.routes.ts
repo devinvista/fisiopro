@@ -7,7 +7,11 @@ import { requirePermission } from "../../../middleware/rbac.js";
 import { validateBody } from "../../../utils/validate.js";
 import { z } from "zod/v4";
 
-const packageTypeEnum = z.enum(["sessoes", "mensal", "faturaConsolidada"]);
+// "faturaConsolidada" foi descontinuado na Sprint 5 — removido do enum de
+// criação. Registros históricos ainda existem no banco e são lidos
+// normalmente; o backend rejeita qualquer tentativa de criar novos templates
+// com esse tipo.
+const packageTypeEnum = z.enum(["sessoes", "mensal"]);
 
 const createPackageSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(200),
@@ -23,8 +27,8 @@ const createPackageSchema = z.object({
   absenceCreditLimit: z.union([z.number().int().min(0), z.string().transform(Number)]).optional().default(0),
 }).refine(d => d.packageType !== "sessoes" || (d.totalSessions != null && Number(d.totalSessions) > 0), {
   message: "totalSessions é obrigatório para pacotes por sessão",
-}).refine(d => !["mensal", "faturaConsolidada"].includes(d.packageType) || (d.monthlyPrice != null && d.billingDay != null), {
-  message: "monthlyPrice e billingDay são obrigatórios para mensalidade ou fatura consolidada",
+}).refine(d => d.packageType !== "mensal" || (d.monthlyPrice != null && d.billingDay != null), {
+  message: "monthlyPrice e billingDay são obrigatórios para mensalidade",
 });
 
 const updatePackageSchema = z.object({

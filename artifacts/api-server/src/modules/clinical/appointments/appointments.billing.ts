@@ -419,32 +419,13 @@ export async function applyBillingRules(
         .orderBy(desc(patientPackagesTable.createdAt))
         .limit(1);
 
-      if (!recurringPkg && priceResolution.priceSource === "plano_mensal_proporcional" && priceResolution.monthlyPlan) {
-        const monthly = priceResolution.monthlyPlan;
-        const startDate = monthly.monthStartDate;
-        const [created] = await db
-          .insert(patientPackagesTable)
-          .values({
-            patientId,
-            packageId: monthly.packageId ?? null,
-            procedureId,
-            name: `Pacote mensal — ${procedure.name} (${patientName})`,
-            totalSessions: 0,
-            usedSessions: 0,
-            sessionsPerWeek: 1,
-            startDate,
-            price: monthly.monthlyAmount,
-            paymentStatus: "pendente",
-            clinicId: resolvedClinicId,
-            notes: `Auto-criado a partir do plano #${priceResolution.treatmentPlanId} (pacote mensal #${monthly.packageId})`,
-            billingDay: monthly.billingDay,
-            monthlyAmount: monthly.monthlyAmount,
-            recurrenceStatus: "ativa",
-            recurrenceType: "faturaConsolidada",
-          })
-          .returning();
-        recurringPkg = created;
-      }
+      // Auto-criação de patient_package com recurrenceType='faturaConsolidada'
+      // foi REMOVIDA. O bloco anterior auto-criava um novo pacote mensal legado
+      // quando priceSource='plano_mensal_proporcional' e nenhum recurringPkg
+      // existia — perpetuando o tipo descontinuado. Planos vigentes usam
+      // faturaPlano (via materialização) e nunca chegam aqui (guard !planProcId
+      // acima). Se nenhum recurringPkg histórico for encontrado, caímos no
+      // Priority 2 (porSessao / creditoAReceber), que é o comportamento correto.
 
       if (recurringPkg) {
         const existingPendente = await db

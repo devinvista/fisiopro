@@ -137,9 +137,12 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
       resolvedExpiryDate = start.toISOString().slice(0, 10);
     }
 
-    // Quando o pacote é recorrente (mensal/faturaConsolidada), popula os
-    // campos de recorrência diretamente em `patient_packages`. Os jobs
-    // `runBilling`/`runConsolidatedBilling` iteram nesta tabela.
+    // Quando o pacote é recorrente (mensal), popula os campos de recorrência
+    // diretamente em `patient_packages`. O job `runMonthlyPlanBilling` itera
+    // nesta tabela para gerar as faturas. 'faturaConsolidada' é mantido apenas
+    // como fallback para templates históricos já existentes no banco; novos
+    // templates não podem ser criados com esse tipo (validação no endpoint POST
+    // /api/packages rejeita o valor).
     const isRecurring = pkg && (pkg.packageType === "mensal" || pkg.packageType === "faturaConsolidada");
     let resolvedBillingDay: number | null = null;
     let resolvedMonthlyAmount: string | null = null;
