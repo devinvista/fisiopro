@@ -44,6 +44,10 @@ export const updateRecordStatusSchema = z.object({
   paymentMethod: z.string().max(50).optional().nullable(),
   // Obrigatório quando o status alvo for `cancelado` ou `estornado` — auditoria do estorno.
   reversalReason: z.string().min(3, "Motivo do estorno é obrigatório (mínimo 3 caracteres)").max(500).optional(),
+  // Baixa parcial: quando informado e < amount original, o registro é quitado
+  // pelo valor pago e um novo registro pendente é criado pelo restante com o
+  // mesmo vencimento original. Ignorado se >= amount total.
+  paidAmount: z.number().positive().optional().nullable(),
 });
 
 export const reverseRecordSchema = z.object({

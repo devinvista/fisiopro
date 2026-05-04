@@ -250,7 +250,7 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
     const id = parseInt(req.params.id as string);
     const body = validateBody(updateRecordStatusSchema, req.body, res);
     if (!body) return;
-    const { status, paymentDate, paymentMethod, reversalReason } = body;
+    const { status, paymentDate, paymentMethod, reversalReason, paidAmount } = body;
 
     const cc = clinicCond(req);
     const existingWhere = cc ? and(eq(financialRecordsTable.id, id), cc) : eq(financialRecordsTable.id, id);
@@ -276,6 +276,19 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
       return;
     }
 
+    // Baixa parcial: valor pago < valor total → split do registro.
+    // O registro original é quitado pelo valor pago; um novo registro pendente
+    // é criado pelo restante com o mesmo vencimento e competência originais.
+    const fullAmount = Number(existing.amount);
+    const isPartialPayment =
+      status === "pago" &&
+      existing.status !== "pago" &&
+      paidAmount != null &&
+      paidAmount > 0 &&
+      paidAmount < fullAmount - 0.005; // tolerância de 0,5 centavo
+
+    const effectivePaidAmount = isPartialPayment ? paidAmount! : fullAmount;
+
     const [record] = await db.transaction(async (tx) => {
       const updateValues: Record<string, any> = {
         status,
@@ -288,6 +301,12 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
         updateValues.reversedBy = req.userId ?? null;
         updateValues.reversedAt = new Date();
       }
+      if (isPartialPayment) {
+        // Reduz o valor do registro original para o valor efetivamente pago.
+        // Preserva o valor original em `originalAmount` para auditoria.
+        updateValues.amount = effectivePaidAmount.toFixed(2);
+        updateValues.originalAmount = existing.originalAmount ?? existing.amount;
+      }
 
       const [updated] = await tx
         .update(financialRecordsTable)
@@ -297,12 +316,39 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
 
       if (!updated) return [];
 
+      // Cria o registro do restante (baixa parcial) com o mesmo vencimento.
+      if (isPartialPayment) {
+        const remainder = fullAmount - effectivePaidAmount;
+        await tx.insert(financialRecordsTable).values({
+          type: existing.type,
+          amount: remainder.toFixed(2),
+          description: `${existing.description} (restante)`,
+          category: existing.category ?? undefined,
+          patientId: existing.patientId ?? undefined,
+          procedureId: existing.procedureId ?? undefined,
+          clinicId: existing.clinicId ?? undefined,
+          dueDate: existing.dueDate ?? undefined,
+          status: "pendente",
+          transactionType: existing.transactionType ?? undefined,
+          planMonthRef: existing.planMonthRef ?? undefined,
+          treatmentPlanId: existing.treatmentPlanId ?? undefined,
+          treatmentPlanProcedureId: existing.treatmentPlanProcedureId ?? undefined,
+          parentRecordId: existing.parentRecordId ?? undefined,
+          priceSource: existing.priceSource ?? undefined,
+          originalUnitPrice: existing.originalUnitPrice ?? undefined,
+          recognitionCreditsTotal: existing.recognitionCreditsTotal ?? undefined,
+          recognitionCreditsConsumed: 0,
+        });
+      }
+
       if (status === "pago" && existing.status !== "pago" && [...RECEIVABLE_TYPES, "vendaPacote"].includes(existing.transactionType ?? "")) {
         const settlement = await postReceivableSettlement({
           clinicId: existing.clinicId ?? req.clinicId ?? null,
           entryDate: paymentDate || todayBRT(),
-          amount: Number(existing.amount),
-          description: `Baixa de recebível — ${existing.description}`,
+          amount: effectivePaidAmount,
+          description: isPartialPayment
+            ? `Baixa parcial de recebível — ${existing.description}`
+            : `Baixa de recebível — ${existing.description}`,
           sourceType: "financial_record",
           sourceId: existing.id,
           patientId: existing.patientId,
@@ -318,7 +364,7 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
             paymentEntryId: settlement.id,
             receivableEntryId: existing.accountingEntryId ?? existing.recognizedEntryId!,
             patientId: existing.patientId!,
-            amount: Number(existing.amount),
+            amount: effectivePaidAmount,
             allocatedAt: paymentDate || todayBRT(),
           }, tx as any);
         }

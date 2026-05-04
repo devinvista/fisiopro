@@ -108,6 +108,7 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
   const [payOpen, setPayOpen] = useState<Installment | null>(null);
   const [payDate, setPayDate] = useState(todayISO());
   const [payMethod, setPayMethod] = useState<string>("pix");
+  const [payAmount, setPayAmount] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [recalcBusy, setRecalcBusy] = useState(false);
 
@@ -203,14 +204,25 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
     if (!payOpen) return;
     setBusy(true);
     try {
-      await apiSendJson(`/api/financial/records/${payOpen.id}/status`, "PATCH", {
+      const fullAmount = Number(payOpen.amount);
+      const parsedPay = Number(payAmount.replace(",", "."));
+      const isPartial = !isNaN(parsedPay) && parsedPay > 0 && parsedPay < fullAmount - 0.005;
+      const remainder = isPartial ? fullAmount - parsedPay : 0;
+
+      const payload: Record<string, unknown> = {
         status: "pago",
         paymentDate: payDate,
         paymentMethod: payMethod,
-      });
+      };
+      if (isPartial) payload.paidAmount = parsedPay;
+
+      await apiSendJson(`/api/financial/records/${payOpen.id}/status`, "PATCH", payload);
+
       toast({
-        title: "Baixa registrada!",
-        description: `Parcela #${payOpen.id} marcada como paga em ${fmtDate(payDate)}.`,
+        title: isPartial ? "Baixa parcial registrada!" : "Baixa registrada!",
+        description: isPartial
+          ? `${fmtBRL(parsedPay)} pago em ${fmtDate(payDate)}. Restante de ${fmtBRL(remainder)} permanece em aberto.`
+          : `Parcela #${payOpen.id} marcada como paga em ${fmtDate(payDate)}.`,
       });
       setPayOpen(null);
       await Promise.all([
@@ -395,6 +407,7 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
                             setPayOpen(it);
                             setPayDate(todayISO());
                             setPayMethod(it.paymentMethod ?? "pix");
+                            setPayAmount(Number(it.amount).toFixed(2).replace(".", ","));
                           }}
                         >
                           <CheckCircle className="w-3.5 h-3.5" /> Dar baixa
@@ -424,10 +437,37 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
               <CheckCircle className="w-5 h-5 text-emerald-600" /> Dar baixa na parcela
             </DialogTitle>
             <DialogDescription>
-              {payOpen?.description} — {payOpen ? fmtBRL(payOpen.amount) : ""}
+              {payOpen?.description} — total {payOpen ? fmtBRL(payOpen.amount) : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Valor pago (R$)</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder={payOpen ? Number(payOpen.amount).toFixed(2).replace(".", ",") : "0,00"}
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+              />
+              {(() => {
+                const full = Number(payOpen?.amount ?? 0);
+                const parsed = Number(payAmount.replace(",", "."));
+                const isPartial = !isNaN(parsed) && parsed > 0 && parsed < full - 0.005;
+                const remainder = isPartial ? full - parsed : 0;
+                if (!isPartial) return null;
+                return (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />
+                    <span>
+                      Baixa parcial: <strong>{fmtBRL(parsed)}</strong> será quitado.
+                      O restante de <strong>{fmtBRL(remainder)}</strong> permanecerá em
+                      aberto com o vencimento original.
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Data do pagamento</Label>
               <Input
@@ -462,7 +502,13 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
             <Button variant="outline" onClick={() => setPayOpen(null)} disabled={busy}>
               Cancelar
             </Button>
-            <Button onClick={confirmPayment} disabled={busy || !payDate}>
+            <Button
+              onClick={confirmPayment}
+              disabled={busy || !payDate || (() => {
+                const parsed = Number(payAmount.replace(",", "."));
+                return isNaN(parsed) || parsed <= 0;
+              })()}
+            >
               {busy && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
               Confirmar baixa
             </Button>
