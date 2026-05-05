@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, sessionCreditsTable, patientsTable,
   patientWalletTable, patientWalletTransactionsTable,
-  accountingJournalEntriesTable,
+  accountingJournalEntriesTable, appointmentsTable,
 } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -350,27 +350,83 @@ router.post("/patients/:patientId/payment", requirePermission("financial.write")
           continue;
         }
 
-        // Registro sem entry de recebível (dados históricos sem contabilização
-        // prévia): cria o recebível agora antes de liquidar.
+        // Registro sem entry de recebível prévia.
+        // Distingue entre dados históricos (serviço já prestado, sem registro contábil)
+        // e pagamento antecipado de avulso (serviço ainda não prestado).
+        //
+        // Para registros com `recognizedEntryId` herdado de uma baixa parcial anterior
+        // (Fix: o restante do split herda a referência contábil do original), este
+        // bloco não é executado — o `receivableEntryId` já está preenchido.
         if (!receivableEntryId && pending.transactionType !== "vendaPacote") {
-          const recognitionEntry = await postReceivableRevenue({
-            clinicId: pending.clinicId ?? req.clinicId ?? null,
-            entryDate: pending.dueDate ?? today,
-            amount: Number(pending.amount),
-            description: pending.description,
-            sourceType: "financial_record",
-            sourceId: pending.id,
-            patientId,
-            appointmentId: pending.appointmentId,
-            procedureId: pending.procedureId,
-            subscriptionId: pending.subscriptionId,
-            financialRecordId: pending.id,
-          }, tx as any);
-          receivableEntryId = recognitionEntry.id;
-          await tx
-            .update(financialRecordsTable)
-            .set({ accountingEntryId: recognitionEntry.id, recognizedEntryId: recognitionEntry.id })
-            .where(eq(financialRecordsTable.id, pending.id));
+          // Verifica se o serviço foi prestado consultando o status do agendamento.
+          // Se confirmado (compareceu/concluido) → histórico sem contabilização.
+          // Se não confirmado ou sem agendamento → pagamento antecipado de avulso.
+          let serviceRendered = true; // padrão conservador para tipos sem appointment (histórico)
+          if (pending.appointmentId) {
+            const [appt] = await (tx as any)
+              .select({ status: appointmentsTable.status })
+              .from(appointmentsTable)
+              .where(eq(appointmentsTable.id, pending.appointmentId))
+              .limit(1);
+            const confirmedStatuses = ["compareceu", "concluido"];
+            serviceRendered = confirmedStatuses.includes(appt?.status ?? "");
+          }
+
+          if (serviceRendered) {
+            // Dados históricos: serviço prestado sem registro contábil préio.
+            // Reconhece receita retroativamente (D Recebíveis / C Receita).
+            const recognitionEntry = await postReceivableRevenue({
+              clinicId: pending.clinicId ?? req.clinicId ?? null,
+              entryDate: pending.dueDate ?? today,
+              amount: Number(pending.amount),
+              description: pending.description,
+              sourceType: "financial_record",
+              sourceId: pending.id,
+              patientId,
+              appointmentId: pending.appointmentId,
+              procedureId: pending.procedureId,
+              subscriptionId: pending.subscriptionId,
+              financialRecordId: pending.id,
+            }, tx as any);
+            receivableEntryId = recognitionEntry.id;
+            await tx
+              .update(financialRecordsTable)
+              .set({ accountingEntryId: recognitionEntry.id, recognizedEntryId: recognitionEntry.id })
+              .where(eq(financialRecordsTable.id, pending.id));
+          } else {
+            // Pagamento antecipado de avulso: serviço ainda não prestado.
+            // D Caixa / C Adiantamentos — crédito do cliente, SEM reconhecer receita.
+            // A receita será reconhecida quando o agendamento for confirmado
+            // (applyBillingRules → postWalletUsage, D Adiantamentos / C Receita).
+            const advanceEntry = await postCashAdvance({
+              clinicId: pending.clinicId ?? req.clinicId ?? null,
+              entryDate: today,
+              amount: allocationAmount,
+              eventType: "cash_advance_avulso",
+              description: `Pagamento antecipado de avulso — ${pending.description}`,
+              sourceType: "financial_record",
+              sourceId: pending.id,
+              patientId,
+              appointmentId: pending.appointmentId,
+              procedureId: pending.procedureId,
+              financialRecordId: pending.id,
+            }, tx as any);
+
+            if (allocationAmount >= Number(pending.amount)) {
+              await tx
+                .update(financialRecordsTable)
+                .set({
+                  status: "pago",
+                  paymentDate: today,
+                  paymentMethod: paymentMethod || null,
+                  settlementEntryId: advanceEntry.id,
+                })
+                .where(eq(financialRecordsTable.id, pending.id));
+            }
+            primaryEntryId ??= advanceEntry.id;
+            remaining = Math.round((remaining - allocationAmount) * 100) / 100;
+            continue;
+          }
         }
 
         const paymentEntry = await postReceivableSettlement({

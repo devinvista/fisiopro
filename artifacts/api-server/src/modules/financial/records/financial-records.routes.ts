@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   financialRecordsTable, proceduresTable, sessionCreditsTable,
-  usersTable, patientsTable,
+  usersTable, patientsTable, accountingJournalEntriesTable, appointmentsTable,
 } from "@workspace/db";
 import { eq, and, sql, gte, lte, inArray, isNotNull, isNull, or, lt, desc } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -21,9 +21,15 @@ const listRecordsQuerySchema = listQuerySchema.extend({
 });
 import {
   allocateReceivable,
+  postCashAdvance,
+  postReceivableRevenue,
   postReceivableSettlement,
   postReversal,
 } from "../../shared/accounting/accounting.service.js";
+
+// Tipos de recebível gerados após a prestação do serviço (avulso/sessão).
+// Diferenciam-se de faturaPlano (mensalidade) e faturaMensalAvulso (agrupador).
+const AVULSO_RECEIVABLE_TYPES = ["creditoAReceber", "cobrancaSessao", "cobrancaMensal"] as const;
 import {
   RECEIVABLE_TYPES,
   monthDateRange,
@@ -319,6 +325,14 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
       if (!updated) return [];
 
       // Cria o registro do restante (baixa parcial) com o mesmo vencimento.
+      // IMPORTANTE: herda recognizedEntryId e accountingEntryId do original para que
+      // o pagamento futuro do restante não crie um novo lançamento de receita (D Recebíveis /
+      // C Receita), evitando reconhecimento de receita em duplicidade.
+      // Para faturaPlano: o accountingEntryId aponta para o deferred_receivable (1.1.2/2.1.1)
+      // gerado no aceite do plano, que cobre o valor integral. O pagamento do restante
+      // apenas liquida a parcela remanescente desse mesmo recebível.
+      // Para avulsos (creditoAReceber etc.): o recognizedEntryId aponta para o
+      // postReceivableRevenue original que já reconheceu a receita pelo valor total.
       if (isPartialPayment) {
         const remainder = fullAmount - effectivePaidAmount;
         await tx.insert(financialRecordsTable).values({
@@ -340,34 +354,145 @@ router.patch("/records/:id/status", requirePermission("financial.write"), async 
           originalUnitPrice: existing.originalUnitPrice ?? undefined,
           recognitionCreditsTotal: existing.recognitionCreditsTotal ?? undefined,
           recognitionCreditsConsumed: 0,
+          // Herda as referências contábeis do original para evitar re-reconhecimento.
+          recognizedEntryId: existing.recognizedEntryId ?? undefined,
+          accountingEntryId: existing.accountingEntryId ?? undefined,
         });
       }
 
       if (status === "pago" && existing.status !== "pago" && [...RECEIVABLE_TYPES, "vendaPacote"].includes(existing.transactionType ?? "")) {
-        const settlement = await postReceivableSettlement({
-          clinicId: existing.clinicId ?? req.clinicId ?? null,
-          entryDate: paymentDate || todayBRT(),
+        // ── Resolve a entrada contábil de referência e o método de liquidação ──
+        //
+        // Hierarquia de decisão:
+        //   1. Registro já tem accountingEntryId/recognizedEntryId → settlement puro
+        //      (D Caixa / C Recebíveis), sem tocar em receitas. Caso padrão.
+        //   2. faturaPlano sem entrada prévia → verifica deferred_receivable no journal:
+        //        • Encontrado: settlement puro (D Caixa / C Recebíveis) — o recebível
+        //          já existe desde o aceite do plano. Receita NÃO é afetada.
+        //        • Não encontrado: postCashAdvance (D Caixa / C Adiantamentos) — pagamento
+        //          antecipado sem recebível diferido. Receita NÃO é afetada.
+        //   3. Avulso (creditoAReceber, cobrancaSessao, cobrancaMensal) sem entrada prévia:
+        //        • Agendamento confirmado (serviço prestado): postReceivableRevenue primeiro
+        //          (dados históricos sem registro contábil), depois settlement.
+        //        • Não confirmado / sem agendamento: postCashAdvance (D Caixa / C Adiantamentos)
+        //          — pagamento antecipado; crédito do cliente até o serviço ser prestado.
+        //   4. Demais tipos (vendaPacote, faturaConsolidada etc.): settlement puro (fallback).
+        const entryClinicId = existing.clinicId ?? req.clinicId ?? null;
+        const entryDate = paymentDate || todayBRT();
+        const baseDesc = isPartialPayment
+          ? `Baixa parcial — ${existing.description}`
+          : `Baixa de recebível — ${existing.description}`;
+        const entryBase = {
+          clinicId: entryClinicId,
+          entryDate,
           amount: effectivePaidAmount,
-          description: isPartialPayment
-            ? `Baixa parcial de recebível — ${existing.description}`
-            : `Baixa de recebível — ${existing.description}`,
-          sourceType: "financial_record",
+          sourceType: "financial_record" as const,
           sourceId: existing.id,
           patientId: existing.patientId,
           appointmentId: existing.appointmentId,
           procedureId: existing.procedureId,
           subscriptionId: existing.subscriptionId,
           financialRecordId: existing.id,
-        }, tx as any);
+        };
 
-        if (existing.accountingEntryId || existing.recognizedEntryId) {
+        const priorEntryId: number | null = existing.accountingEntryId ?? existing.recognizedEntryId ?? null;
+        let settlement: { id: number };
+        let allocateAgainstEntryId: number | null = priorEntryId;
+
+        if (priorEntryId) {
+          // Caminho padrão: settlement contra o recebível/reconhecimento existente.
+          settlement = await postReceivableSettlement({
+            ...entryBase,
+            description: baseDesc,
+          }, tx as any);
+
+        } else if (existing.transactionType === "faturaPlano") {
+          // Plano mensal sem entrada prévia: verifica se há deferred_receivable.
+          const [deferredEntry] = await (tx as any)
+            .select({ id: accountingJournalEntriesTable.id })
+            .from(accountingJournalEntriesTable)
+            .where(and(
+              eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+              eq(accountingJournalEntriesTable.sourceId, existing.id),
+              eq(accountingJournalEntriesTable.eventType, "deferred_receivable"),
+              eq(accountingJournalEntriesTable.status, "posted"),
+            ))
+            .limit(1);
+
+          if (deferredEntry) {
+            // Recebível diferido existe → settlement puro. Receita não muda.
+            settlement = await postReceivableSettlement({
+              ...entryBase,
+              description: `Pagamento de fatura mensal — ${existing.description}`,
+            }, tx as any);
+            allocateAgainstEntryId = deferredEntry.id;
+          } else {
+            // Sem deferred_receivable → adiantamento. Receita não muda.
+            settlement = await postCashAdvance({
+              ...entryBase,
+              eventType: "cash_advance_receipt",
+              description: `Pagamento antecipado de fatura mensal — ${existing.description}`,
+            }, tx as any);
+            allocateAgainstEntryId = null;
+          }
+
+        } else if ((AVULSO_RECEIVABLE_TYPES as readonly string[]).includes(existing.transactionType ?? "")) {
+          // Avulso sem reconhecimento prévio: distingue serviço prestado de pagamento antecipado.
+          let serviceRendered = false;
+          if (existing.appointmentId) {
+            const [appt] = await (tx as any)
+              .select({ status: appointmentsTable.status })
+              .from(appointmentsTable)
+              .where(eq(appointmentsTable.id, existing.appointmentId))
+              .limit(1);
+            serviceRendered = appt?.status === "compareceu" || appt?.status === "concluido";
+          }
+
+          if (serviceRendered) {
+            // Dados históricos: serviço prestado mas sem registro contábil.
+            // Reconhece receita retroativamente (D Recebíveis / C Receita), depois liquida.
+            const revenueEntry = await postReceivableRevenue({
+              ...entryBase,
+              amount: Number(existing.amount),
+              entryDate: existing.dueDate ?? entryDate,
+              description: `Receita reconhecida retroativamente — ${existing.description}`,
+            }, tx as any);
+            await (tx as any)
+              .update(financialRecordsTable)
+              .set({ recognizedEntryId: revenueEntry.id, accountingEntryId: revenueEntry.id })
+              .where(eq(financialRecordsTable.id, existing.id));
+            settlement = await postReceivableSettlement({
+              ...entryBase,
+              description: baseDesc,
+            }, tx as any);
+            allocateAgainstEntryId = revenueEntry.id;
+          } else {
+            // Pagamento antecipado: serviço ainda não prestado → crédito do cliente.
+            // D Caixa / C Adiantamentos. Receita reconhecida apenas na sessão confirmada.
+            settlement = await postCashAdvance({
+              ...entryBase,
+              eventType: "cash_advance_avulso",
+              description: `Pagamento antecipado de avulso — ${existing.description}`,
+            }, tx as any);
+            allocateAgainstEntryId = null;
+          }
+
+        } else {
+          // Fallback: outros tipos (vendaPacote legado, faturaConsolidada etc.).
+          settlement = await postReceivableSettlement({
+            ...entryBase,
+            description: baseDesc,
+          }, tx as any);
+        }
+
+        if (allocateAgainstEntryId && existing.patientId != null) {
           await allocateReceivable({
-            clinicId: existing.clinicId ?? req.clinicId ?? null,
+            clinicId: entryClinicId,
             paymentEntryId: settlement.id,
-            receivableEntryId: existing.accountingEntryId ?? existing.recognizedEntryId!,
-            patientId: existing.patientId!,
+            receivableEntryId: allocateAgainstEntryId,
+            patientId: existing.patientId,
             amount: effectivePaidAmount,
-            allocatedAt: paymentDate || todayBRT(),
+            allocatedAt: entryDate,
           }, tx as any);
         }
 
