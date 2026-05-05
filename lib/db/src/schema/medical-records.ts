@@ -8,6 +8,7 @@ import { appointmentsTable } from "./appointments";
 export const anamnesisTable = pgTable("anamnesis", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
 
   // Template selector — one record per (patient, templateType)
   templateType: text("template_type").notNull().default("reabilitacao"),
@@ -75,6 +76,7 @@ export const anamnesisTable = pgTable("anamnesis", {
 }, (table) => [
   unique("uniq_anamnesis_patient_template").on(table.patientId, table.templateType),
   index("idx_anamnesis_patient_id").on(table.patientId),
+  index("idx_anamnesis_clinic_id").on(table.clinicId),
 ]);
 
 export const insertAnamnesisSchema = createInsertSchema(anamnesisTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -84,6 +86,7 @@ export type Anamnesis = typeof anamnesisTable.$inferSelect;
 export const evaluationsTable = pgTable("evaluations", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
   inspection: text("inspection"),
   posture: text("posture"),
   rangeOfMotion: text("range_of_motion"),
@@ -96,7 +99,9 @@ export const evaluationsTable = pgTable("evaluations", {
   functionalTests: text("functional_tests"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_evaluations_clinic_id").on(table.clinicId),
+]);
 
 export const insertEvaluationSchema = createInsertSchema(evaluationsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertEvaluation = z.infer<typeof insertEvaluationSchema>;
@@ -267,6 +272,7 @@ export type TreatmentPlanProcedure = typeof treatmentPlanProceduresTable.$inferS
 export const evolutionsTable = pgTable("evolutions", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
   appointmentId: integer("appointment_id").notNull().references(() => appointmentsTable.id, { onDelete: "restrict" }),
   description: text("description"),
   patientResponse: text("patient_response"),
@@ -278,7 +284,9 @@ export const evolutionsTable = pgTable("evolutions", {
   homeExercises: text("home_exercises"),
   nextSessionGoals: text("next_session_goals"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_evolutions_clinic_id").on(table.clinicId),
+]);
 
 export const insertEvolutionSchema = createInsertSchema(evolutionsTable).omit({ id: true, createdAt: true });
 export type InsertEvolution = z.infer<typeof insertEvolutionSchema>;
@@ -287,13 +295,16 @@ export type Evolution = typeof evolutionsTable.$inferSelect;
 export const dischargeSummariesTable = pgTable("discharge_summaries", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().unique().references(() => patientsTable.id),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
   dischargeDate: date("discharge_date").notNull(),
   dischargeReason: text("discharge_reason").notNull(),
   achievedResults: text("achieved_results"),
   recommendations: text("recommendations"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_discharge_summaries_clinic_id").on(table.clinicId),
+]);
 
 export const insertDischargeSummarySchema = createInsertSchema(dischargeSummariesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertDischargeSummary = z.infer<typeof insertDischargeSummarySchema>;
@@ -302,6 +313,7 @@ export type DischargeSummary = typeof dischargeSummariesTable.$inferSelect;
 export const examAttachmentsTable = pgTable("exam_attachments", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
   examTitle: text("exam_title"),
   originalFilename: text("original_filename"),
   contentType: text("content_type"),
@@ -310,7 +322,9 @@ export const examAttachmentsTable = pgTable("exam_attachments", {
   description: text("description"),
   resultText: text("result_text"),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_exam_attachments_clinic_id").on(table.clinicId),
+]);
 
 export const insertExamAttachmentSchema = createInsertSchema(examAttachmentsTable).omit({ id: true, uploadedAt: true });
 export type InsertExamAttachment = z.infer<typeof insertExamAttachmentSchema>;
@@ -319,6 +333,7 @@ export type ExamAttachment = typeof examAttachmentsTable.$inferSelect;
 export const atestadosTable = pgTable("atestados", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
+  clinicId: integer("clinic_id").references(() => clinicsTable.id),
   type: text("type").notNull(),
   professionalName: text("professional_name").notNull(),
   professionalSpecialty: text("professional_specialty"),
@@ -327,7 +342,9 @@ export const atestadosTable = pgTable("atestados", {
   cid: text("cid"),
   daysOff: integer("days_off"),
   issuedAt: timestamp("issued_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_atestados_clinic_id").on(table.clinicId),
+]);
 
 export type Atestado = typeof atestadosTable.$inferSelect;
 

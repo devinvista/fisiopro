@@ -10,7 +10,7 @@ import * as repo from "./medical-records.repository.js";
 import { acceptPlanFinancials } from "./treatment-plans.acceptance.js";
 import { buildAcceptedClausesSnapshot } from "../contract-clauses/contract-clauses.service.js";
 
-export type AuthCtx = { userId?: number };
+export type AuthCtx = { userId?: number; clinicId?: number | null };
 
 // ─── Indicators (lógica de agregação já existente) ───────────────────────────
 
@@ -178,7 +178,7 @@ export async function upsertAnamnesisForPatient(
 ) {
   const { templateType, ...rest } = body as { templateType?: string } & Record<string, unknown>;
   const resolvedType = templateType || "reabilitacao";
-  const { record, isUpdate } = await repo.upsertAnamnesis(patientId, resolvedType, rest);
+  const { record, isUpdate } = await repo.upsertAnamnesis(patientId, resolvedType, ctx.clinicId ?? null, rest);
   await logAudit({
     userId: ctx.userId,
     patientId,
@@ -217,7 +217,7 @@ export async function createPatientEvaluation(
   data: Record<string, unknown>,
   ctx: AuthCtx,
 ) {
-  const evaluation = await repo.createEvaluation(patientId, data);
+  const evaluation = await repo.createEvaluation(patientId, ctx.clinicId ?? null, data);
   await logAudit({
     userId: ctx.userId,
     patientId,
@@ -788,7 +788,7 @@ export async function createPatientEvolution(
   data: Record<string, unknown>,
   ctx: AuthCtx,
 ) {
-  const evolution = await repo.createEvolution(patientId, normalizeEvolution(data));
+  const evolution = await repo.createEvolution(patientId, ctx.clinicId ?? null, normalizeEvolution(data));
   await logAudit({
     userId: ctx.userId,
     patientId,
@@ -894,7 +894,7 @@ export async function upsertPatientDischargeSummary(
     achievedResults,
     recommendations,
   };
-  const { record, isUpdate } = await repo.upsertDischargeSummary(patientId, null, data);
+  const { record, isUpdate } = await repo.upsertDischargeSummary(patientId, ctx.clinicId ?? null, data);
   await logAudit({
     userId: ctx.userId,
     patientId,
@@ -970,7 +970,7 @@ export async function createPatientAttachment(
     throw HttpError.badRequest("Informe um arquivo ou um resultado em texto.");
   }
 
-  const attachment = await repo.createAttachment(patientId, {
+  const attachment = await repo.createAttachment(patientId, ctx.clinicId ?? null, {
     examTitle: body.examTitle || null,
     originalFilename: body.originalFilename || null,
     contentType: body.contentType || null,
@@ -1051,7 +1051,7 @@ export async function createPatientAtestado(
     throw HttpError.badRequest("Campos obrigatórios: type, professionalName, content");
   }
 
-  const atestado = await repo.createAtestado(patientId, {
+  const atestado = await repo.createAtestado(patientId, ctx.clinicId ?? null, {
     type,
     professionalName,
     professionalSpecialty: professionalSpecialty || null,

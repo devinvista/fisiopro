@@ -29,7 +29,7 @@ export async function getAnamnesis(patientId: number, type?: string, all?: boole
   return record ?? null;
 }
 
-export async function upsertAnamnesis(patientId: number, templateType: string, fields: Record<string, unknown>) {
+export async function upsertAnamnesis(patientId: number, templateType: string, clinicId: number | null, fields: Record<string, unknown>) {
   const [existing] = await db.select({ id: anamnesisTable.id }).from(anamnesisTable)
     .where(and(eq(anamnesisTable.patientId, patientId), eq(anamnesisTable.templateType, templateType)));
   if (existing) {
@@ -38,7 +38,7 @@ export async function upsertAnamnesis(patientId: number, templateType: string, f
       .returning();
     return { record: updated, isUpdate: true };
   }
-  const [created] = await db.insert(anamnesisTable).values({ patientId, templateType, ...fields }).returning();
+  const [created] = await db.insert(anamnesisTable).values({ patientId, templateType, clinicId, ...fields }).returning();
   return { record: created, isUpdate: false };
 }
 
@@ -95,8 +95,8 @@ export async function listEvaluations(patientId: number) {
   return db.select().from(evaluationsTable).where(eq(evaluationsTable.patientId, patientId)).orderBy(desc(evaluationsTable.createdAt));
 }
 
-export async function createEvaluation(patientId: number, data: Record<string, unknown>) {
-  const [created] = await db.insert(evaluationsTable).values({ patientId, ...data } as any).returning();
+export async function createEvaluation(patientId: number, clinicId: number | null, data: Record<string, unknown>) {
+  const [created] = await db.insert(evaluationsTable).values({ patientId, clinicId, ...data } as any).returning();
   return created;
 }
 
@@ -264,8 +264,8 @@ export async function listEvolutions(patientId: number) {
   return db.select().from(evolutionsTable).where(eq(evolutionsTable.patientId, patientId)).orderBy(desc(evolutionsTable.createdAt));
 }
 
-export async function createEvolution(patientId: number, data: Record<string, unknown>) {
-  const [created] = await db.insert(evolutionsTable).values({ patientId, ...data } as any).returning();
+export async function createEvolution(patientId: number, clinicId: number | null, data: Record<string, unknown>) {
+  const [created] = await db.insert(evolutionsTable).values({ patientId, clinicId, ...data } as any).returning();
   return created;
 }
 
@@ -278,6 +278,7 @@ export async function ensureAutoEvolutionForAppointment(
   patientId: number,
   appointmentId: number,
   sessionDuration?: number | null,
+  clinicId?: number | null,
 ) {
   const existing = await db
     .select({ id: evolutionsTable.id })
@@ -291,6 +292,7 @@ export async function ensureAutoEvolutionForAppointment(
     .values({
       patientId,
       appointmentId,
+      clinicId: clinicId ?? null,
       description: "Sessão concluída automaticamente — registre a evolução clínica.",
       sessionDuration: sessionDuration ?? null,
     } as any)
@@ -339,7 +341,7 @@ export async function upsertDischargeSummary(patientId: number, clinicId: number
       .returning();
     return { record: updated, isUpdate: true };
   }
-  const [created] = await db.insert(dischargeSummariesTable).values({ patientId, ...data } as any).returning();
+  const [created] = await db.insert(dischargeSummariesTable).values({ patientId, clinicId, ...data } as any).returning();
   return { record: created, isUpdate: false };
 }
 
@@ -366,8 +368,8 @@ export async function listAttachments(patientId: number) {
   return db.select().from(examAttachmentsTable).where(eq(examAttachmentsTable.patientId, patientId)).orderBy(desc(examAttachmentsTable.uploadedAt));
 }
 
-export async function createAttachment(patientId: number, data: Record<string, unknown>) {
-  const [created] = await db.insert(examAttachmentsTable).values({ patientId, ...data } as any).returning();
+export async function createAttachment(patientId: number, clinicId: number | null, data: Record<string, unknown>) {
+  const [created] = await db.insert(examAttachmentsTable).values({ patientId, clinicId, ...data } as any).returning();
   return created;
 }
 
@@ -386,8 +388,8 @@ export async function listAtestados(patientId: number) {
   return db.select().from(atestadosTable).where(eq(atestadosTable.patientId, patientId)).orderBy(desc(atestadosTable.issuedAt));
 }
 
-export async function createAtestado(patientId: number, data: Record<string, unknown>) {
-  const [created] = await db.insert(atestadosTable).values({ patientId, ...data } as any).returning();
+export async function createAtestado(patientId: number, clinicId: number | null, data: Record<string, unknown>) {
+  const [created] = await db.insert(atestadosTable).values({ patientId, clinicId, ...data } as any).returning();
   return created;
 }
 

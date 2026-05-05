@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { db, patientsTable } from "@workspace/db";
+import { db, patientsTable, patientAccessRequestsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
@@ -31,7 +31,7 @@ router.use(authMiddleware);
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getCtx(req: AuthRequest): svc.AuthCtx {
-  return { userId: req.userId };
+  return { userId: req.userId, clinicId: req.clinicId ?? null };
 }
 
 function patientIdParam(req: Request<P>): number {
@@ -40,17 +40,44 @@ function patientIdParam(req: Request<P>): number {
   return id;
 }
 
-// ─── Tenant isolation: garante que o paciente pertence à clínica do usuário ──
+// ─── Tenant isolation: garante que o paciente pertence à clínica ou que há
+// uma solicitação de acesso aprovada (cross-clinic) para dados clínicos. ──────
 
 router.use(asyncHandler(async (req: AuthRequest, _res, next: NextFunction) => {
   if (!req.clinicId) return next();
   const patientId = parseInt(req.params.patientId as string);
   if (isNaN(patientId)) throw HttpError.badRequest("patientId inválido");
-  const [patient] = await db
+
+  // Tentativa 1: paciente pertence diretamente à clínica do usuário.
+  const [ownPatient] = await db
     .select({ id: patientsTable.id })
     .from(patientsTable)
     .where(and(eq(patientsTable.id, patientId), eq(patientsTable.clinicId, req.clinicId)));
-  if (!patient) throw HttpError.forbidden("Acesso negado a este paciente");
+  if (ownPatient) return next();
+
+  // Tentativa 2: o paciente existe em outra clínica — verificar se há
+  // solicitação de acesso aprovada (scope=clinical_records) emitida por esta clínica.
+  const [foreignPatient] = await db
+    .select({ cpf: patientsTable.cpf })
+    .from(patientsTable)
+    .where(eq(patientsTable.id, patientId))
+    .limit(1);
+
+  if (!foreignPatient) throw HttpError.forbidden("Acesso negado a este paciente");
+
+  const [approvedRequest] = await db
+    .select({ id: patientAccessRequestsTable.id })
+    .from(patientAccessRequestsTable)
+    .where(
+      and(
+        eq(patientAccessRequestsTable.cpf, foreignPatient.cpf),
+        eq(patientAccessRequestsTable.requestingClinicId, req.clinicId),
+        eq(patientAccessRequestsTable.status, "approved"),
+      ),
+    )
+    .limit(1);
+
+  if (!approvedRequest) throw HttpError.forbidden("Acesso negado a este paciente");
   next();
 }));
 

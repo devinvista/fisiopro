@@ -459,51 +459,59 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
       ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
       : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
 
-    const [patient] = await db
-      .update(patientsTable)
-      .set({
-        name,
-        cpf,
-        birthDate: birthDate !== undefined ? (birthDate || null) : undefined,
-        phone,
-        email: email !== undefined ? (email || null) : undefined,
-        address: address !== undefined ? (address || null) : undefined,
-        profession: profession !== undefined ? (profession || null) : undefined,
-        emergencyContact: emergencyContact !== undefined ? (emergencyContact || null) : undefined,
-        notes: notes !== undefined ? (notes || null) : undefined,
-      })
-      .where(condition)
-      .returning();
+    // Atualização e sync cross-clinic em transação atômica:
+    // se o sync falhar, o update principal também faz rollback.
+    const patient = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(patientsTable)
+        .set({
+          name,
+          cpf,
+          birthDate: birthDate !== undefined ? (birthDate || null) : undefined,
+          phone,
+          email: email !== undefined ? (email || null) : undefined,
+          address: address !== undefined ? (address || null) : undefined,
+          profession: profession !== undefined ? (profession || null) : undefined,
+          emergencyContact: emergencyContact !== undefined ? (emergencyContact || null) : undefined,
+          notes: notes !== undefined ? (notes || null) : undefined,
+        })
+        .where(condition)
+        .returning();
+
+      if (!updated) return null;
+
+      // Sincronizar campos demográficos básicos para todos os registros com o mesmo CPF em outras clínicas
+      const currentCpf = updated.cpf;
+      const demographicUpdate: Record<string, any> = {};
+      if (name !== undefined) demographicUpdate.name = name;
+      if (birthDate !== undefined) demographicUpdate.birthDate = birthDate || null;
+      if (phone !== undefined) demographicUpdate.phone = phone;
+      if (email !== undefined) demographicUpdate.email = email || null;
+      if (address !== undefined) demographicUpdate.address = address || null;
+      if (profession !== undefined) demographicUpdate.profession = profession || null;
+      if (emergencyContact !== undefined) demographicUpdate.emergencyContact = emergencyContact || null;
+      // CPF update: sync new CPF to all sibling records
+      if (cpf !== undefined && cpf !== currentCpf) demographicUpdate.cpf = cpf;
+
+      if (Object.keys(demographicUpdate).length > 0) {
+        await tx
+          .update(patientsTable)
+          .set(demographicUpdate)
+          .where(
+            and(
+              eq(patientsTable.cpf, currentCpf),
+              ne(patientsTable.id, id),
+              isNull(patientsTable.deletedAt),
+            ),
+          );
+      }
+
+      return updated;
+    });
 
     if (!patient) {
       res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
       return;
-    }
-
-    // Sincronizar campos demográficos básicos para todos os registros com o mesmo CPF em outras clínicas
-    const currentCpf = patient.cpf;
-    const demographicUpdate: Record<string, any> = {};
-    if (name !== undefined) demographicUpdate.name = name;
-    if (birthDate !== undefined) demographicUpdate.birthDate = birthDate || null;
-    if (phone !== undefined) demographicUpdate.phone = phone;
-    if (email !== undefined) demographicUpdate.email = email || null;
-    if (address !== undefined) demographicUpdate.address = address || null;
-    if (profession !== undefined) demographicUpdate.profession = profession || null;
-    if (emergencyContact !== undefined) demographicUpdate.emergencyContact = emergencyContact || null;
-    // CPF update: sync new CPF to all sibling records
-    if (cpf !== undefined && cpf !== currentCpf) demographicUpdate.cpf = cpf;
-
-    if (Object.keys(demographicUpdate).length > 0) {
-      await db
-        .update(patientsTable)
-        .set(demographicUpdate)
-        .where(
-          and(
-            eq(patientsTable.cpf, currentCpf),
-            ne(patientsTable.id, id),
-            isNull(patientsTable.deletedAt),
-          ),
-        );
     }
 
     await logAudit({
