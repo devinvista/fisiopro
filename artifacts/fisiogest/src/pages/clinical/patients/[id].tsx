@@ -326,31 +326,38 @@ function EditPatientDialog({
             </div>
           </div>
 
-          {/* ── Emergência + Notas ── */}
+          {/* ── Emergência ── */}
           <div>
             <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">Informações Adicionais</p>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Contato de Emergência
-                </Label>
-                <Input
-                  value={form.emergencyContact}
-                  onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
-                  placeholder="Nome — Telefone"
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-medium text-slate-700">Observações</Label>
-                <Textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Histórico, alergias, restrições…"
-                  className="min-h-[80px] bg-slate-50 border-slate-200 focus:bg-white resize-none"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Contato de Emergência
+              </Label>
+              <Input
+                value={form.emergencyContact}
+                onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })}
+                placeholder="Nome — Telefone"
+                className="h-10"
+              />
             </div>
+          </div>
+
+          {/* ── Notas desta clínica ── */}
+          <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-1.5">
+            <div>
+              <Label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-primary" /> Observações desta clínica
+              </Label>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Específicas para este estabelecimento — não compartilhadas com outras clínicas.
+              </p>
+            </div>
+            <Textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Histórico, alergias, restrições…"
+              className="min-h-[80px] bg-white border-slate-200 focus:bg-white resize-none"
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
@@ -778,9 +785,11 @@ export default function PatientDetail() {
                 </div>
               )}
               {patient.notes && (
-                <div className="mt-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                  <p className="text-[10px] text-amber-700 font-semibold uppercase mb-0.5">Observações</p>
-                  <p className="text-xs text-amber-800">{patient.notes}</p>
+                <div className="mt-3 p-3 bg-primary/[0.04] rounded-xl border border-primary/20">
+                  <p className="text-[10px] text-primary font-semibold uppercase mb-0.5 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" /> Observações desta clínica
+                  </p>
+                  <p className="text-xs text-slate-700">{patient.notes}</p>
                 </div>
               )}
 

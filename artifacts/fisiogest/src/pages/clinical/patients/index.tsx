@@ -705,7 +705,10 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs text-amber-700">Observações específicas desta clínica (opcional):</p>
+            <div>
+              <p className="text-xs font-medium text-amber-800">Observações desta clínica <span className="font-normal text-amber-600">(opcional)</span></p>
+              <p className="text-[11px] text-amber-600 mt-0.5">Salvas apenas no vínculo com esta clínica — não visíveis em outros estabelecimentos.</p>
+            </div>
             <Textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -837,7 +840,10 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
           <div className="space-y-2">
-            <Label>Observações</Label>
+            <div>
+              <Label>Observações desta clínica</Label>
+              <p className="text-[11px] text-slate-400 mt-0.5">Visível apenas nesta clínica — não compartilhado com outros estabelecimentos.</p>
+            </div>
             <Textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
