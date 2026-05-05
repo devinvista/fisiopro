@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { patientsTable, appointmentsTable, financialRecordsTable, clinicsTable } from "@workspace/db";
+import { patientsTable, appointmentsTable, financialRecordsTable, clinicsTable, subscriptionPlansTable } from "@workspace/db";
 import { eq, ilike, or, and, sql, desc, isNull, lt, ne } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
-import { requireActiveSubscription, enforceLimit } from "../../../middleware/subscription.js";
+import { requireActiveSubscription, enforceLimit, getPlanLimits, findRequiredPlan } from "../../../middleware/subscription.js";
 import { logAudit } from "../../../utils/auditLog.js";
 import { parseIntParam, validateBody, validateQuery } from "../../../utils/validate.js";
 import { listQuerySchema } from "../../../utils/listQuery.js";
@@ -147,7 +147,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
   }
 });
 
-router.post("/", requirePermission("patients.create"), enforceLimit("patients"), async (req: AuthRequest, res) => {
+router.post("/", requirePermission("patients.create"), async (req: AuthRequest, res) => {
   try {
     const parsed = validateBody(createPatientSchema, req.body, res);
     if (!parsed) return;
@@ -159,7 +159,9 @@ router.post("/", requirePermission("patients.create"), enforceLimit("patients"),
       return;
     }
 
-    // Verificar se o CPF já existe em OUTRA clínica (antes de tentar inserir)
+    // ── 1. Cross-clinic CPF check runs FIRST — before any limit enforcement ──
+    // This ensures the import banner always shows when a CPF already exists in
+    // another clinic, even if the current clinic has reached its patient limit.
     if (req.clinicId) {
       const existingInOtherClinic = await db
         .select({
@@ -186,7 +188,6 @@ router.post("/", requirePermission("patients.create"), enforceLimit("patients"),
 
       if (existingInOtherClinic.length > 0) {
         const existing = existingInOtherClinic[0]!;
-        // Buscar nome da clínica de origem
         const [sourceClinic] = await db
           .select({ name: clinicsTable.name })
           .from(clinicsTable)
@@ -210,6 +211,39 @@ router.post("/", requirePermission("patients.create"), enforceLimit("patients"),
           sourceClinic: sourceClinic?.name ?? "outra clínica",
         });
         return;
+      }
+
+      // ── 2. Inline limit enforcement (only reached when CPF is truly new) ──
+      const sub = req.subscriptionInfo ?? await getPlanLimits(req.clinicId);
+      if (sub && sub.maxPatients != null) {
+        const [{ total }] = await db
+          .select({ total: sql<number>`count(*)` })
+          .from(patientsTable)
+          .where(and(eq(patientsTable.clinicId, req.clinicId), isNull(patientsTable.deletedAt)));
+        const current = Number(total);
+        if (current >= sub.maxPatients) {
+          const [planRow] = await db
+            .select({ price: subscriptionPlansTable.price, displayName: subscriptionPlansTable.displayName })
+            .from(subscriptionPlansTable)
+            .where(eq(subscriptionPlansTable.id, sub.planId))
+            .limit(1);
+          const priceCents = planRow ? Math.round(Number(planRow.price) * 100) : 0;
+          const required = await findRequiredPlan("patients", current, priceCents);
+          res.status(402).json({
+            error: "Plan Limit Reached",
+            limitReached: true,
+            resource: "patients",
+            limit: sub.maxPatients,
+            current,
+            planName: sub.planName,
+            planDisplayName: planRow?.displayName ?? sub.planName,
+            requiredPlan: required
+              ? { name: required.name, displayName: required.displayName, price: required.price, limit: required.maxPatients }
+              : null,
+            message: `Você atingiu o limite de ${sub.maxPatients} paciente${sub.maxPatients === 1 ? "" : "s"} do plano ${planRow?.displayName ?? sub.planName}.`,
+          });
+          return;
+        }
       }
     }
 

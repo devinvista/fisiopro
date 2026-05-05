@@ -84,7 +84,7 @@ export class PlanLimitError extends Error {
   }
 }
 
-function isPlanLimitPayload(body: unknown): body is PlanLimitInfo {
+export function isPlanLimitPayload(body: unknown): body is PlanLimitInfo {
   return (
     !!body &&
     typeof body === "object" &&

@@ -184,7 +184,7 @@ async function countResource(resource: LimitedResource, clinicId: number): Promi
  * informado. Retorna o plano ativo mais barato cujo limite seja `null`
  * (ilimitado) ou estritamente maior que o consumo atual.
  */
-async function findRequiredPlan(resource: LimitedResource, requiredCount: number, currentPriceCents: number) {
+export async function findRequiredPlan(resource: LimitedResource, requiredCount: number, currentPriceCents: number) {
   const field = LIMIT_FIELD[resource];
   const col = subscriptionPlansTable[field];
   const candidates = await db

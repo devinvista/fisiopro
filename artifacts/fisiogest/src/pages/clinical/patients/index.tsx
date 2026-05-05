@@ -4,7 +4,8 @@ import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListPatients } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, isPlanLimitPayload } from "@/lib/api";
+import { usePlanLimit } from "@/contexts/plan-limit-context";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -559,6 +560,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { show: showPlanLimit } = usePlanLimit();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -588,6 +590,11 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
       if (res.status === 409 && body?.code === "CPF_EXISTS_OTHER_CLINIC") {
         setCrossClinicPatient(body.patient);
         setCrossClinicName(body.sourceClinic ?? "outra clínica");
+        return;
+      }
+
+      if (res.status === 402 && isPlanLimitPayload(body)) {
+        showPlanLimit(body);
         return;
       }
 
