@@ -9,12 +9,17 @@ Sistema completo de gestão para clínicas de fisioterapia e saúde — agenda, 
 ```
 fisiogest-pro/
 ├── server/
-│   └── index.cjs                  # API Express bundleada (Node.js)
+│   ├── start.cjs                  # ← ponto de entrada: .env + migrations + servidor
+│   ├── migrate.cjs                # runner de migrations (chamado pelo start.cjs)
+│   └── index.cjs                  # API Express bundleada
 ├── artifacts/
 │   └── fisiogest/
 │       └── dist/
-│           └── public/            # SPA React compilada (servida pela API)
-├── package.json                   # Dependências de runtime
+│           └── public/            # SPA React compilada (servida pela API em produção)
+├── db/
+│   └── migrations/                # Arquivos SQL de migrations do Drizzle ORM
+├── node_modules/                  # Dependências de runtime já instaladas
+├── package.json                   # Scripts e dependências de runtime
 ├── .env.example                   # Variáveis de ambiente — copie para .env
 └── README.md
 ```
@@ -23,11 +28,10 @@ fisiogest-pro/
 
 ## Pré-requisitos
 
-| Requisito | Versão |
-|-----------|--------|
-| Node.js   | ≥ 22   |
-| npm / pnpm | qualquer |
-| PostgreSQL | ≥ 14   |
+| Requisito  | Versão mínima |
+|------------|---------------|
+| Node.js    | ≥ 22          |
+| PostgreSQL  | ≥ 14          |
 
 ---
 
@@ -35,67 +39,55 @@ fisiogest-pro/
 
 ### 1. Faça upload do ZIP
 
-Extraia o conteúdo do `fisiogest-pro.zip` na raiz do seu site no Hostinger (via File Manager ou FTP/SFTP).
+Extraia o conteúdo de `fisiogest-pro.zip` na raiz do seu site no Hostinger (via File Manager ou FTP/SFTP).
 
 ### 2. Configure as variáveis de ambiente
 
 ```bash
 cp .env.example .env
-nano .env          # preencha todos os valores marcados como obrigatórios
+nano .env          # preencha todos os valores obrigatórios (veja seção abaixo)
 ```
 
-Variáveis **obrigatórias**:
-- `DATABASE_URL` — string de conexão PostgreSQL
-- `JWT_SECRET` — string aleatória longa (mín. 64 chars)
-- `NODE_ENV=production`
-- `APP_PUBLIC_URL` — URL pública do site (ex: `https://app.suaclinica.com.br`)
-- `CORS_ORIGIN` — mesmo valor de `APP_PUBLIC_URL`
-- `ASAAS_API_KEY` — chave de produção do Asaas
-- `ASAAS_WEBHOOK_TOKEN` — token para validação de webhooks
-- `CLOUDINARY_URL` — URL do Cloudinary para upload de fotos
+### 3. Configure o ponto de entrada no Hostinger
 
-### 3. Instale as dependências de runtime
+No painel do Hostinger, em **Websites → Manage → Node.js**, defina:
 
-```bash
-npm install --omit=dev
-```
-
-### 4. Execute as migrations do banco de dados
-
-```bash
-node -e "
-const { execSync } = require('child_process');
-// Rode as migrations antes de iniciar pela primeira vez
-" 
-# Ou use o script de migrations diretamente se tiver o código-fonte disponível:
-# npx tsx scripts/migrate.ts
-```
-
-> **Nota:** Se você tiver acesso ao código-fonte completo, rode `pnpm run db:migrate` antes do primeiro start.  
-> Se usar apenas este pacote de produção, execute o SQL das migrations manualmente no banco via pgAdmin ou psql.
-
-### 5. Configure o ponto de entrada no Hostinger
-
-No painel do Hostinger, em **Websites > Manage > Node.js**, defina:
-
-- **Entry point / Startup file:** `server/index.cjs`
+- **Entry point / Startup file:** `server/start.cjs`
 - **Node.js version:** 22.x
 
-Ou, se usar PM2:
+O `start.cjs` faz automaticamente, a cada inicialização:
+1. Carrega o arquivo `.env` da raiz do projeto
+2. Aplica todas as migrations SQL pendentes no banco (operação idempotente — seguro rodar várias vezes)
+3. Inicia o servidor Express que serve a API e a SPA React
+
+### 4. (Alternativa) Usar PM2
 
 ```bash
-pm2 start server/index.cjs --name fisiogest-pro
+pm2 start server/start.cjs --name fisiogest-pro
 pm2 save
 pm2 startup
 ```
 
-### 6. Configure o domínio e SSL
+### 5. Configure domínio e SSL
 
-No painel do Hostinger ative o SSL gratuito (Let's Encrypt) e aponte o domínio para a aplicação Node.js.
+No painel do Hostinger, ative o SSL gratuito (Let's Encrypt) e aponte o domínio para a aplicação Node.js.
 
 ---
 
-## Variáveis de ambiente completas
+## Variáveis de ambiente obrigatórias
+
+| Variável              | Descrição                                                     |
+|-----------------------|---------------------------------------------------------------|
+| `DATABASE_URL`        | String de conexão PostgreSQL (ex: `postgresql://u:p@host/db?sslmode=require`) |
+| `JWT_SECRET`          | Chave secreta longa para assinar JWTs (mín. 64 chars)         |
+| `NODE_ENV`            | `production`                                                  |
+| `PORT`                | Porta do servidor (padrão: `3000`)                            |
+| `APP_PUBLIC_URL`      | URL pública do site (ex: `https://app.suaclinica.com.br`)     |
+| `CORS_ORIGIN`         | Mesmo valor de `APP_PUBLIC_URL` (para restringir CORS)        |
+| `ASAAS_API_KEY`       | Chave de API Asaas (use a chave de **produção** ao ir ao ar)  |
+| `ASAAS_BASE_URL`      | `https://api.asaas.com/api/v3` (produção)                    |
+| `ASAAS_WEBHOOK_TOKEN` | Token para validação de webhooks do Asaas                     |
+| `CLOUDINARY_URL`      | URL Cloudinary: `cloudinary://api_key:api_secret@cloud_name`  |
 
 Veja `.env.example` para a lista completa com descrições.
 
@@ -109,12 +101,21 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ---
 
-## Saúde da API
+## Verificar saúde da API
 
-Acesse `https://seu-dominio.com.br/api/healthz` para verificar se a API está respondendo.
+```
+GET https://seu-dominio.com.br/api/healthz
+→ {"status":"ok"}
+```
 
 ---
 
-## Suporte
+## Primeira vez num banco já existente (baseline)
 
-Para dúvidas, consulte a documentação interna ou entre em contato com a equipe de desenvolvimento.
+Se o banco já possui tabelas criadas via `drizzle-kit push` (sem histórico de migrations), rode uma vez:
+
+```bash
+node server/migrate.cjs --baseline
+```
+
+Isso registra todas as migrations atuais como aplicadas sem executar o SQL, evitando conflitos.

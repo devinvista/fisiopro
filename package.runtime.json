@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "start": "node server/index.cjs"
+    "start": "node server/start.cjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
