@@ -205,11 +205,20 @@ export async function runEndOfMonthRevenueClosure(
           eventType: "end_of_month_closure",
         };
 
-        // Detecção do modo pré-pago (deferred_receivable):
-        // Se o aceite postou D 1.1.2 / C 2.1.1 (`deferred_receivable`),
-        // o recebível e o adiantamento já existem antes do consumo.
-        // O resíduo deve consumir do adiantamento (D 2.1.1 / C 4.1.x).
-        // Sem deferred_receivable: cria recebível + receita (D 1.1.2 / C 4.1.x).
+        // Detecção de adiantamentos creditados em 2.1.1:
+        //
+        //   • P3 (deferred_receivable): aceite postou D 1.1.2 / C 2.1.1.
+        //     O recebível e o adiantamento já existem; o resíduo consome 2.1.1.
+        //
+        //   • cashAdvance (sem deferred_receivable): fatura paga antes de qualquer
+        //     sessão via postCashAdvance → D 1.1.1 / C 2.1.1. O adiantamento
+        //     também existe e deve ser consumido pelo resíduo.
+        //
+        //   • Sem adiantamento (fatura pendente, sem cashAdvance): não há saldo
+        //     em 2.1.1. O resíduo cria recebível + receita (D 1.1.2 / C 4.1.x).
+        //
+        // NÃO usamos `invoice.status === "pago"` como proxy — faturas pagas via
+        // fluxo antigo (settlement sem adiantamento prévio) não têm 2.1.1 creditado.
         const [hasDeferred] = await tx
           .select({ id: accountingJournalEntriesTable.id })
           .from(accountingJournalEntriesTable)
@@ -222,13 +231,27 @@ export async function runEndOfMonthRevenueClosure(
           .limit(1);
         const isP3Mode = !!hasDeferred;
 
+        const [hasCashAdvance] = await tx
+          .select({ id: accountingJournalEntriesTable.id })
+          .from(accountingJournalEntriesTable)
+          .where(and(
+            eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+            eq(accountingJournalEntriesTable.sourceId, invoice.id),
+            inArray(accountingJournalEntriesTable.eventType, ["cash_advance_receipt", "cash_advance_avulso"]),
+            eq(accountingJournalEntriesTable.status, "posted"),
+          ))
+          .limit(1);
+
+        // hasAdvances = 2.1.1 definitivamente creditado via deferred ou cashAdvance.
+        const hasAdvances = isP3Mode || !!hasCashAdvance;
+
         let entryId: number;
-        if (isP3Mode || invoice.status === "pago") {
-          // Pré-pago ou já paga: consome do adiantamento (D 2.1.1 / C 4.1.x).
+        if (hasAdvances) {
+          // 2.1.1 tem saldo → consome do adiantamento (D 2.1.1 / C 4.1.x).
           const entry = await postWalletUsage(baseEntry as any, tx as any);
           entryId = entry.id;
         } else {
-          // Pós-pago sem adiantamento: cria recebível + receita (D 1.1.2 / C 4.1.x).
+          // Sem adiantamento → cria recebível + receita (D 1.1.2 / C 4.1.x).
           const entry = await postReceivableRevenue(baseEntry as any, tx as any);
           entryId = entry.id;
         }

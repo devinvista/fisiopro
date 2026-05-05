@@ -179,6 +179,19 @@ export async function createJournalEntry(input: JournalEntryInput, tx: Tx = db) 
   return entry;
 }
 
+/**
+ * ATENÇÃO — NÃO usar nos fluxos de cobrança de pacientes.
+ *
+ * Lança DIRETAMENTE D 1.1.1 (Caixa) / C 4.1.x (Receita), pulando a etapa
+ * de recebível (1.1.2). Só é válido para cenários onde pagamento e entrega
+ * do serviço ocorrem simultaneamente e SEM geração prévia de recebível
+ * (ex.: venda de produto no balcão, bilheteria avulsa).
+ *
+ * Para os fluxos standard de sessões e planos, use a sequência correta:
+ *   • Avulso pós-sessão:  postReceivableRevenue → postReceivableSettlement
+ *   • Plano (P3):         postDeferredReceivable → postWalletUsage → postReceivableSettlement
+ *   • Pagamento antecipado: postCashAdvance → postWalletUsage (na sessão)
+ */
 export async function postCashReceipt(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; eventType?: string; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,

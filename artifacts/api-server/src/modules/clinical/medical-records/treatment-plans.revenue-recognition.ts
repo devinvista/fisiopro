@@ -277,7 +277,7 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
     const total = Math.max(1, allAppointments.length);
     const shareBase = round2(amount / total);
 
-    // ── Sub-conta de receita e modo P3 ────────────────────────────────────
+    // ── Sub-conta de receita ───────────────────────────────────────────────
     let revenueAccountCode = "4.1.2";
     if (invoice.procedureId) {
       const [proc] = await tx
@@ -292,10 +292,18 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       );
     }
 
-    // P3 (deferred_receivable existe): aceite já postou D 1.1.2 / C 2.1.1 →
-    // fragmentas consomem o adiantamento (D 2.1.1 / C 4.1.x).
-    // Sem adiantamento (faturas sem pré-pagamento): fragmentas geram recebível
-    // + receita (D 1.1.2 / C 4.1.x).
+    // ── Detecção de adiantamentos em 2.1.1 ────────────────────────────────
+    // Determina se o pool de Adiantamentos de Clientes (2.1.1) foi creditado,
+    // o que define qual primitiva contábil usar para as fragmentas de receita:
+    //   • hasAdvances = true  → D 2.1.1 / C 4.1.x  (postWalletUsage)
+    //   • hasAdvances = false → D 1.1.2 / C 4.1.x  (postReceivableRevenue)
+    //
+    // 2.1.1 é creditado em dois cenários:
+    //   1. P3 (deferred_receivable): no aceite do plano, D 1.1.2 / C 2.1.1.
+    //   2. cashAdvance: fatura paga antecipadamente sem deferred (postCashAdvance).
+    //
+    // NÃO inferimos por `invoice.status === "pago"` — faturas pagas via fluxo
+    // antigo (settlement sem adiantamento) não têm 2.1.1 creditado.
     const [hasDeferred] = await tx
       .select({ id: accountingJournalEntriesTable.id })
       .from(accountingJournalEntriesTable)
@@ -309,6 +317,29 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       )
       .limit(1);
     const isP3Mode = !!hasDeferred;
+
+    // Verifica se 2.1.1 (Adiantamentos) foi creditado via adiantamento de caixa.
+    // Isso ocorre quando a fatura foi paga SEM deferred_receivable (fluxo
+    // corrigido: D Caixa / C Adiantamentos via postCashAdvance).
+    // NÃO usamos `invoice.status === "pago"` como proxy pois faturas pagas via
+    // fluxo antigo (settlement sem adiantamento prévio) não têm 2.1.1 creditado.
+    const [hasCashAdvance] = await tx
+      .select({ id: accountingJournalEntriesTable.id })
+      .from(accountingJournalEntriesTable)
+      .where(and(
+        eq(accountingJournalEntriesTable.sourceType, "financial_record"),
+        eq(accountingJournalEntriesTable.sourceId, invoice.id),
+        inArray(accountingJournalEntriesTable.eventType, ["cash_advance_receipt", "cash_advance_avulso"]),
+        eq(accountingJournalEntriesTable.status, "posted"),
+      ))
+      .limit(1);
+
+    // hasAdvances = true quando 2.1.1 foi definitivamente creditado:
+    //   • P3 (deferred_receivable): D 1.1.2 / C 2.1.1 no aceite do plano
+    //   • cashAdvance: D 1.1.1 / C 2.1.1 no pagamento antecipado
+    // Fragmentas consomem 2.1.1 (D 2.1.1 / C 4.1.x) apenas neste caso.
+    // Sem adiantamento: criam recebível + receita (D 1.1.2 / C 4.1.x).
+    const hasAdvances = isP3Mode || !!hasCashAdvance;
 
     // ── Separa appointments com fragmenta existente dos que ainda precisam ──
     // Necessário para: (a) idempotência por sessão no bulk,
@@ -359,10 +390,12 @@ export async function recognizeMonthlyInvoiceRevenuePartial(
       };
 
       let entryId: number;
-      if (isP3Mode || invoice.status === "pago") {
+      if (hasAdvances) {
+        // Adiantamentos creditados → consome 2.1.1 (D Adiantamentos / C Receita)
         const entry = await postWalletUsage(entryBase, tx as any);
         entryId = entry.id;
       } else {
+        // Sem adiantamento → cria recebível + receita (D Recebíveis / C Receita)
         const entry = await postReceivableRevenue(entryBase, tx as any);
         entryId = entry.id;
       }
