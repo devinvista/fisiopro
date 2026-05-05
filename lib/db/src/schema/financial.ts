@@ -14,7 +14,7 @@ export const financialRecordsTable = pgTable("financial_records", {
   appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
   patientId: integer("patient_id").references(() => patientsTable.id),
   procedureId: integer("procedure_id").references(() => proceduresTable.id),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   paymentDate: date("payment_date"),
   paymentMethod: text("payment_method"),
   transactionType: text("transaction_type"),

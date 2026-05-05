@@ -16,7 +16,7 @@ export const proceduresTable = pgTable("procedures", {
   billingType: text("billing_type").notNull().default("porSessao"),
   monthlyPrice: numeric("monthly_price", { precision: 10, scale: 2 }),
   billingDay: integer("billing_day"),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   isActive: boolean("is_active").notNull().default(true),
   /**
    * Sprint 3 — T8: Categorização contábil por procedimento.

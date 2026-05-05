@@ -110,7 +110,7 @@ export type Evaluation = typeof evaluationsTable.$inferSelect;
 export const treatmentPlansTable = pgTable("treatment_plans", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
-  clinicId: integer("clinic_id").references(() => clinicsTable.id),
+  clinicId: integer("clinic_id").notNull().references(() => clinicsTable.id),
   objectives: text("objectives"),
   techniques: text("techniques"),
   frequency: text("frequency"),
@@ -353,7 +353,7 @@ export type Atestado = typeof atestadosTable.$inferSelect;
 export const bodyMeasurementsTable = pgTable("body_measurements", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   measuredAt: timestamp("measured_at").defaultNow().notNull(),
 
   // Biometria
@@ -388,7 +388,7 @@ export type BodyMeasurement = typeof bodyMeasurementsTable.$inferSelect;
 export const patientPhotosTable = pgTable("patient_photos", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
 
   // Identification
   takenAt: timestamp("taken_at").defaultNow().notNull(),  // data da sessão fotográfica

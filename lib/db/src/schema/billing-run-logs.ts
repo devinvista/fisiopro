@@ -14,7 +14,7 @@ export const billingRunLogsTable = pgTable("billing_run_logs", {
   id: serial("id").primaryKey(),
   ranAt: timestamp("ran_at").defaultNow().notNull(),
   triggeredBy: text("triggered_by").notNull().default("scheduler"), // "scheduler" | "manual"
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   processed: integer("processed").notNull().default(0),
   generated: integer("generated").notNull().default(0),
   skipped: integer("skipped").notNull().default(0),

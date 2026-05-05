@@ -10,7 +10,7 @@ export const blockedSlotsTable = pgTable("blocked_slots", {
   reason: text("reason"),
   recurrenceGroupId: text("recurrence_group_id"),
   userId: integer("user_id").references(() => usersTable.id),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   scheduleId: integer("schedule_id").references(() => schedulesTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

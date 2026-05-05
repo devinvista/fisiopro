@@ -9,7 +9,7 @@ import { patientWalletTransactionsTable } from "./patient-wallet";
 
 export const accountingAccountsTable = pgTable("accounting_accounts", {
   id: serial("id").primaryKey(),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   code: text("code").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull(),
@@ -24,7 +24,7 @@ export const accountingAccountsTable = pgTable("accounting_accounts", {
 
 export const accountingJournalEntriesTable = pgTable("accounting_journal_entries", {
   id: serial("id").primaryKey(),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   entryDate: date("entry_date").notNull(),
   eventType: text("event_type").notNull(),
   description: text("description").notNull(),
@@ -64,7 +64,7 @@ export const accountingJournalLinesTable = pgTable("accounting_journal_lines", {
 
 export const receivableAllocationsTable = pgTable("receivable_allocations", {
   id: serial("id").primaryKey(),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   paymentEntryId: integer("payment_entry_id").notNull().references(() => accountingJournalEntriesTable.id),
   receivableEntryId: integer("receivable_entry_id").notNull().references(() => accountingJournalEntriesTable.id),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id),

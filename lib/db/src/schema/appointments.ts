@@ -15,7 +15,7 @@ export const appointmentsTable = pgTable("appointments", {
   endTime: text("end_time").notNull(),
   status: text("status").notNull().default("agendado"),
   notes: text("notes"),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   scheduleId: integer("schedule_id").notNull(),
   // ── Materialização por plano de tratamento ────────────────────────────────
   // Liga este agendamento ao item do plano que o gerou. Quando preenchido,

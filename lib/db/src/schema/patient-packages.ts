@@ -19,7 +19,7 @@ export const patientPackagesTable = pgTable("patient_packages", {
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   paymentStatus: text("payment_status").notNull().default("pendente"),
   notes: text("notes"),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   // ─── Sprint 1 — Unificação de recorrência ───────────────────────────────
   // Os campos abaixo controlam recorrência mensal.

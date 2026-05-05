@@ -8,7 +8,7 @@ import { financialRecordsTable } from "./financial";
 export const patientWalletTable = pgTable("patient_wallet", {
   id:        serial("id").primaryKey(),
   patientId: integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
-  clinicId:  integer("clinic_id"),
+  clinicId:  integer("clinic_id").notNull(),
   balance:   numeric("balance", { precision: 10, scale: 2 }).notNull().default("0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -21,7 +21,7 @@ export const patientWalletTransactionsTable = pgTable("patient_wallet_transactio
   id:                serial("id").primaryKey(),
   walletId:          integer("wallet_id").notNull().references(() => patientWalletTable.id, { onDelete: "cascade" }),
   patientId:         integer("patient_id").notNull().references(() => patientsTable.id, { onDelete: "cascade" }),
-  clinicId:          integer("clinic_id"),
+  clinicId:          integer("clinic_id").notNull(),
   amount:            numeric("amount", { precision: 10, scale: 2 }).notNull(),
   type:              text("type").notNull(),
   description:       text("description").notNull(),

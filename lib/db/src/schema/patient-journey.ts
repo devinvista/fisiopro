@@ -21,7 +21,7 @@ export const patientJourneyStepsTable = pgTable("patient_journey_steps", {
   patientId: integer("patient_id")
     .notNull()
     .references(() => patientsTable.id, { onDelete: "cascade" }),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   stepKey: text("step_key").notNull(),
   stepOrder: integer("step_order").notNull(),
   status: text("status").notNull().default("pending"),

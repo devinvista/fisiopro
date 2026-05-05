@@ -41,7 +41,7 @@ export const sessionCreditsTable = pgTable("session_credits", {
   usedQuantity: integer("used_quantity").notNull().default(0),
   sourceAppointmentId: integer("source_appointment_id").references(() => appointmentsTable.id),
   patientPackageId: integer("patient_package_id"),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   notes: text("notes"),
   // ── Sprint "créditos com validade" ──────────────────────────────────────
   validUntil: date("valid_until"),

@@ -27,7 +27,7 @@ export const packagesTable = pgTable("packages", {
   //   - "prepago"   : créditos só ficam disponíveis quando a fatura é paga.
   paymentMode: text("payment_mode").notNull().default("postpago"),
   isActive: boolean("is_active").notNull().default(true),
-  clinicId: integer("clinic_id"),
+  clinicId: integer("clinic_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
