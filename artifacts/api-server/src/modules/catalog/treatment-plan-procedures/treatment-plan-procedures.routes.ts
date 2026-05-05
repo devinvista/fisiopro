@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { treatmentPlanProceduresTable, treatmentPlansTable, proceduresTable, packagesTable, patientsTable, appointmentsTable, usersTable } from "@workspace/db";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { treatmentPlanProceduresTable, treatmentPlansTable, proceduresTable, packagesTable, patientsTable, patientClinicsTable, appointmentsTable, usersTable } from "@workspace/db";
+import { eq, and, or, inArray, isNull } from "drizzle-orm";
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 
@@ -11,24 +11,32 @@ router.use(authMiddleware);
 async function verifyPlanOwnership(planId: number, req: AuthRequest): Promise<boolean> {
   if (!req.clinicId) return true;
   const [row] = await db
-    .select({ clinicId: patientsTable.clinicId })
+    .select({ bound: patientClinicsTable.id })
     .from(treatmentPlansTable)
-    .innerJoin(patientsTable, eq(treatmentPlansTable.patientId, patientsTable.id))
+    .innerJoin(patientClinicsTable, and(
+      eq(patientClinicsTable.patientId, treatmentPlansTable.patientId),
+      eq(patientClinicsTable.clinicId, req.clinicId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
     .where(eq(treatmentPlansTable.id, planId))
     .limit(1);
-  return row?.clinicId === req.clinicId;
+  return !!row;
 }
 
 async function verifyItemOwnership(itemId: number, req: AuthRequest): Promise<boolean> {
   if (!req.clinicId) return true;
   const [row] = await db
-    .select({ clinicId: patientsTable.clinicId })
+    .select({ bound: patientClinicsTable.id })
     .from(treatmentPlanProceduresTable)
     .innerJoin(treatmentPlansTable, eq(treatmentPlanProceduresTable.treatmentPlanId, treatmentPlansTable.id))
-    .innerJoin(patientsTable, eq(treatmentPlansTable.patientId, patientsTable.id))
+    .innerJoin(patientClinicsTable, and(
+      eq(patientClinicsTable.patientId, treatmentPlansTable.patientId),
+      eq(patientClinicsTable.clinicId, req.clinicId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
     .where(eq(treatmentPlanProceduresTable.id, itemId))
     .limit(1);
-  return row?.clinicId === req.clinicId;
+  return !!row;
 }
 
 // Valida e normaliza o payload `startTimesByDay` (mapa "dia → HH:MM").

@@ -168,26 +168,35 @@ if (req.isSuperAdmin || !req.clinicId) return null;
 - `clinical/schedules/schedules.routes.ts` — list + delete
 - `clinical/blocked-slots/blocked-slots.routes.ts` — list + ownership checks
 
-## Cross-Clinic Patient Identity
+## Global Patient Identity (migration 0024)
 
-Implemented in migration `0021_patient_cross_clinic.sql`:
+Implemented in `db/migrations/0024_patient_clinics_global.sql`:
 
-- **`patients.cpf` uniqueness**: global UNIQUE removed; replaced with `UNIQUE(cpf, clinic_id)` so the same CPF can exist across multiple clinics.
-- **`patients.source_patient_id`**: nullable self-reference FK pointing to the original record in the source clinic.
-- **`patient_access_requests` table**: tracks requests from one clinic to another for clinical data access (`scope: clinical_records`), with `status: pending | approved | denied`.
+- **Single global `patients` record per CPF**: the old per-clinic copy model is gone. `patients.cpf` is enforced globally via partial unique index `idx_patients_cpf_global_unique (cpf) WHERE deleted_at IS NULL`.
+- **`patient_clinics` junction table**: per-clinic binding (`patient_id`, `clinic_id`, `notes`, `status`, soft-deletable). A patient can belong to many clinics; each binding carries the clinic-specific notes.
+- **Deduplication (migration only)**: existing cross-clinic copies (`source_patient_id IS NOT NULL`) had their FKs re-pointed to the canonical patient, a `patient_clinics` entry was created for each importing clinic, and the duplicate patient record was soft-deleted.
+- **`patient_clinics.notes`**: per-clinic notes field. Global `patients.notes` kept for legacy reads.
+- **`patient_access_requests` table**: unchanged — tracks cross-clinic clinical data access requests (`scope: clinical_records`), `status: pending | approved | denied`.
 
 **Backend routes (`/api/patients`):**
-- `POST /` — detects CPF in another clinic → returns `409 { code: "CPF_EXISTS_OTHER_CLINIC", patient, sourceClinic }`.
-- `POST /import-by-cpf` — copies basic demographic fields from the source record into the requesting clinic.
-- `PUT /:id` — after a demographic update, syncs `name, phone, email, birthDate, address, profession, emergencyContact` to all records sharing the same CPF across other clinics (`notes` is clinic-specific and is NOT synced).
-- `POST /access-requests` — send a clinical-data access request to the source clinic.
-- `GET /access-requests/incoming` — list pending requests for the current clinic (as source).
-- `GET /access-requests/outgoing` — list requests sent by the current clinic.
-- `PATCH /access-requests/:id` — approve or deny a pending request (source clinic only).
+- `POST /` — checks CPF globally; if exists in another clinic → `409 { code: "CPF_EXISTS_OTHER_CLINIC" }`; if truly new → creates global `patients` + `patient_clinics` in one transaction.
+- `POST /import-by-cpf` — creates only a `patient_clinics` entry (no new patient row); returns the global patient data with clinic context.
+- `PUT /:id` — updates global demographics; updates `patient_clinics.notes` for per-clinic notes. No cross-clinic sync needed (single record).
+- `DELETE /:id` — soft-deletes the `patient_clinics` binding only (global patient preserved).
+- `POST /access-requests`, `GET /access-requests/incoming|outgoing`, `PATCH /access-requests/:id` — unchanged.
 
-**Frontend:**
-- `CreatePatientForm` (patients list page): on 409 `CPF_EXISTS_OTHER_CLINIC`, hides the normal form and shows an amber import banner with the existing patient's data and an "Import basic data" button.
-- `AccessRequestsPanel` (patient detail sidebar): invisible when there are no pending requests; shows a card per pending request with approve/deny buttons.
+**Count for SaaS limits:** `COUNT(*) FROM patient_clinics WHERE clinic_id = ? AND deleted_at IS NULL`.
+
+**Pattern for clinic membership check:** `SELECT id FROM patient_clinics WHERE patient_id = ? AND clinic_id = ? AND deleted_at IS NULL` (replaces old `patients.clinic_id = ?`).
+
+**Files updated (2025-05, migration 0024):**
+- `lib/db/src/schema/patient-clinics.ts` — new table
+- `patients.routes.ts`, `patient-access-requests.routes.ts` — rewritten
+- `financial.repository.ts`, `patient-journey.routes.ts`, `dashboard.routes.ts`
+- `medical-records.routes.ts`, `medical-records.repository.ts`
+- `treatment-plan-procedures.routes.ts`, `treatment-plans.tokens.ts`
+- `treatment-plans.recalc-durations.ts`, `treatment-plan-installments.routes.ts`
+- `middleware/subscription.ts`, `saas-plans.repository.ts`, `saas-plans.service.ts`
 
 ## External Dependencies
 

@@ -4,7 +4,6 @@ import {
   treatmentPlansTable,
   treatmentPlanProceduresTable,
   proceduresTable,
-  patientsTable,
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -53,10 +52,9 @@ export async function recalcPlanAppointmentDurations(
   const [planRow] = await db
     .select({
       id: treatmentPlansTable.id,
-      patientClinicId: patientsTable.clinicId,
+      patientClinicId: treatmentPlansTable.clinicId,
     })
     .from(treatmentPlansTable)
-    .innerJoin(patientsTable, eq(treatmentPlansTable.patientId, patientsTable.id))
     .where(eq(treatmentPlansTable.id, planId))
     .limit(1);
 

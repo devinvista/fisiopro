@@ -5,7 +5,6 @@ import {
   treatmentPlansTable,
   treatmentPlanProceduresTable,
   packagesTable,
-  patientsTable,
 } from "@workspace/db";
 import { eq, and, asc } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
@@ -24,9 +23,8 @@ async function verifyPlanOwnership(
 ): Promise<boolean> {
   if (req.isSuperAdmin || !req.clinicId) return true;
   const [row] = await db
-    .select({ clinicId: patientsTable.clinicId })
+    .select({ clinicId: treatmentPlansTable.clinicId })
     .from(treatmentPlansTable)
-    .innerJoin(patientsTable, eq(treatmentPlansTable.patientId, patientsTable.id))
     .where(eq(treatmentPlansTable.id, planId))
     .limit(1);
   return row?.clinicId === req.clinicId;

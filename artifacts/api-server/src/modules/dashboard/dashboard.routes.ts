@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { appointmentsTable, patientsTable, proceduresTable, financialRecordsTable, treatmentPlansTable } from "@workspace/db";
-import { eq, and, sql, gte, gt, lte, isNull } from "drizzle-orm";
+import { appointmentsTable, patientsTable, patientClinicsTable, proceduresTable, financialRecordsTable, treatmentPlansTable } from "@workspace/db";
+import { eq, and, sql, gte, gt, lte, isNull, inArray } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
 import { requirePermission } from "../../middleware/rbac.js";
 import { todayBRT, nowBRT, monthDateRangeBRT } from "../../utils/dateUtils.js";
@@ -17,7 +17,16 @@ function apptClinicFilter(req: AuthRequest) {
 
 function patientClinicFilter(req: AuthRequest) {
   if (!req.clinicId) return null;
-  return eq(patientsTable.clinicId, req.clinicId);
+  return inArray(
+    patientsTable.id,
+    db
+      .select({ id: patientClinicsTable.patientId })
+      .from(patientClinicsTable)
+      .where(and(
+        eq(patientClinicsTable.clinicId, req.clinicId),
+        isNull(patientClinicsTable.deletedAt),
+      )),
+  );
 }
 
 function financialClinicFilter(req: AuthRequest) {

@@ -4,6 +4,7 @@ import {
   patientJourneyStepsTable,
   JOURNEY_STEP_DEFS,
   patientsTable,
+  patientClinicsTable,
   anamnesisTable,
   evaluationsTable,
   treatmentPlansTable,
@@ -11,7 +12,7 @@ import {
   dischargeSummariesTable,
   patientPackagesTable,
 } from "@workspace/db";
-import { eq, and, or, gt, count } from "drizzle-orm";
+import { eq, and, or, gt, count, isNull } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { logAudit } from "../../../utils/auditLog.js";
 
@@ -23,11 +24,16 @@ type PS = { patientId: string; stepId: string };
 
 async function checkClinicAccess(req: AuthRequest, patientId: number): Promise<boolean> {
   if (!req.clinicId) return true;
-  const [patient] = await db
-    .select({ id: patientsTable.id })
-    .from(patientsTable)
-    .where(and(eq(patientsTable.id, patientId), eq(patientsTable.clinicId, req.clinicId)));
-  return !!patient;
+  const [binding] = await db
+    .select({ id: patientClinicsTable.id })
+    .from(patientClinicsTable)
+    .where(and(
+      eq(patientClinicsTable.patientId, patientId),
+      eq(patientClinicsTable.clinicId, req.clinicId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
+    .limit(1);
+  return !!binding;
 }
 
 interface AutoStatus {

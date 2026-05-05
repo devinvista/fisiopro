@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import {
   clinicSubscriptionsTable,
   subscriptionPlansTable,
-  patientsTable,
+  patientClinicsTable,
   schedulesTable,
   userRolesTable,
 } from "@workspace/db";
@@ -153,8 +153,8 @@ async function countResource(resource: LimitedResource, clinicId: number): Promi
   if (resource === "patients") {
     const [{ total }] = await db
       .select({ total: count() })
-      .from(patientsTable)
-      .where(and(eq(patientsTable.clinicId, clinicId), isNull(patientsTable.deletedAt)));
+      .from(patientClinicsTable)
+      .where(and(eq(patientClinicsTable.clinicId, clinicId), isNull(patientClinicsTable.deletedAt)));
     return Number(total);
   }
   if (resource === "schedules") {

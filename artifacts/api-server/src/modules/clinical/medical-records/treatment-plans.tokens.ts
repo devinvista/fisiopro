@@ -279,14 +279,13 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
       cpf: patientsTable.cpf,
       phone: patientsTable.phone,
       birthDate: patientsTable.birthDate,
-      clinicId: patientsTable.clinicId,
     })
     .from(patientsTable)
     .where(eq(patientsTable.id, plan.patientId))
     .limit(1);
 
-  // Sprint Financeiro 11 (P5): cláusulas vigentes da clínica do paciente.
-  const clinicIdForClauses = patient?.clinicId ?? null;
+  // Sprint Financeiro 11 (P5): cláusulas vigentes da clínica do plano.
+  const clinicIdForClauses = plan.clinicId ?? null;
   const clausesRows = clinicIdForClauses
     ? await db
         .select({
@@ -329,8 +328,8 @@ export async function loadPublicPlanSnapshot(planId: number): Promise<PublicPlan
     }
   }
 
-  const clinicWhereClause = patient?.clinicId
-    ? eq(clinicsTable.id, patient.clinicId)
+  const clinicWhereClause = plan.clinicId
+    ? eq(clinicsTable.id, plan.clinicId)
     : eq(clinicsTable.isActive, true);
 
   const [clinicRow] = await db

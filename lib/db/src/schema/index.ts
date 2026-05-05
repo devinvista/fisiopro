@@ -25,4 +25,5 @@ export * from "./patient-wallet";
 export * from "./accounting";
 export * from "./lgpd";
 export * from "./patient-access-requests";
+export * from "./patient-clinics";
 export * from "../plan-features";

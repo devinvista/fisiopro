@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { patientsTable, appointmentsTable, financialRecordsTable, clinicsTable, subscriptionPlansTable } from "@workspace/db";
-import { eq, ilike, or, and, sql, desc, isNull, lt, ne } from "drizzle-orm";
+import {
+  patientsTable,
+  patientClinicsTable,
+  appointmentsTable,
+  financialRecordsTable,
+  clinicsTable,
+  subscriptionPlansTable,
+} from "@workspace/db";
+import { eq, ilike, or, and, sql, desc, isNull, lt } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireActiveSubscription, enforceLimit, getPlanLimits, findRequiredPlan } from "../../../middleware/subscription.js";
@@ -71,19 +78,45 @@ function isDuplicateKeyError(err: any): boolean {
   return err?.code === "23505" || err?.cause?.code === "23505";
 }
 
-/** Campos demográficos básicos que devem ser sincronizados entre clínicas */
-const DEMOGRAPHIC_FIELDS = ["name", "birthDate", "phone", "email", "address", "profession", "emergencyContact"] as const;
-
 const router = Router();
 router.use(authMiddleware);
 router.use(requireActiveSubscription());
 
-function clinicFilter(req: AuthRequest) {
-  if (!req.clinicId) return isNull(patientsTable.deletedAt);
-  return and(eq(patientsTable.clinicId, req.clinicId), isNull(patientsTable.deletedAt));
+/** Shared SELECT shape — keeps API response backward-compatible */
+const patientWithClinicSelect = {
+  id: patientsTable.id,
+  name: patientsTable.name,
+  cpf: patientsTable.cpf,
+  birthDate: patientsTable.birthDate,
+  phone: patientsTable.phone,
+  email: patientsTable.email,
+  address: patientsTable.address,
+  profession: patientsTable.profession,
+  emergencyContact: patientsTable.emergencyContact,
+  notes: patientClinicsTable.notes,
+  clinicId: patientClinicsTable.clinicId,
+  sourcePatientId: patientsTable.sourcePatientId,
+  createdAt: patientsTable.createdAt,
+  deletedAt: patientsTable.deletedAt,
+};
+
+/** Checks if a patient has an active patient_clinics binding for a given clinic */
+async function patientBelongsToClinic(patientId: number, clinicId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: patientClinicsTable.id })
+    .from(patientClinicsTable)
+    .where(
+      and(
+        eq(patientClinicsTable.patientId, patientId),
+        eq(patientClinicsTable.clinicId, clinicId),
+        isNull(patientClinicsTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
-router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res) => {
+router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res): Promise<void> => {
   try {
     const q = validateQuery(listPatientsQuerySchema, req.query, res);
     if (!q) return;
@@ -92,7 +125,6 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
     const limit = clampLimit(q.limit);
     const cursor = decodeCursor(q.cursor);
 
-    const clinicCondition = clinicFilter(req);
     const normalizedSearch = search ? normalizeCpf(search) : null;
     const cpfDiffersFromSearch = normalizedSearch && normalizedSearch !== search && normalizedSearch.length >= 3;
     const searchCondition = search
@@ -116,20 +148,65 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
         )
       : null;
 
-    const filters = [clinicCondition, searchCondition].filter(Boolean) as any[];
-    const whereCondition = and(...filters, ...(cursorCondition ? [cursorCondition] : []));
-    const countWhere = filters.length > 0 ? and(...filters) : undefined;
+    if (req.clinicId) {
+      const clinicJoin = and(
+        eq(patientClinicsTable.patientId, patientsTable.id),
+        eq(patientClinicsTable.clinicId, req.clinicId),
+        isNull(patientClinicsTable.deletedAt),
+      );
+      const baseWhere = and(
+        isNull(patientsTable.deletedAt),
+        searchCondition ?? undefined,
+      );
+      const fullWhere = and(baseWhere, cursorCondition ?? undefined);
+
+      const [rows, countResult] = await Promise.all([
+        db
+          .select(patientWithClinicSelect)
+          .from(patientsTable)
+          .innerJoin(patientClinicsTable, clinicJoin)
+          .where(fullWhere)
+          .orderBy(desc(patientsTable.createdAt), desc(patientsTable.id))
+          .limit(limit + 1),
+        cursor
+          ? Promise.resolve(null)
+          : db
+              .select({ count: sql<number>`count(*)` })
+              .from(patientClinicsTable)
+              .where(and(
+                eq(patientClinicsTable.clinicId, req.clinicId),
+                isNull(patientClinicsTable.deletedAt),
+              )),
+      ]);
+
+      const total = countResult ? Number(countResult[0]?.count ?? 0) : undefined;
+      const result = buildPage(
+        rows,
+        limit,
+        (row) => ({ v: row.createdAt!.toISOString(), id: row.id }),
+        total,
+      );
+      res.json(result);
+      return;
+    }
+
+    // Superadmin path — no clinic filter
+    const baseWhere = and(isNull(patientsTable.deletedAt), searchCondition ?? undefined);
+    const fullWhere = and(baseWhere, cursorCondition ?? undefined);
 
     const [rows, countResult] = await Promise.all([
       db
         .select()
         .from(patientsTable)
-        .where(whereCondition)
+        .where(fullWhere)
         .orderBy(desc(patientsTable.createdAt), desc(patientsTable.id))
         .limit(limit + 1),
       cursor
         ? Promise.resolve(null)
-        : db.select({ count: sql<number>`count(*)` }).from(patientsTable).where(countWhere),
+        : db
+            .select({ count: sql<number>`count(*)` })
+            .from(patientsTable)
+            .where(and(isNull(patientsTable.deletedAt), searchCondition ?? undefined)),
     ]);
 
     const total = countResult ? Number(countResult[0]?.count ?? 0) : undefined;
@@ -139,7 +216,6 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
       (row) => ({ v: row.createdAt!.toISOString(), id: row.id }),
       total,
     );
-
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -159,11 +235,9 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
       return;
     }
 
-    // ── 1. Cross-clinic CPF check runs FIRST — before any limit enforcement ──
-    // This ensures the import banner always shows when a CPF already exists in
-    // another clinic, even if the current clinic has reached its patient limit.
+    // ── 1. Cross-clinic CPF check — always runs first, before limit enforcement ──
     if (req.clinicId) {
-      const existingInOtherClinic = await db
+      const existingGlobal = await db
         .select({
           id: patientsTable.id,
           name: patientsTable.name,
@@ -174,24 +248,33 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
           address: patientsTable.address,
           profession: patientsTable.profession,
           emergencyContact: patientsTable.emergencyContact,
-          clinicId: patientsTable.clinicId,
         })
         .from(patientsTable)
-        .where(
-          and(
-            eq(patientsTable.cpf, normalizedCpf),
-            ne(patientsTable.clinicId, req.clinicId),
-            isNull(patientsTable.deletedAt),
-          ),
-        )
+        .where(and(eq(patientsTable.cpf, normalizedCpf), isNull(patientsTable.deletedAt)))
         .limit(1);
 
-      if (existingInOtherClinic.length > 0) {
-        const existing = existingInOtherClinic[0]!;
-        const [sourceClinic] = await db
-          .select({ name: clinicsTable.name })
-          .from(clinicsTable)
-          .where(eq(clinicsTable.id, existing.clinicId!));
+      if (existingGlobal.length > 0) {
+        const existing = existingGlobal[0]!;
+        const alreadyInClinic = await patientBelongsToClinic(existing.id, req.clinicId);
+        if (alreadyInClinic) {
+          res.status(409).json({ error: "Conflict", message: "CPF já cadastrado nesta clínica" });
+          return;
+        }
+
+        // CPF exists in another clinic — find source clinic
+        const [sourceBinding] = await db
+          .select({ clinicId: patientClinicsTable.clinicId })
+          .from(patientClinicsTable)
+          .where(and(
+            eq(patientClinicsTable.patientId, existing.id),
+            isNull(patientClinicsTable.deletedAt),
+          ))
+          .orderBy(patientClinicsTable.createdAt)
+          .limit(1);
+
+        const sourceClinicName = sourceBinding?.clinicId
+          ? (await db.select({ name: clinicsTable.name }).from(clinicsTable).where(eq(clinicsTable.id, sourceBinding.clinicId)).limit(1))[0]?.name
+          : null;
 
         res.status(409).json({
           error: "Conflict",
@@ -208,18 +291,21 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
             profession: existing.profession,
             emergencyContact: existing.emergencyContact,
           },
-          sourceClinic: sourceClinic?.name ?? "outra clínica",
+          sourceClinic: sourceClinicName ?? "outra clínica",
         });
         return;
       }
 
-      // ── 2. Inline limit enforcement (only reached when CPF is truly new) ──
+      // ── 2. Inline limit enforcement (only for truly new CPF) ──
       const sub = req.subscriptionInfo ?? await getPlanLimits(req.clinicId);
       if (sub && sub.maxPatients != null) {
         const [{ total }] = await db
           .select({ total: sql<number>`count(*)` })
-          .from(patientsTable)
-          .where(and(eq(patientsTable.clinicId, req.clinicId), isNull(patientsTable.deletedAt)));
+          .from(patientClinicsTable)
+          .where(and(
+            eq(patientClinicsTable.clinicId, req.clinicId),
+            isNull(patientClinicsTable.deletedAt),
+          ));
         const current = Number(total);
         if (current >= sub.maxPatients) {
           const [planRow] = await db
@@ -247,31 +333,53 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
       }
     }
 
-    const [patient] = await db
-      .insert(patientsTable)
-      .values({
-        name,
-        cpf: normalizedCpf,
-        birthDate: birthDate || null,
-        phone,
-        email: email || null,
-        address: address || null,
-        profession: profession || null,
-        emergencyContact: emergencyContact || null,
-        notes: notes || null,
-        clinicId: req.clinicId ?? null,
-      })
-      .returning();
+    // ── 3. Create global patient + clinic binding in one transaction ──
+    const result = await db.transaction(async (tx) => {
+      const [patient] = await tx
+        .insert(patientsTable)
+        .values({
+          name,
+          cpf: normalizedCpf,
+          birthDate: birthDate || null,
+          phone,
+          email: email || null,
+          address: address || null,
+          profession: profession || null,
+          emergencyContact: emergencyContact || null,
+          notes: notes || null,
+          clinicId: req.clinicId ?? null,
+        })
+        .returning();
+
+      let binding = null;
+      if (req.clinicId && patient) {
+        [binding] = await tx
+          .insert(patientClinicsTable)
+          .values({
+            patientId: patient.id,
+            clinicId: req.clinicId,
+            notes: notes || null,
+          })
+          .returning();
+      }
+
+      return { patient, binding };
+    });
 
     await logAudit({
       userId: req.userId,
-      patientId: patient?.id,
+      patientId: result.patient?.id,
       action: "create",
       entityType: "patient",
-      entityId: patient?.id,
+      entityId: result.patient?.id,
       summary: `Paciente cadastrado: ${name}`,
     });
-    res.status(201).json(patient);
+
+    res.status(201).json({
+      ...result.patient,
+      clinicId: result.binding?.clinicId ?? result.patient?.clinicId ?? null,
+      notes: result.binding?.notes ?? result.patient?.notes ?? null,
+    });
   } catch (err: any) {
     if (isDuplicateKeyError(err)) {
       res.status(409).json({ error: "Conflict", message: "CPF já cadastrado nesta clínica" });
@@ -284,9 +392,8 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
 
 /**
  * POST /api/patients/import-by-cpf
- * Importa dados básicos de um paciente já cadastrado em outra clínica.
- * Cria um novo registro vinculado à clínica atual, apontando sourcePatientId
- * para o paciente original.
+ * No novo modelo global: o paciente já existe como registro único.
+ * Apenas cria o vínculo patient_clinics para a clínica atual.
  */
 router.post("/import-by-cpf", requirePermission("patients.create"), enforceLimit("patients"), async (req: AuthRequest, res) => {
   try {
@@ -308,70 +415,49 @@ router.post("/import-by-cpf", requirePermission("patients.create"), enforceLimit
       return;
     }
 
-    // Verificar se já existe nesta clínica
-    const alreadyExists = await db
-      .select({ id: patientsTable.id })
+    // Find global patient
+    const [globalPatient] = await db
+      .select()
       .from(patientsTable)
-      .where(
-        and(
-          eq(patientsTable.cpf, normalizedCpf),
-          eq(patientsTable.clinicId, req.clinicId),
-          isNull(patientsTable.deletedAt),
-        ),
-      )
+      .where(and(eq(patientsTable.cpf, normalizedCpf), isNull(patientsTable.deletedAt)))
       .limit(1);
 
-    if (alreadyExists.length > 0) {
+    if (!globalPatient) {
+      res.status(404).json({ error: "Not Found", message: "Paciente não encontrado em nenhuma clínica." });
+      return;
+    }
+
+    // Check if already in this clinic
+    const alreadyBound = await patientBelongsToClinic(globalPatient.id, req.clinicId);
+    if (alreadyBound) {
       res.status(409).json({ error: "Conflict", message: "Paciente já cadastrado nesta clínica." });
       return;
     }
 
-    // Buscar dados do paciente de origem (outra clínica)
-    const [source] = await db
-      .select()
-      .from(patientsTable)
-      .where(
-        and(
-          eq(patientsTable.cpf, normalizedCpf),
-          ne(patientsTable.clinicId, req.clinicId),
-          isNull(patientsTable.deletedAt),
-        ),
-      )
-      .orderBy(patientsTable.id)
-      .limit(1);
-
-    if (!source) {
-      res.status(404).json({ error: "Not Found", message: "Paciente não encontrado em nenhuma outra clínica." });
-      return;
-    }
-
-    const [patient] = await db
-      .insert(patientsTable)
+    // Create clinic binding
+    const [binding] = await db
+      .insert(patientClinicsTable)
       .values({
-        name: source.name,
-        cpf: source.cpf,
-        birthDate: source.birthDate,
-        phone: source.phone,
-        email: source.email,
-        address: source.address,
-        profession: source.profession,
-        emergencyContact: source.emergencyContact,
-        notes: parsed.notes || null,
+        patientId: globalPatient.id,
         clinicId: req.clinicId,
-        sourcePatientId: source.id,
+        notes: parsed.notes || null,
       })
       .returning();
 
     await logAudit({
       userId: req.userId,
-      patientId: patient?.id,
+      patientId: globalPatient.id,
       action: "create",
       entityType: "patient",
-      entityId: patient?.id,
-      summary: `Paciente importado de outra clínica: ${source.name}`,
+      entityId: globalPatient.id,
+      summary: `Paciente vinculado de outra clínica: ${globalPatient.name}`,
     });
 
-    res.status(201).json(patient);
+    res.status(201).json({
+      ...globalPatient,
+      clinicId: binding.clinicId,
+      notes: binding.notes ?? globalPatient.notes,
+    });
   } catch (err: any) {
     if (isDuplicateKeyError(err)) {
       res.status(409).json({ error: "Conflict", message: "Paciente já cadastrado nesta clínica." });
@@ -386,14 +472,29 @@ router.get("/:id", requirePermission("patients.read"), async (req: AuthRequest, 
   try {
     const id = parseIntParam(req.params.id, res, "ID do paciente");
     if (id === null) return;
-    const condition = !req.clinicId
-      ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
-      : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
 
-    const [patient] = await db
-      .select()
-      .from(patientsTable)
-      .where(condition);
+    let patient: any;
+    if (req.clinicId) {
+      const [row] = await db
+        .select(patientWithClinicSelect)
+        .from(patientsTable)
+        .innerJoin(
+          patientClinicsTable,
+          and(
+            eq(patientClinicsTable.patientId, patientsTable.id),
+            eq(patientClinicsTable.clinicId, req.clinicId),
+            isNull(patientClinicsTable.deletedAt),
+          ),
+        )
+        .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)));
+      patient = row ?? null;
+    } else {
+      const [row] = await db
+        .select()
+        .from(patientsTable)
+        .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)));
+      patient = row ?? null;
+    }
 
     if (!patient) {
       res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
@@ -415,9 +516,9 @@ router.get("/:id", requirePermission("patients.read"), async (req: AuthRequest, 
             eq(financialRecordsTable.type, "receita"),
             or(
               eq(financialRecordsTable.patientId, id),
-              eq(appointmentsTable.patientId, id)
-            )
-          )
+              eq(appointmentsTable.patientId, id),
+            ),
+          ),
         ),
     ]);
 
@@ -455,58 +556,71 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
       cpf = normalizedCpf;
     }
 
-    const condition = !req.clinicId
-      ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
-      : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
+    // Verify clinic membership
+    if (req.clinicId) {
+      const belongs = await patientBelongsToClinic(id, req.clinicId);
+      if (!belongs) {
+        res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
+        return;
+      }
+    } else {
+      const [existing] = await db
+        .select({ id: patientsTable.id })
+        .from(patientsTable)
+        .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)));
+      if (!existing) {
+        res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
+        return;
+      }
+    }
 
-    // Atualização e sync cross-clinic em transação atômica:
-    // se o sync falhar, o update principal também faz rollback.
+    // Update global patient demographics + per-clinic notes in one transaction
     const patient = await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(patientsTable)
-        .set({
-          name,
-          cpf,
-          birthDate: birthDate !== undefined ? (birthDate || null) : undefined,
-          phone,
-          email: email !== undefined ? (email || null) : undefined,
-          address: address !== undefined ? (address || null) : undefined,
-          profession: profession !== undefined ? (profession || null) : undefined,
-          emergencyContact: emergencyContact !== undefined ? (emergencyContact || null) : undefined,
-          notes: notes !== undefined ? (notes || null) : undefined,
-        })
-        .where(condition)
-        .returning();
+      const demographicSet: Record<string, any> = {};
+      if (name !== undefined) demographicSet.name = name;
+      if (cpf !== undefined) demographicSet.cpf = cpf;
+      if (birthDate !== undefined) demographicSet.birthDate = birthDate || null;
+      if (phone !== undefined) demographicSet.phone = phone;
+      if (email !== undefined) demographicSet.email = email || null;
+      if (address !== undefined) demographicSet.address = address || null;
+      if (profession !== undefined) demographicSet.profession = profession || null;
+      if (emergencyContact !== undefined) demographicSet.emergencyContact = emergencyContact || null;
+
+      let updated: any = null;
+      if (Object.keys(demographicSet).length > 0) {
+        const [u] = await tx
+          .update(patientsTable)
+          .set(demographicSet)
+          .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)))
+          .returning();
+        updated = u ?? null;
+      } else {
+        const [u] = await tx
+          .select()
+          .from(patientsTable)
+          .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)));
+        updated = u ?? null;
+      }
 
       if (!updated) return null;
 
-      // Sincronizar campos demográficos básicos para todos os registros com o mesmo CPF em outras clínicas
-      const currentCpf = updated.cpf;
-      const demographicUpdate: Record<string, any> = {};
-      if (name !== undefined) demographicUpdate.name = name;
-      if (birthDate !== undefined) demographicUpdate.birthDate = birthDate || null;
-      if (phone !== undefined) demographicUpdate.phone = phone;
-      if (email !== undefined) demographicUpdate.email = email || null;
-      if (address !== undefined) demographicUpdate.address = address || null;
-      if (profession !== undefined) demographicUpdate.profession = profession || null;
-      if (emergencyContact !== undefined) demographicUpdate.emergencyContact = emergencyContact || null;
-      // CPF update: sync new CPF to all sibling records
-      if (cpf !== undefined && cpf !== currentCpf) demographicUpdate.cpf = cpf;
-
-      if (Object.keys(demographicUpdate).length > 0) {
-        await tx
-          .update(patientsTable)
-          .set(demographicUpdate)
-          .where(
-            and(
-              eq(patientsTable.cpf, currentCpf),
-              ne(patientsTable.id, id),
-              isNull(patientsTable.deletedAt),
-            ),
-          );
+      // Update per-clinic notes if notes field was provided and we have a clinic context
+      let bindingNotes: string | null = null;
+      if (notes !== undefined && req.clinicId) {
+        const [binding] = await tx
+          .update(patientClinicsTable)
+          .set({ notes: notes || null })
+          .where(and(
+            eq(patientClinicsTable.patientId, id),
+            eq(patientClinicsTable.clinicId, req.clinicId),
+            isNull(patientClinicsTable.deletedAt),
+          ))
+          .returning({ notes: patientClinicsTable.notes, clinicId: patientClinicsTable.clinicId });
+        bindingNotes = binding?.notes ?? null;
+        return { ...updated, clinicId: binding?.clinicId ?? req.clinicId, notes: bindingNotes };
       }
 
-      return updated;
+      return { ...updated, clinicId: req.clinicId ?? updated.clinicId, notes: updated.notes };
     });
 
     if (!patient) {
@@ -534,33 +648,65 @@ router.delete("/:id", requirePermission("patients.delete"), async (req: AuthRequ
     const id = parseIntParam(req.params.id, res, "ID do paciente");
     if (id === null) return;
 
-    const condition = !req.clinicId
-      ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
-      : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
+    if (req.clinicId) {
+      // Clinic user: soft-delete only the patient_clinics binding
+      const [binding] = await db
+        .select({
+          bindingId: patientClinicsTable.id,
+          patientName: patientsTable.name,
+        })
+        .from(patientClinicsTable)
+        .innerJoin(patientsTable, eq(patientClinicsTable.patientId, patientsTable.id))
+        .where(and(
+          eq(patientClinicsTable.patientId, id),
+          eq(patientClinicsTable.clinicId, req.clinicId),
+          isNull(patientClinicsTable.deletedAt),
+        ));
 
-    const [existing] = await db
-      .select({ name: patientsTable.name })
-      .from(patientsTable)
-      .where(condition);
+      if (!binding) {
+        res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
+        return;
+      }
 
-    if (!existing) {
-      res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
-      return;
+      await db
+        .update(patientClinicsTable)
+        .set({ deletedAt: new Date() })
+        .where(eq(patientClinicsTable.id, binding.bindingId));
+
+      await logAudit({
+        userId: req.userId,
+        patientId: null,
+        action: "delete",
+        entityType: "patient",
+        entityId: id,
+        summary: `Vínculo de paciente removido da clínica: ${binding.patientName ?? `ID ${id}`}`,
+      });
+    } else {
+      // Superadmin: soft-delete global patient record
+      const [existing] = await db
+        .select({ name: patientsTable.name })
+        .from(patientsTable)
+        .where(and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt)));
+
+      if (!existing) {
+        res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
+        return;
+      }
+
+      await db
+        .update(patientsTable)
+        .set({ deletedAt: new Date() })
+        .where(eq(patientsTable.id, id));
+
+      await logAudit({
+        userId: req.userId,
+        patientId: null,
+        action: "delete",
+        entityType: "patient",
+        entityId: id,
+        summary: `Paciente global excluído: ${existing.name ?? `ID ${id}`}`,
+      });
     }
-
-    await db
-      .update(patientsTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(patientsTable.id, id));
-
-    await logAudit({
-      userId: req.userId,
-      patientId: null,
-      action: "delete",
-      entityType: "patient",
-      entityId: id,
-      summary: `Paciente excluído: ${existing?.name ?? `ID ${id}`}`,
-    });
 
     res.status(204).send();
   } catch (err) {

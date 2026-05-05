@@ -74,7 +74,7 @@ export const anamnesisTable = pgTable("anamnesis", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
-  unique("uniq_anamnesis_patient_template").on(table.patientId, table.templateType),
+  unique("uniq_anamnesis_patient_clinic_template").on(table.patientId, table.clinicId, table.templateType),
   index("idx_anamnesis_patient_id").on(table.patientId),
   index("idx_anamnesis_clinic_id").on(table.clinicId),
 ]);
@@ -294,7 +294,7 @@ export type Evolution = typeof evolutionsTable.$inferSelect;
 
 export const dischargeSummariesTable = pgTable("discharge_summaries", {
   id: serial("id").primaryKey(),
-  patientId: integer("patient_id").notNull().unique().references(() => patientsTable.id),
+  patientId: integer("patient_id").notNull().references(() => patientsTable.id),
   clinicId: integer("clinic_id").references(() => clinicsTable.id),
   dischargeDate: date("discharge_date").notNull(),
   dischargeReason: text("discharge_reason").notNull(),
@@ -304,6 +304,7 @@ export const dischargeSummariesTable = pgTable("discharge_summaries", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_discharge_summaries_clinic_id").on(table.clinicId),
+  unique("uniq_discharge_patient_clinic").on(table.patientId, table.clinicId),
 ]);
 
 export const insertDischargeSummarySchema = createInsertSchema(dischargeSummariesTable).omit({ id: true, createdAt: true, updatedAt: true });

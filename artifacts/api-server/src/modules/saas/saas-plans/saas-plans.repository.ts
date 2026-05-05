@@ -3,13 +3,13 @@ import {
   subscriptionPlansTable,
   clinicSubscriptionsTable,
   clinicsTable,
-  patientsTable,
+  patientClinicsTable,
   usersTable,
   userRolesTable,
   schedulesTable,
   clinicPaymentHistoryTable,
 } from "@workspace/db";
-import { eq, desc, asc, count, and, sql, gte, lte } from "drizzle-orm";
+import { eq, desc, asc, count, and, sql, gte, lte, isNull } from "drizzle-orm";
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 
@@ -130,8 +130,8 @@ export async function getClinicUsage(clinicId: number) {
 
   const [patientsCount] = await db
     .select({ total: count() })
-    .from(patientsTable)
-    .where(eq(patientsTable.clinicId, clinicId));
+    .from(patientClinicsTable)
+    .where(and(eq(patientClinicsTable.clinicId, clinicId), isNull(patientClinicsTable.deletedAt)));
 
   const [schedulesCount] = await db
     .select({ total: count() })

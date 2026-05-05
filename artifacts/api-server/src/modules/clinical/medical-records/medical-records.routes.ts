@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { db, patientsTable, patientAccessRequestsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, patientsTable, patientClinicsTable, patientAccessRequestsTable } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { asyncHandler } from "../../../utils/asyncHandler.js";
@@ -48,12 +48,17 @@ router.use(asyncHandler(async (req: AuthRequest, _res, next: NextFunction) => {
   const patientId = parseInt(req.params.patientId as string);
   if (isNaN(patientId)) throw HttpError.badRequest("patientId inválido");
 
-  // Tentativa 1: paciente pertence diretamente à clínica do usuário.
-  const [ownPatient] = await db
-    .select({ id: patientsTable.id })
-    .from(patientsTable)
-    .where(and(eq(patientsTable.id, patientId), eq(patientsTable.clinicId, req.clinicId)));
-  if (ownPatient) return next();
+  // Tentativa 1: paciente tem vínculo ativo com esta clínica (patient_clinics).
+  const [binding] = await db
+    .select({ id: patientClinicsTable.id })
+    .from(patientClinicsTable)
+    .where(and(
+      eq(patientClinicsTable.patientId, patientId),
+      eq(patientClinicsTable.clinicId, req.clinicId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
+    .limit(1);
+  if (binding) return next();
 
   // Tentativa 2: o paciente existe em outra clínica — verificar se há
   // solicitação de acesso aprovada (scope=clinical_records) emitida por esta clínica.

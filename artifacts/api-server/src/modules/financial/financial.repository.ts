@@ -1,8 +1,8 @@
 import { db } from "@workspace/db";
 import {
-  appointmentsTable, financialRecordsTable, patientsTable,
+  appointmentsTable, financialRecordsTable, patientClinicsTable,
 } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { AuthRequest } from "../../middleware/auth.js";
 
 export function clinicCond(req: AuthRequest) {
@@ -20,9 +20,14 @@ export async function assertPatientInClinic(
   req: AuthRequest,
 ): Promise<boolean> {
   if (!req.clinicId) return true;
-  const [p] = await db
-    .select({ id: patientsTable.id })
-    .from(patientsTable)
-    .where(and(eq(patientsTable.id, patientId), eq(patientsTable.clinicId, req.clinicId)));
-  return !!p;
+  const [binding] = await db
+    .select({ id: patientClinicsTable.id })
+    .from(patientClinicsTable)
+    .where(and(
+      eq(patientClinicsTable.patientId, patientId),
+      eq(patientClinicsTable.clinicId, req.clinicId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
+    .limit(1);
+  return !!binding;
 }

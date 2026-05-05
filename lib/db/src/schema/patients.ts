@@ -21,7 +21,7 @@ export const patientsTable = pgTable("patients", {
   index("idx_patients_clinic_id").on(table.clinicId),
   index("idx_patients_name").on(table.name),
   index("idx_patients_cpf").on(table.cpf),
-  unique("patients_cpf_clinic_unique").on(table.cpf, table.clinicId),
+  // unique(cpf) global enforced via partial index idx_patients_cpf_global_unique (migration 0024)
 ]);
 
 export const insertPatientSchema = createInsertSchema(patientsTable).omit({ id: true, createdAt: true });

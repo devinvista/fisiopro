@@ -2,11 +2,11 @@ import { db } from "@workspace/db";
 import {
   subscriptionPlansTable,
   clinicSubscriptionsTable,
-  patientsTable,
+  patientClinicsTable,
   userRolesTable,
   schedulesTable,
 } from "@workspace/db";
-import { eq, count, and, inArray } from "drizzle-orm";
+import { eq, count, and, inArray, isNull } from "drizzle-orm";
 import { todayBRT, addDays } from "../../../utils/dateUtils.js";
 import { HttpError } from "../../../utils/httpError.js";
 import { DEFAULT_PLANS } from "./saas-plans.constants.js";
@@ -193,8 +193,8 @@ export async function getMineLimits(clinicId: number | null) {
 
   const [patientsCount] = await db
     .select({ total: count() })
-    .from(patientsTable)
-    .where(eq(patientsTable.clinicId, clinicId));
+    .from(patientClinicsTable)
+    .where(and(eq(patientClinicsTable.clinicId, clinicId), isNull(patientClinicsTable.deletedAt)));
 
   const [usersCount] = await db
     .select({ total: count() })

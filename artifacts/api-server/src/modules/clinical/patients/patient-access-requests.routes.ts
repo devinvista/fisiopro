@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { patientAccessRequestsTable, patientsTable, clinicsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { patientAccessRequestsTable, patientsTable, patientClinicsTable, clinicsTable } from "@workspace/db";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireActiveSubscription } from "../../../middleware/subscription.js";
@@ -32,22 +32,25 @@ router.post("/access-requests", requirePermission("patients.create"), async (req
 
     const normalizedCpf = parsed.cpf.replace(/\D/g, "");
 
-    // Encontrar a clínica de origem (que primeiro cadastrou o paciente com esse CPF)
-    const [sourcePatient] = await db
-      .select({ clinicId: patientsTable.clinicId })
-      .from(patientsTable)
+    // Encontrar a clínica de origem (primeiro vínculo do paciente via patient_clinics)
+    const [sourceBinding] = await db
+      .select({ clinicId: patientClinicsTable.clinicId })
+      .from(patientClinicsTable)
+      .innerJoin(patientsTable, eq(patientClinicsTable.patientId, patientsTable.id))
       .where(and(
         eq(patientsTable.cpf, normalizedCpf),
+        isNull(patientsTable.deletedAt),
+        isNull(patientClinicsTable.deletedAt),
       ))
-      .orderBy(patientsTable.id)
+      .orderBy(patientClinicsTable.createdAt)
       .limit(1);
 
-    if (!sourcePatient?.clinicId) {
+    if (!sourceBinding?.clinicId) {
       res.status(404).json({ error: "Not Found", message: "Paciente não encontrado." });
       return;
     }
 
-    if (sourcePatient.clinicId === req.clinicId) {
+    if (sourceBinding.clinicId === req.clinicId) {
       res.status(400).json({ error: "Bad Request", message: "O paciente já pertence a esta clínica." });
       return;
     }
@@ -72,7 +75,7 @@ router.post("/access-requests", requirePermission("patients.create"), async (req
       .values({
         cpf: normalizedCpf,
         requestingClinicId: req.clinicId,
-        sourceClinicId: sourcePatient.clinicId,
+        sourceClinicId: sourceBinding.clinicId,
         message: parsed.message ?? null,
         status: "pending",
         scope: "clinical_records",
@@ -124,10 +127,12 @@ router.get("/access-requests/incoming", requirePermission("patients.read"), asyn
         const [patient] = await db
           .select({ name: patientsTable.name })
           .from(patientsTable)
-          .where(and(
-            eq(patientsTable.cpf, r.cpf),
-            eq(patientsTable.clinicId, req.clinicId!),
+          .innerJoin(patientClinicsTable, and(
+            eq(patientClinicsTable.patientId, patientsTable.id),
+            eq(patientClinicsTable.clinicId, req.clinicId!),
+            isNull(patientClinicsTable.deletedAt),
           ))
+          .where(eq(patientsTable.cpf, r.cpf))
           .limit(1);
         return { ...r, patientName: patient?.name ?? null };
       }),
@@ -181,7 +186,7 @@ router.get("/access-requests/outgoing", requirePermission("patients.read"), asyn
  */
 router.patch("/access-requests/:id", requirePermission("patients.update"), async (req: AuthRequest, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id as string, 10);
     if (isNaN(id)) {
       res.status(400).json({ error: "Bad Request", message: "ID inválido." });
       return;

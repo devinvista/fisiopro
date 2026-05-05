@@ -12,9 +12,10 @@ import {
   examAttachmentsTable,
   atestadosTable,
   patientsTable,
+  patientClinicsTable,
   bodyMeasurementsTable,
 } from "@workspace/db";
-import { eq, desc, or, and } from "drizzle-orm";
+import { eq, desc, or, and, isNull } from "drizzle-orm";
 
 // ─── Anamnesis ─────────────────────────────────────────────────────────────────
 
@@ -254,8 +255,16 @@ export async function acceptTreatmentPlan(
 }
 
 export async function getPatientClinicId(patientId: number) {
-  const [patient] = await db.select({ clinicId: patientsTable.clinicId }).from(patientsTable).where(eq(patientsTable.id, patientId)).limit(1);
-  return patient?.clinicId ?? null;
+  const [binding] = await db
+    .select({ clinicId: patientClinicsTable.clinicId })
+    .from(patientClinicsTable)
+    .where(and(
+      eq(patientClinicsTable.patientId, patientId),
+      isNull(patientClinicsTable.deletedAt),
+    ))
+    .orderBy(patientClinicsTable.createdAt)
+    .limit(1);
+  return binding?.clinicId ?? null;
 }
 
 // ─── Evolutions ───────────────────────────────────────────────────────────────
