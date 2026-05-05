@@ -176,15 +176,24 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
 
 router.get("/schedule-occupation", requirePermission("reports.read"), async (req, res) => {
   try {
+    const authReq = req as AuthRequest;
     const brt = nowBRT();
-    const month = parseInt(req.query.month as string) || brt.month;
-    const year = parseInt(req.query.year as string) || brt.year;
+    const month = parseInt(authReq.query.month as string) || brt.month;
+    const year = parseInt(authReq.query.year as string) || brt.year;
     const { startDate, endDate } = monthDateRange(year, month);
+
+    const clinicFilter = authReq.isSuperAdmin || !authReq.clinicId
+      ? null
+      : eq(appointmentsTable.clinicId, authReq.clinicId);
 
     const appointments = await db
       .select()
       .from(appointmentsTable)
-      .where(and(gte(appointmentsTable.date, startDate), lte(appointmentsTable.date, endDate)));
+      .where(and(
+        gte(appointmentsTable.date, startDate),
+        lte(appointmentsTable.date, endDate),
+        clinicFilter ?? undefined
+      ));
 
     const totalSlots = appointments.length;
     const occupiedSlots = appointments.filter((a) =>
