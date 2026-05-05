@@ -462,18 +462,23 @@ export async function getAccountingBalances(input: { clinicId?: number | null; p
  * Retorna o saldo de Adiantamentos de Clientes (2.1.1) filtrado pela
  * COMPETÊNCIA do mês selecionado.
  *
- * Para entradas do tipo `deferred_receivable` (geradas no aceite do plano),
- * todos os meses futuros são lançados no mesmo dia (entry_date = data do
- * aceite). Por isso, a data de competência é lida da `due_date` do
- * `financial_record` vinculado, não da `entry_date` do lançamento.
+ * PRINCÍPIO: Adiantamentos devem refletir apenas caixa efetivamente recebido
+ * do paciente que ainda não foi reconhecido como receita. Para registros do
+ * tipo `deferred_receivable` (criados no aceite do plano), o crédito em
+ * Adiantamentos é limitado ao valor liquidado (`receivable_settlement`),
+ * evitando que baixas parciais inflem o passivo com valores não cobrados.
  *
- * Para todos os demais lançamentos de 2.1.1 (reconhecimento de receita por
- * sessão, depósitos de carteira, estornos, etc.) a competência é a própria
- * `entry_date` — que já representa o dia em que o evento ocorreu.
+ * Exemplo: plano R$210, pago parcialmente R$200 → effective_credit = min(210,200) = 200.
+ * Após 8 sessões × R$25 = R$200 reconhecidos: Adiantamentos = 200 − 200 = R$0.
+ * O R$10 restante permanece apenas em Contas a Receber (ativo), não em Adiantamentos.
  *
- * Resultado: COALESCE(fr.due_date, aje.entry_date) BETWEEN startDate AND endDate.
+ * Para pagamento completo (R$210): effective_credit = min(210,210) = 210.
+ * Com 1 sessão pendente (R$10): Adiantamentos = 210 − 200 = R$10 (correto).
  *
- * Usa SQL raw via db.execute para garantir que o COALESCE entre duas colunas
+ * Para demais lançamentos (wallet_deposit, cash_advance_receipt, etc.) o
+ * credit_amount é usado integralmente pois já representa caixa recebido.
+ *
+ * Usa SQL raw via pool.query para garantir que o COALESCE entre duas colunas
  * de tabelas diferentes seja gerado corretamente (evita ambiguidade no ORM).
  */
 export async function getCustomerAdvancesByCompetence(input: {
@@ -481,13 +486,35 @@ export async function getCustomerAdvancesByCompetence(input: {
   startDate: string;
   endDate: string;
 }): Promise<number> {
+  // Sub-query inline que calcula o crédito efetivo de cada linha 2.1.1:
+  // - deferred_receivable → LEAST(credit, total_settled para o mesmo financial_record)
+  // - demais              → credit_amount original
+  const effectiveCreditExpr = `
+    CASE
+      WHEN aje.event_type = 'deferred_receivable'
+      THEN LEAST(
+        ajl.credit_amount::numeric,
+        COALESCE((
+          SELECT SUM(ajl2.credit_amount::numeric)
+          FROM accounting_journal_lines ajl2
+          JOIN accounting_journal_entries aje2 ON aje2.id = ajl2.entry_id
+          JOIN accounting_accounts        aa2  ON aa2.id  = ajl2.account_id
+          WHERE aje2.financial_record_id = aje.financial_record_id
+            AND aje2.event_type          = 'receivable_settlement'
+            AND aa2.code                 = '1.1.2'
+        ), 0)
+      )
+      ELSE ajl.credit_amount::numeric
+    END
+  `;
+
   let queryText: string;
   let params: (string | number)[];
 
   if (input.clinicId != null) {
     queryText = `
       SELECT
-        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        COALESCE(SUM(${effectiveCreditExpr}), 0)
         - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
       FROM accounting_journal_lines ajl
       JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
@@ -502,7 +529,7 @@ export async function getCustomerAdvancesByCompetence(input: {
   } else {
     queryText = `
       SELECT
-        COALESCE(SUM(ajl.credit_amount::numeric), 0)
+        COALESCE(SUM(${effectiveCreditExpr}), 0)
         - COALESCE(SUM(ajl.debit_amount::numeric), 0) AS advances
       FROM accounting_journal_lines ajl
       JOIN accounting_journal_entries aje ON aje.id = ajl.entry_id
