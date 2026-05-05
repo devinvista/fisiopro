@@ -113,6 +113,48 @@
       "when": 1777766400000,
       "tag": "0015_clinic_contract_clauses",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1778000000000,
+      "tag": "0016_treatment_plans_cancellation",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1778001000000,
+      "tag": "0017_clinics_use_v2_acceptance_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778002000000,
+      "tag": "0018_default_v2_for_new_clinics",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778003000000,
+      "tag": "0019_remove_v1_acceptance_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778004000000,
+      "tag": "0020_treatment_plan_slot_holds",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778005000000,
+      "tag": "0021_patient_cross_clinic",
+      "breakpoints": true
     }
   ]
 }
