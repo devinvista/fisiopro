@@ -24,4 +24,5 @@ export * from "./coupons";
 export * from "./patient-wallet";
 export * from "./accounting";
 export * from "./lgpd";
+export * from "./patient-access-requests";
 export * from "../plan-features";

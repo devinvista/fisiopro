@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { patientsTable, appointmentsTable, financialRecordsTable } from "@workspace/db";
-import { eq, ilike, or, and, sql, desc, isNull, lt } from "drizzle-orm";
+import { patientsTable, appointmentsTable, financialRecordsTable, clinicsTable } from "@workspace/db";
+import { eq, ilike, or, and, sql, desc, isNull, lt, ne } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireActiveSubscription, enforceLimit } from "../../../middleware/subscription.js";
@@ -12,14 +12,12 @@ import { buildPage, clampLimit, decodeCursor } from "../../../utils/pagination.j
 import { z } from "zod/v4";
 
 const listPatientsQuerySchema = listQuerySchema.extend({
-  /** Compat: o frontend ainda usa `?search=` no lugar de `?q=`. */
   search: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
   ),
 });
 
-// Accepts a valid YYYY-MM-DD string, an empty string (treated as null), or null/undefined.
 const birthDateField = z
   .union([
     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "birthDate deve estar no formato YYYY-MM-DD"),
@@ -29,7 +27,6 @@ const birthDateField = z
   .optional()
   .transform((v) => (v === "" ? null : v ?? null));
 
-// Accepts a valid e-mail, an empty string (treated as null), or null/undefined.
 const emailField = z
   .union([z.email("E-mail inválido"), z.literal(""), z.null()])
   .optional()
@@ -56,15 +53,12 @@ function normalizeCpf(value: string): string {
 function validateCpf(cpf: string): boolean {
   const d = cpf.replace(/\D/g, "");
   if (d.length !== 11) return false;
-  // Reject all-same-digit sequences (000...000, 111...111, etc.)
   if (/^(\d)\1{10}$/.test(d)) return false;
-  // First check digit
   let sum = 0;
   for (let i = 0; i < 9; i++) sum += parseInt(d[i]) * (10 - i);
   let rem = (sum * 10) % 11;
   if (rem === 10 || rem === 11) rem = 0;
   if (rem !== parseInt(d[9])) return false;
-  // Second check digit
   sum = 0;
   for (let i = 0; i < 10; i++) sum += parseInt(d[i]) * (11 - i);
   rem = (sum * 10) % 11;
@@ -76,6 +70,9 @@ function validateCpf(cpf: string): boolean {
 function isDuplicateKeyError(err: any): boolean {
   return err?.code === "23505" || err?.cause?.code === "23505";
 }
+
+/** Campos demográficos básicos que devem ser sincronizados entre clínicas */
+const DEMOGRAPHIC_FIELDS = ["name", "birthDate", "phone", "email", "address", "profession", "emergencyContact"] as const;
 
 const router = Router();
 router.use(authMiddleware);
@@ -109,8 +106,6 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
         )
       : null;
 
-    // Paginação cursor: ordenamos por createdAt desc, id desc (desempate).
-    // Cursor carrega o createdAt ISO da última linha + id.
     const cursorCondition = cursor
       ? or(
           lt(patientsTable.createdAt, new Date(cursor.v as string)),
@@ -132,7 +127,6 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
         .where(whereCondition)
         .orderBy(desc(patientsTable.createdAt), desc(patientsTable.id))
         .limit(limit + 1),
-      // Total só na primeira página (sem cursor) — evita custo em scroll infinito.
       cursor
         ? Promise.resolve(null)
         : db.select({ count: sql<number>`count(*)` }).from(patientsTable).where(countWhere),
@@ -165,6 +159,60 @@ router.post("/", requirePermission("patients.create"), enforceLimit("patients"),
       return;
     }
 
+    // Verificar se o CPF já existe em OUTRA clínica (antes de tentar inserir)
+    if (req.clinicId) {
+      const existingInOtherClinic = await db
+        .select({
+          id: patientsTable.id,
+          name: patientsTable.name,
+          phone: patientsTable.phone,
+          email: patientsTable.email,
+          birthDate: patientsTable.birthDate,
+          cpf: patientsTable.cpf,
+          address: patientsTable.address,
+          profession: patientsTable.profession,
+          emergencyContact: patientsTable.emergencyContact,
+          clinicId: patientsTable.clinicId,
+        })
+        .from(patientsTable)
+        .where(
+          and(
+            eq(patientsTable.cpf, normalizedCpf),
+            ne(patientsTable.clinicId, req.clinicId),
+            isNull(patientsTable.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (existingInOtherClinic.length > 0) {
+        const existing = existingInOtherClinic[0]!;
+        // Buscar nome da clínica de origem
+        const [sourceClinic] = await db
+          .select({ name: clinicsTable.name })
+          .from(clinicsTable)
+          .where(eq(clinicsTable.id, existing.clinicId!));
+
+        res.status(409).json({
+          error: "Conflict",
+          code: "CPF_EXISTS_OTHER_CLINIC",
+          message: "Este CPF já está cadastrado em outra clínica.",
+          patient: {
+            id: existing.id,
+            name: existing.name,
+            phone: existing.phone,
+            email: existing.email,
+            birthDate: existing.birthDate,
+            cpf: existing.cpf,
+            address: existing.address,
+            profession: existing.profession,
+            emergencyContact: existing.emergencyContact,
+          },
+          sourceClinic: sourceClinic?.name ?? "outra clínica",
+        });
+        return;
+      }
+    }
+
     const [patient] = await db
       .insert(patientsTable)
       .values({
@@ -192,7 +240,107 @@ router.post("/", requirePermission("patients.create"), enforceLimit("patients"),
     res.status(201).json(patient);
   } catch (err: any) {
     if (isDuplicateKeyError(err)) {
-      res.status(409).json({ error: "Conflict", message: "CPF já cadastrado" });
+      res.status(409).json({ error: "Conflict", message: "CPF já cadastrado nesta clínica" });
+      return;
+    }
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+/**
+ * POST /api/patients/import-by-cpf
+ * Importa dados básicos de um paciente já cadastrado em outra clínica.
+ * Cria um novo registro vinculado à clínica atual, apontando sourcePatientId
+ * para o paciente original.
+ */
+router.post("/import-by-cpf", requirePermission("patients.create"), enforceLimit("patients"), async (req: AuthRequest, res) => {
+  try {
+    const schema = z.object({
+      cpf: z.string().min(1),
+      notes: z.string().max(2000).optional().nullable(),
+    });
+    const parsed = validateBody(schema, req.body, res);
+    if (!parsed) return;
+
+    const normalizedCpf = normalizeCpf(parsed.cpf);
+    if (!validateCpf(normalizedCpf)) {
+      res.status(400).json({ error: "Bad Request", message: "CPF inválido." });
+      return;
+    }
+
+    if (!req.clinicId) {
+      res.status(400).json({ error: "Bad Request", message: "Clínica não identificada." });
+      return;
+    }
+
+    // Verificar se já existe nesta clínica
+    const alreadyExists = await db
+      .select({ id: patientsTable.id })
+      .from(patientsTable)
+      .where(
+        and(
+          eq(patientsTable.cpf, normalizedCpf),
+          eq(patientsTable.clinicId, req.clinicId),
+          isNull(patientsTable.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (alreadyExists.length > 0) {
+      res.status(409).json({ error: "Conflict", message: "Paciente já cadastrado nesta clínica." });
+      return;
+    }
+
+    // Buscar dados do paciente de origem (outra clínica)
+    const [source] = await db
+      .select()
+      .from(patientsTable)
+      .where(
+        and(
+          eq(patientsTable.cpf, normalizedCpf),
+          ne(patientsTable.clinicId, req.clinicId),
+          isNull(patientsTable.deletedAt),
+        ),
+      )
+      .orderBy(patientsTable.id)
+      .limit(1);
+
+    if (!source) {
+      res.status(404).json({ error: "Not Found", message: "Paciente não encontrado em nenhuma outra clínica." });
+      return;
+    }
+
+    const [patient] = await db
+      .insert(patientsTable)
+      .values({
+        name: source.name,
+        cpf: source.cpf,
+        birthDate: source.birthDate,
+        phone: source.phone,
+        email: source.email,
+        address: source.address,
+        profession: source.profession,
+        emergencyContact: source.emergencyContact,
+        notes: parsed.notes || null,
+        clinicId: req.clinicId,
+        sourcePatientId: source.id,
+      })
+      .returning();
+
+    await logAudit({
+      userId: req.userId,
+      patientId: patient?.id,
+      action: "create",
+      entityType: "patient",
+      entityId: patient?.id,
+      summary: `Paciente importado de outra clínica: ${source.name}`,
+    });
+
+    res.status(201).json(patient);
+  } catch (err: any) {
+    if (isDuplicateKeyError(err)) {
+      res.status(409).json({ error: "Conflict", message: "Paciente já cadastrado nesta clínica." });
       return;
     }
     console.error(err);
@@ -297,6 +445,33 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
       res.status(404).json({ error: "Not Found", message: "Paciente não encontrado" });
       return;
     }
+
+    // Sincronizar campos demográficos básicos para todos os registros com o mesmo CPF em outras clínicas
+    const currentCpf = patient.cpf;
+    const demographicUpdate: Record<string, any> = {};
+    if (name !== undefined) demographicUpdate.name = name;
+    if (birthDate !== undefined) demographicUpdate.birthDate = birthDate || null;
+    if (phone !== undefined) demographicUpdate.phone = phone;
+    if (email !== undefined) demographicUpdate.email = email || null;
+    if (address !== undefined) demographicUpdate.address = address || null;
+    if (profession !== undefined) demographicUpdate.profession = profession || null;
+    if (emergencyContact !== undefined) demographicUpdate.emergencyContact = emergencyContact || null;
+    // CPF update: sync new CPF to all sibling records
+    if (cpf !== undefined && cpf !== currentCpf) demographicUpdate.cpf = cpf;
+
+    if (Object.keys(demographicUpdate).length > 0) {
+      await db
+        .update(patientsTable)
+        .set(demographicUpdate)
+        .where(
+          and(
+            eq(patientsTable.cpf, currentCpf),
+            ne(patientsTable.id, id),
+            isNull(patientsTable.deletedAt),
+          ),
+        );
+    }
+
     await logAudit({
       userId: req.userId,
       patientId: id,

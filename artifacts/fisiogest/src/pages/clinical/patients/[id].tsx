@@ -38,7 +38,7 @@ import {
   Check, ArrowUpRight, Zap, X,
   Wallet, TrendingDown, ArrowDownRight,
   Sparkles, Leaf, Droplets, Sun, Dumbbell, Scale, Ruler, FlaskConical,
-  ShieldCheck, Link2, Camera,
+  ShieldCheck, Link2, Camera, UserPlus, Building2, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
@@ -412,6 +412,128 @@ function ExportLgpdButton({ patientId }: { patientId: number }) {
   );
 }
 
+// ─── Access Requests Panel ───────────────────────────────────────────────────
+
+interface AccessRequest {
+  id: number;
+  requestingClinicId: number;
+  requestingClinicName: string;
+  scope: string;
+  status: "pending" | "approved" | "denied";
+  message?: string | null;
+  createdAt: string;
+}
+
+function AccessRequestsPanel({ cpf }: { cpf: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, refetch } = useQuery<AccessRequest[]>({
+    queryKey: ["/api/patients/access-requests/incoming", cpf],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/patients/access-requests/incoming?cpf=${encodeURIComponent(cpf)}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: "approved" | "denied" }) => {
+      const csrfCookie = document.cookie
+        .split(";")
+        .find((c) => c.trim().startsWith("fisiogest_csrf="))
+        ?.split("=")[1];
+      const res = await apiFetch(`/api/patients/access-requests/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfCookie ? { "x-csrf-token": decodeURIComponent(csrfCookie) } : {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Falha ao responder solicitação");
+      return res.json();
+    },
+    onSuccess: (_, vars) => {
+      toast({
+        title: vars.status === "approved" ? "Acesso aprovado" : "Acesso negado",
+        description: vars.status === "approved"
+          ? "A outra clínica poderá visualizar os dados clínicos deste paciente."
+          : "A solicitação foi recusada.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/patients/access-requests/incoming", cpf] });
+      refetch();
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível processar a resposta." });
+    },
+  });
+
+  const pending = (data ?? []).filter((r) => r.status === "pending");
+
+  if (isLoading || pending.length === 0) return null;
+
+  return (
+    <Card className="border-none shadow-xl bg-white overflow-hidden">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-primary/10">
+            <Bell className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Solicitações de acesso</p>
+            <p className="text-xs text-slate-500">Dados clínicos deste paciente</p>
+          </div>
+          <span className="ml-auto flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">
+            {pending.length}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {pending.map((req) => (
+            <div key={req.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <Building2 className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-slate-700 truncate">{req.requestingClinicName}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {new Date(req.createdAt).toLocaleDateString("pt-BR")} · {req.scope === "clinical_records" ? "Prontuário completo" : req.scope}
+                  </p>
+                  {req.message && (
+                    <p className="text-[10px] text-slate-500 mt-1 italic">"{req.message}"</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-7 text-[11px] rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+                  disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: req.id, status: "denied" })}
+                >
+                  <XCircle className="w-3 h-3 mr-1" /> Negar
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 h-7 text-[11px] rounded-lg bg-primary hover:bg-primary/90"
+                  disabled={respondMutation.isPending}
+                  onClick={() => respondMutation.mutate({ id: req.id, status: "approved" })}
+                >
+                  {respondMutation.isPending
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <><CheckCircle className="w-3 h-3 mr-1" /> Aprovar</>
+                  }
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function PatientDetail() {
@@ -621,6 +743,11 @@ export default function PatientDetail() {
               )}
             </CardContent>
           </Card>
+
+          {/* ── Solicitações de acesso a dados clínicos ── */}
+          {canEdit && patient.cpf && (
+            <AccessRequestsPanel cpf={patient.cpf} />
+          )}
         </div>
 
         {/* Main Content */}

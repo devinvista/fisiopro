@@ -9,6 +9,7 @@ import storageRouter from "./storage/storage.routes.js";
 
 // Clinical domain
 import patientsRouter from "./clinical/patients/patients.routes.js";
+import patientAccessRequestsRouter from "./clinical/patients/patient-access-requests.routes.js";
 import appointmentsRouter from "./clinical/appointments/appointments.routes.js";
 import schedulesRouter from "./clinical/schedules/schedules.routes.js";
 import medicalRecordsRouter from "./clinical/medical-records/medical-records.routes.js";
@@ -75,6 +76,7 @@ router.use("/audit-log", auditLogRouter);
 router.use("/admin/data-cleanup", dataCleanupRouter);
 
 // Clinical
+router.use("/patients", patientAccessRequestsRouter);
 router.use("/patients", patientsRouter);
 router.use("/patients/:patientId", medicalRecordsRouter);
 router.use("/patients/:patientId", patientJourneyRouter);

@@ -524,6 +524,18 @@ function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
 
 // ─── Create Patient Form ──────────────────────────────────────────────────────
 
+interface CrossClinicPatient {
+  id: number;
+  name: string;
+  cpf: string;
+  phone: string;
+  email?: string | null;
+  birthDate?: string | null;
+  address?: string | null;
+  profession?: string | null;
+  emergencyContact?: string | null;
+}
+
 function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: "",
@@ -536,11 +548,20 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
     emergencyContact: "",
     notes: "",
   });
+
+  // Estado do fluxo de importação cross-clínica
+  const [crossClinicPatient, setCrossClinicPatient] = useState<CrossClinicPatient | null>(null);
+  const [crossClinicName, setCrossClinicName] = useState<string>("");
+  const [isImporting, setIsImporting] = useState(false);
+
   const mutation = useCreatePatient();
   const { toast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Se já detectamos um paciente em outra clínica, não prosseguir com criação normal
+    if (crossClinicPatient) return;
+
     const parsed = patientFormSchema.safeParse(formData);
     if (!parsed.success) {
       const first = parsed.error.issues[0];
@@ -560,12 +581,57 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
           onSuccess();
         },
         onError: (err: any) => {
-          const message =
-            err?.data?.message ?? err?.message ?? "Falha ao cadastrar paciente.";
+          const data = err?.data ?? {};
+          // CPF existe em outra clínica → oferecer importação
+          if (err?.status === 409 && data?.code === "CPF_EXISTS_OTHER_CLINIC") {
+            setCrossClinicPatient(data.patient);
+            setCrossClinicName(data.sourceClinic ?? "outra clínica");
+            return;
+          }
+          const message = data?.message ?? err?.message ?? "Falha ao cadastrar paciente.";
           toast({ variant: "destructive", title: "Erro", description: message });
         },
       }
     );
+  };
+
+  const handleImport = async () => {
+    if (!crossClinicPatient) return;
+    setIsImporting(true);
+    try {
+      const csrfCookie = document.cookie
+        .split(";")
+        .find((c) => c.trim().startsWith("fisiogest_csrf="))
+        ?.split("=")[1];
+
+      const res = await fetch("/api/patients/import-by-cpf", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfCookie ? { "x-csrf-token": decodeURIComponent(csrfCookie) } : {}),
+        },
+        body: JSON.stringify({ cpf: crossClinicPatient.cpf, notes: formData.notes || undefined }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Erro ao importar", description: err?.message ?? "Tente novamente." });
+        return;
+      }
+
+      toast({ title: "Paciente importado!", description: `${crossClinicPatient.name} foi adicionado à sua clínica com os dados básicos já preenchidos.` });
+      onSuccess();
+    } catch {
+      toast({ variant: "destructive", title: "Erro de conexão", description: "Não foi possível importar o paciente." });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDismissImport = () => {
+    setCrossClinicPatient(null);
+    setCrossClinicName("");
   };
 
   return (
@@ -573,122 +639,201 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
       <DialogHeader>
         <DialogTitle className="font-display text-2xl">Novo Paciente</DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label>Nome Completo *</Label>
-          <Input
-            required
-            value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: maskName(e.target.value) })
-            }
-            onBlur={(e) =>
-              setFormData({ ...formData, name: maskName(e.target.value).trimEnd() })
-            }
-            placeholder="Ex.: Maria da Silva"
-            autoComplete="name"
-            className="h-11"
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+
+      {/* ── Banner de importação cross-clínica ── */}
+      {crossClinicPatient && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 p-1.5 rounded-lg bg-amber-100 shrink-0">
+              <UserPlus className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">CPF já cadastrado em outra clínica</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Este CPF pertence a <span className="font-medium">{crossClinicPatient.name}</span>, cadastrado em <span className="font-medium">{crossClinicName}</span>.
+                Você pode importar os dados básicos para esta clínica.
+              </p>
+            </div>
+          </div>
+
+          {/* Dados resumidos do paciente existente */}
+          <div className="rounded-lg bg-white border border-amber-100 p-3 space-y-1.5 text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <span className="font-medium w-20 text-slate-400">Nome</span>
+              <span>{crossClinicPatient.name}</span>
+            </div>
+            {crossClinicPatient.phone && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium w-20 text-slate-400">Telefone</span>
+                <span>{crossClinicPatient.phone}</span>
+              </div>
+            )}
+            {crossClinicPatient.email && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium w-20 text-slate-400">E-mail</span>
+                <span>{crossClinicPatient.email}</span>
+              </div>
+            )}
+            {crossClinicPatient.birthDate && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium w-20 text-slate-400">Nasc.</span>
+                <span>{new Date(crossClinicPatient.birthDate + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2">
-            <Label>CPF *</Label>
+            <p className="text-xs text-amber-700">Observações específicas desta clínica (opcional):</p>
+            <Textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Histórico, alergias, restrições…"
+              className="resize-none min-h-[60px] text-sm"
+            />
+          </div>
+
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={handleDismissImport}
+              className="flex-1 sm:flex-none h-9 px-4 rounded-lg text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <Button
+              type="button"
+              onClick={handleImport}
+              disabled={isImporting}
+              className="flex-1 h-9 px-5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+            >
+              {isImporting
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Importando…</>
+                : <><UserPlus className="w-3.5 h-3.5" /> Importar dados básicos</>
+              }
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Formulário normal (oculto quando há conflito cross-clínica) ── */}
+      {!crossClinicPatient && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Nome Completo *</Label>
             <Input
               required
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={14}
-              value={formData.cpf}
-              onChange={(e) => setFormData({ ...formData, cpf: maskCpf(e.target.value) })}
-              placeholder="000.000.000-00"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: maskName(e.target.value) })
+              }
+              onBlur={(e) =>
+                setFormData({ ...formData, name: maskName(e.target.value).trimEnd() })
+              }
+              placeholder="Ex.: Maria da Silva"
+              autoComplete="name"
               className="h-11"
             />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <Label>CPF *</Label>
+              <Input
+                required
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={14}
+                value={formData.cpf}
+                onChange={(e) => setFormData({ ...formData, cpf: maskCpf(e.target.value) })}
+                placeholder="000.000.000-00"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Telefone *</Label>
+              <Input
+                required
+                type="tel"
+                inputMode="tel"
+                autoComplete="off"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
+                placeholder="(11) 99999-0000"
+                className="h-11"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                inputMode="email"
+                autoComplete="off"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="nome@exemplo.com"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Nascimento</Label>
+              <DatePickerPTBR
+                value={formData.birthDate}
+                onChange={(v) => setFormData({ ...formData, birthDate: v })}
+                className="h-11"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <Label>Profissão</Label>
+              <Input
+                value={formData.profession}
+                onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
+                placeholder="Ex: Professora"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Endereço</Label>
+              <Input
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                placeholder="Rua e número"
+                className="h-11"
+              />
+            </div>
+          </div>
           <div className="space-y-2">
-            <Label>Telefone *</Label>
+            <Label>Contato de Emergência</Label>
             <Input
-              required
-              type="tel"
-              inputMode="tel"
-              autoComplete="off"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-              placeholder="(11) 99999-0000"
-              className="h-11"
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div className="space-y-2">
-            <Label>E-mail</Label>
-            <Input
-              type="email"
-              inputMode="email"
-              autoComplete="off"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="nome@exemplo.com"
+              value={formData.emergencyContact}
+              onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+              placeholder="Nome — Telefone"
               className="h-11"
             />
           </div>
           <div className="space-y-2">
-            <Label>Data de Nascimento</Label>
-            <DatePickerPTBR
-              value={formData.birthDate}
-              onChange={(v) => setFormData({ ...formData, birthDate: v })}
-              className="h-11"
+            <Label>Observações</Label>
+            <Textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Histórico, alergias, restrições…"
+              className="resize-none min-h-[80px]"
             />
           </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          <div className="space-y-2">
-            <Label>Profissão</Label>
-            <Input
-              value={formData.profession}
-              onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
-              placeholder="Ex: Professora"
-              className="h-11"
-            />
+          <div className="pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+            <Button
+              type="submit"
+              className="w-full sm:w-auto h-11 px-8 rounded-xl text-sm font-semibold"
+              disabled={mutation.isPending}
+            >
+              {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label>Endereço</Label>
-            <Input
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              placeholder="Rua e número"
-              className="h-11"
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label>Contato de Emergência</Label>
-          <Input
-            value={formData.emergencyContact}
-            onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-            placeholder="Nome — Telefone"
-            className="h-11"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Observações</Label>
-          <Textarea
-            value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="Histórico, alergias, restrições…"
-            className="resize-none min-h-[80px]"
-          />
-        </div>
-        <div className="pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-          <Button
-            type="submit"
-            className="w-full sm:w-auto h-11 px-8 rounded-xl text-sm font-semibold"
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
-          </Button>
-        </div>
-      </form>
+        </form>
+      )}
     </>
   );
 }

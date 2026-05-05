@@ -133,6 +133,27 @@ Any runtime, framework, or package manager dependency added to the project **MUS
 
 **Deployment:** `pnpm run build` then `pnpm run start` (runs `node artifacts/api-server/dist/index.cjs` which serves the built SPA from `artifacts/fisiogest/dist/public`).
 
+## Cross-Clinic Patient Identity
+
+Implemented in migration `0021_patient_cross_clinic.sql`:
+
+- **`patients.cpf` uniqueness**: global UNIQUE removed; replaced with `UNIQUE(cpf, clinic_id)` so the same CPF can exist across multiple clinics.
+- **`patients.source_patient_id`**: nullable self-reference FK pointing to the original record in the source clinic.
+- **`patient_access_requests` table**: tracks requests from one clinic to another for clinical data access (`scope: clinical_records`), with `status: pending | approved | denied`.
+
+**Backend routes (`/api/patients`):**
+- `POST /` — detects CPF in another clinic → returns `409 { code: "CPF_EXISTS_OTHER_CLINIC", patient, sourceClinic }`.
+- `POST /import-by-cpf` — copies basic demographic fields from the source record into the requesting clinic.
+- `PUT /:id` — after a demographic update, syncs `name, phone, email, birthDate, address, profession, emergencyContact` to all records sharing the same CPF across other clinics (`notes` is clinic-specific and is NOT synced).
+- `POST /access-requests` — send a clinical-data access request to the source clinic.
+- `GET /access-requests/incoming` — list pending requests for the current clinic (as source).
+- `GET /access-requests/outgoing` — list requests sent by the current clinic.
+- `PATCH /access-requests/:id` — approve or deny a pending request (source clinic only).
+
+**Frontend:**
+- `CreatePatientForm` (patients list page): on 409 `CPF_EXISTS_OTHER_CLINIC`, hides the normal form and shows an amber import banner with the existing patient's data and an "Import basic data" button.
+- `AccessRequestsPanel` (patient detail sidebar): invisible when there are no pending requests; shows a card per pending request with approve/deny buttons.
+
 ## External Dependencies
 
 - **PostgreSQL**: Primary database.
