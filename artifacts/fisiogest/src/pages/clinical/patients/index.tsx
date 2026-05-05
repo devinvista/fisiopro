@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListPatients, useCreatePatient } from "@workspace/api-client-react";
+import { useListPatients } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -553,14 +555,14 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
   const [crossClinicPatient, setCrossClinicPatient] = useState<CrossClinicPatient | null>(null);
   const [crossClinicName, setCrossClinicName] = useState<string>("");
   const [isImporting, setIsImporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const mutation = useCreatePatient();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Se já detectamos um paciente em outra clínica, não prosseguir com criação normal
-    if (crossClinicPatient) return;
+    if (crossClinicPatient || isSaving) return;
 
     const parsed = patientFormSchema.safeParse(formData);
     if (!parsed.success) {
@@ -572,27 +574,40 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
       });
       return;
     }
-    const payload = buildPatientPayload(parsed.data);
-    mutation.mutate(
-      { data: payload },
-      {
-        onSuccess: () => {
-          toast({ title: "Sucesso", description: "Paciente cadastrado com sucesso!" });
-          onSuccess();
-        },
-        onError: (err: any) => {
-          const data = err?.data ?? {};
-          // CPF existe em outra clínica → oferecer importação
-          if (err?.status === 409 && data?.code === "CPF_EXISTS_OTHER_CLINIC") {
-            setCrossClinicPatient(data.patient);
-            setCrossClinicName(data.sourceClinic ?? "outra clínica");
-            return;
-          }
-          const message = data?.message ?? err?.message ?? "Falha ao cadastrar paciente.";
-          toast({ variant: "destructive", title: "Erro", description: message });
-        },
+
+    setIsSaving(true);
+    try {
+      const res = await apiFetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPatientPayload(parsed.data)),
+      });
+
+      const body = await res.json().catch(() => ({}));
+
+      if (res.status === 409 && body?.code === "CPF_EXISTS_OTHER_CLINIC") {
+        setCrossClinicPatient(body.patient);
+        setCrossClinicName(body.sourceClinic ?? "outra clínica");
+        return;
       }
-    );
+
+      if (!res.ok) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: body?.message ?? "Falha ao cadastrar paciente.",
+        });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/patients"] });
+      toast({ title: "Sucesso", description: "Paciente cadastrado com sucesso!" });
+      onSuccess();
+    } catch {
+      toast({ variant: "destructive", title: "Erro de conexão", description: "Não foi possível cadastrar o paciente." });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleImport = async () => {
@@ -827,9 +842,9 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
             <Button
               type="submit"
               className="w-full sm:w-auto h-11 px-8 rounded-xl text-sm font-semibold"
-              disabled={mutation.isPending}
+              disabled={isSaving}
             >
-              {mutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
+              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
             </Button>
           </div>
         </form>

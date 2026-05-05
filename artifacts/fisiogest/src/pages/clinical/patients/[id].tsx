@@ -412,16 +412,20 @@ function ExportLgpdButton({ patientId }: { patientId: number }) {
   );
 }
 
-// ─── Access Requests Panel ───────────────────────────────────────────────────
+// ─── Access Requests Panels ──────────────────────────────────────────────────
 
 interface AccessRequest {
   id: number;
+  cpf: string;
   requestingClinicId: number;
   requestingClinicName: string;
+  sourceClinicId?: number;
+  sourceClinicName?: string;
   scope: string;
   status: "pending" | "approved" | "denied";
   message?: string | null;
   createdAt: string;
+  respondedAt?: string | null;
 }
 
 function AccessRequestsPanel({ cpf }: { cpf: string }) {
@@ -528,6 +532,80 @@ function AccessRequestsPanel({ cpf }: { cpf: string }) {
               </div>
             </div>
           ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Outgoing Access Requests Panel ──────────────────────────────────────────
+
+function OutgoingAccessRequestsPanel({ cpf }: { cpf: string }) {
+  const { data, isLoading } = useQuery<AccessRequest[]>({
+    queryKey: ["/api/patients/access-requests/outgoing", cpf],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/patients/access-requests/outgoing`);
+      if (!res.ok) return [];
+      const all: AccessRequest[] = await res.json();
+      const normalizedCpf = cpf.replace(/\D/g, "");
+      return all.filter((r) => r.cpf === normalizedCpf || (r as any).cpf?.replace?.(/\D/g, "") === normalizedCpf);
+    },
+    staleTime: 30_000,
+  });
+
+  if (isLoading || !data || data.length === 0) return null;
+
+  const statusConfig = {
+    pending: { label: "Aguardando", bg: "bg-amber-100", text: "text-amber-700", icon: <Clock className="w-3 h-3" /> },
+    approved: { label: "Aprovado", bg: "bg-green-100", text: "text-green-700", icon: <CheckCircle className="w-3 h-3" /> },
+    denied: { label: "Negado", bg: "bg-red-100", text: "text-red-600", icon: <XCircle className="w-3 h-3" /> },
+  };
+
+  return (
+    <Card className="border-none shadow-xl bg-white overflow-hidden">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-slate-100">
+            <ArrowUpRight className="w-4 h-4 text-slate-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Solicitações enviadas</p>
+            <p className="text-xs text-slate-500">Acesso a dados de outra clínica</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          {data.map((req) => {
+            const cfg = statusConfig[req.status];
+            return (
+              <div key={req.id} className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-1.5 min-w-0">
+                    <Building2 className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <p className="text-xs font-medium text-slate-700 truncate">
+                      {req.sourceClinicName ?? "Clínica de origem"}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${cfg.bg} ${cfg.text}`}>
+                    {cfg.icon} {cfg.label}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  {new Date(req.createdAt).toLocaleDateString("pt-BR")} · {req.scope === "clinical_records" ? "Prontuário completo" : req.scope}
+                </p>
+                {req.status === "approved" && (
+                  <p className="text-[10px] text-green-600 font-medium">
+                    Aprovado em {req.respondedAt ? new Date(req.respondedAt).toLocaleDateString("pt-BR") : "—"}
+                  </p>
+                )}
+                {req.status === "denied" && (
+                  <p className="text-[10px] text-red-500 font-medium">
+                    Negado em {req.respondedAt ? new Date(req.respondedAt).toLocaleDateString("pt-BR") : "—"}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
@@ -747,6 +825,11 @@ export default function PatientDetail() {
           {/* ── Solicitações de acesso a dados clínicos ── */}
           {canEdit && patient.cpf && (
             <AccessRequestsPanel cpf={patient.cpf} />
+          )}
+
+          {/* ── Solicitações enviadas a outras clínicas ── */}
+          {patient.cpf && (
+            <OutgoingAccessRequestsPanel cpf={patient.cpf} />
           )}
         </div>
 
