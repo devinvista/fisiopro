@@ -55,17 +55,19 @@ router.get("/records", requirePermission("financial.read"), async (req: AuthRequ
     if (q.type) conditions.push(eq(financialRecordsTable.type, q.type));
     if (q.month && q.year) {
       const { startDate, endDate } = monthDateRange(q.year, q.month);
+      // Princípio da competência: faturaPlano usa planMonthRef como data de
+      // competência (não paymentDate). Demais: paymentDate → dueDate → createdAt.
       conditions.push(
-        or(
-          and(isNotNull(financialRecordsTable.paymentDate), gte(financialRecordsTable.paymentDate, startDate), lte(financialRecordsTable.paymentDate, endDate)),
-          and(isNull(financialRecordsTable.paymentDate), isNotNull(financialRecordsTable.dueDate), gte(financialRecordsTable.dueDate, startDate), lte(financialRecordsTable.dueDate, endDate)),
-          and(
-            isNull(financialRecordsTable.paymentDate),
-            isNull(financialRecordsTable.dueDate),
-            gte(sql`DATE(${financialRecordsTable.createdAt})`, startDate),
-            lte(sql`DATE(${financialRecordsTable.createdAt})`, endDate),
-          ),
-        )!,
+        sql`(CASE
+          WHEN ${financialRecordsTable.transactionType} = 'faturaPlano'
+            AND ${financialRecordsTable.planMonthRef} IS NOT NULL
+          THEN ${financialRecordsTable.planMonthRef}::date
+          ELSE COALESCE(
+            ${financialRecordsTable.paymentDate}::date,
+            ${financialRecordsTable.dueDate}::date,
+            DATE(${financialRecordsTable.createdAt})
+          )
+        END) BETWEEN ${startDate}::date AND ${endDate}::date`,
       );
     }
 

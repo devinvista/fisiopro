@@ -17,14 +17,19 @@ import { recordDateFilter, revenueSummarySql, RECEIVABLE_TYPES } from "../shared
 import { getAccountingBalances } from "../../shared/accounting/accounting.service.js";
 
 /**
- * Data efetiva do registro financeiro para fins de relatório:
- * 1. paymentDate (se pago)
- * 2. dueDate (se a vencer)
- * 3. DATE(createdAt) (fallback)
+ * Data efetiva do registro financeiro para fins de relatório (competência):
+ * — faturaPlano com planMonthRef → usa planMonthRef (competência do serviço,
+ *   não a data do pagamento). Pagar em maio uma parcela de julho → julho.
+ * — Demais: paymentDate se pago, dueDate se pendente, createdAt como fallback.
  *
  * Espelha a regra usada por `recordDateFilter` no `financial-reports.service`.
  */
-const effectiveDateSql = sql<string>`COALESCE(${financialRecordsTable.paymentDate}::date, ${financialRecordsTable.dueDate}::date, DATE(${financialRecordsTable.createdAt}))`;
+const effectiveDateSql = sql<string>`CASE
+  WHEN ${financialRecordsTable.transactionType} = 'faturaPlano'
+    AND ${financialRecordsTable.planMonthRef} IS NOT NULL
+  THEN ${financialRecordsTable.planMonthRef}::date
+  ELSE COALESCE(${financialRecordsTable.paymentDate}::date, ${financialRecordsTable.dueDate}::date, DATE(${financialRecordsTable.createdAt}))
+END`;
 
 const router = Router();
 router.use(authMiddleware);
@@ -129,8 +134,11 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
         WHERE fr.type = 'receita'
           AND fr.status NOT IN ('estornado', 'cancelado')
           AND (fr.transaction_type IS NULL OR fr.transaction_type NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada'))
-          AND COALESCE(fr.payment_date::date, fr.due_date::date, DATE(fr.created_at))
-              BETWEEN ${startCond}::date AND ${endCond}::date
+          AND (CASE
+                 WHEN fr.transaction_type = 'faturaPlano' AND fr.plan_month_ref IS NOT NULL
+                 THEN fr.plan_month_ref::date
+                 ELSE COALESCE(fr.payment_date::date, fr.due_date::date, DATE(fr.created_at))
+               END) BETWEEN ${startCond}::date AND ${endCond}::date
           ${clinicCond}
       )
       SELECT p.id AS procedure_id,

@@ -54,26 +54,27 @@ export function monthDateRange(
   return monthDateRangeBRT(year, month);
 }
 
+/**
+ * Filtra registros financeiros pela data de **competência** (princípio da
+ * competência / régua contábil brasileira):
+ *
+ * — `faturaPlano` com `planMonthRef` preenchido → usa `planMonthRef` como
+ *   competência (independente de `paymentDate`). Pagar em maio uma parcela
+ *   de julho deve aparecer em julho, não em maio.
+ * — Demais registros: paymentDate se pago, dueDate se pendente,
+ *   DATE(createdAt) como fallback.
+ */
 export function recordDateFilter(startDate: string, endDate: string) {
-  return or(
-    and(
-      isNotNull(financialRecordsTable.paymentDate),
-      gte(financialRecordsTable.paymentDate, startDate),
-      lte(financialRecordsTable.paymentDate, endDate),
-    ),
-    and(
-      isNull(financialRecordsTable.paymentDate),
-      isNotNull(financialRecordsTable.dueDate),
-      gte(financialRecordsTable.dueDate, startDate),
-      lte(financialRecordsTable.dueDate, endDate),
-    ),
-    and(
-      isNull(financialRecordsTable.paymentDate),
-      isNull(financialRecordsTable.dueDate),
-      gte(sql`DATE(${financialRecordsTable.createdAt})`, startDate),
-      lte(sql`DATE(${financialRecordsTable.createdAt})`, endDate),
-    ),
-  )!;
+  return sql`(CASE
+    WHEN ${financialRecordsTable.transactionType} = 'faturaPlano'
+      AND ${financialRecordsTable.planMonthRef} IS NOT NULL
+    THEN ${financialRecordsTable.planMonthRef}::date
+    ELSE COALESCE(
+      ${financialRecordsTable.paymentDate}::date,
+      ${financialRecordsTable.dueDate}::date,
+      DATE(${financialRecordsTable.createdAt})
+    )
+  END) BETWEEN ${startDate}::date AND ${endDate}::date`;
 }
 
 export function monthlyCreditQuantity(sessionsPerWeek?: number | null): number {
