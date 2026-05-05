@@ -49,6 +49,7 @@ import lgpdRouter from "./lgpd/lgpd.routes.js";
 import clinicsRouter from "./admin/clinics/clinics.routes.js";
 import usersRouter from "./admin/users/users.routes.js";
 import auditLogRouter from "./admin/audit-log/audit-log.routes.js";
+import dataCleanupRouter from "./admin/data-cleanup/data-cleanup.routes.js";
 
 const router: IRouter = Router();
 
@@ -71,6 +72,7 @@ router.use("/lgpd", lgpdRouter);
 router.use("/clinics", clinicsRouter);
 router.use("/users", usersRouter);
 router.use("/audit-log", auditLogRouter);
+router.use("/admin/data-cleanup", dataCleanupRouter);
 
 // Clinical
 router.use("/patients", patientsRouter);

@@ -3,6 +3,7 @@ export { CouponsTab } from "./CouponsTab";
 export { FeatureMatrixTab } from "./FeatureMatrixTab";
 export { InadimplenciaTab } from "./InadimplenciaTab";
 export { KpiCard } from "./KpiCard";
+export { LimpezaTab } from "./LimpezaTab";
 export { PainelTab } from "./PainelTab";
 export { PaymentBadge } from "./PaymentBadge";
 export { PaymentsTab } from "./PaymentsTab";
