@@ -1,3 +1,8 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "7PafeRhkWRnX15_B3nI9a"
+uri = "file://fisiogest-pro.zip"
+type = "unspecified"
+title = "fisiogest-pro.zip — pacote de produção Hostinger"
