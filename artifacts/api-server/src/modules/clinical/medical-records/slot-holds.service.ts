@@ -11,8 +11,13 @@
  *   - Quando criamos/renovamos hold de um plano, validamos que cada slot:
  *       (a) não conflita com appointment EXISTENTE não-cancelado/faltou/remarcado;
  *       (b) não conflita com hold VIVO (`expires_at > now()`) de OUTRO plano.
- *   - Conflito = mesma `(date, scheduleId)` E intervalos `[start,end)` se
- *     sobrepõem.
+ *   - Para procedimentos INDIVIDUAIS (maxCapacity <= 1):
+ *       Conflito = mesma `(date, scheduleId)` E intervalos `[start,end)` se sobrepõem.
+ *   - Para SESSÕES EM GRUPO (maxCapacity > 1):
+ *       Conflito só ocorre quando a sessão está LOTADA (ocupações >= maxCapacity)
+ *       ou quando existe outra sessão do mesmo procedimento que se sobrepõe
+ *       mas começa num horário diferente. Isso espelha a lógica de
+ *       `getAvailableSlots()` e `checkConflict()` do módulo de agendamentos.
  *   - Se algum slot conflita, NADA é persistido — devolvemos a lista para
  *     a UI mostrar e o usuário escolher outro horário.
  *
@@ -29,6 +34,7 @@ import {
   treatmentPlansTable,
   appointmentsTable,
   treatmentPlanProceduresTable,
+  proceduresTable,
 } from "@workspace/db";
 import { and, eq, ne, sql, isNotNull, inArray } from "drizzle-orm";
 import { HttpError } from "../../../utils/httpError.js";
@@ -95,8 +101,11 @@ function intervalsOverlap(
          timeToMinutes(bStart) < timeToMinutes(aEnd);
 }
 
-/** True se dois slots compartilham (date, scheduleId) E overlap temporal. */
-function slotsConflict(a: HoldSlot, b: HoldSlot): boolean {
+/**
+ * True se dois slots individuais conflitam: mesma (date, scheduleId) E overlap temporal.
+ * Usado apenas para procedimentos individuais (maxCapacity <= 1).
+ */
+function slotsConflictIndividual(a: HoldSlot, b: HoldSlot): boolean {
   if (a.date !== b.date) return false;
   if (a.scheduleId !== b.scheduleId) return false;
   return intervalsOverlap(a.startTime, a.endTime, b.startTime, b.endTime);
@@ -153,7 +162,32 @@ function validateSlotShape(s: unknown): HoldSlot {
   return { itemId, date, startTime, endTime, scheduleId, procedureId };
 }
 
-// ─── Conflitos com appointments existentes ────────────────────────────────
+// ─── Carrega capacidades dos procedimentos ─────────────────────────────────
+
+interface ProcedureCapacity {
+  id: number;
+  name: string;
+  maxCapacity: number;
+}
+
+async function loadProcedureCapacities(
+  procedureIds: number[],
+): Promise<Map<number, ProcedureCapacity>> {
+  if (procedureIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      id: proceduresTable.id,
+      name: proceduresTable.name,
+      maxCapacity: proceduresTable.maxCapacity,
+    })
+    .from(proceduresTable)
+    .where(inArray(proceduresTable.id, procedureIds));
+  return new Map(
+    rows.map((r) => [r.id, { id: r.id, name: r.name, maxCapacity: r.maxCapacity ?? 1 }]),
+  );
+}
+
+// ─── Linha de appointment para análise de conflitos ───────────────────────
 
 interface AppointmentRow {
   id: number;
@@ -161,24 +195,22 @@ interface AppointmentRow {
   startTime: string;
   endTime: string;
   scheduleId: number | null;
+  procedureId: number | null;
 }
 
-async function findConflictingAppointments(
-  slots: HoldSlot[],
-): Promise<Array<{ slot: HoldSlot; appointmentId: number }>> {
-  if (slots.length === 0) return [];
-
-  // Otimização: agrupa por date para uma única query por data distinta.
-  const dates = Array.from(new Set(slots.map((s) => s.date)));
-  const scheduleIds = Array.from(new Set(slots.map((s) => s.scheduleId)));
-
-  const rows: AppointmentRow[] = await db
+async function loadExistingAppointments(
+  dates: string[],
+  scheduleIds: number[],
+): Promise<AppointmentRow[]> {
+  if (dates.length === 0 || scheduleIds.length === 0) return [];
+  return db
     .select({
       id: appointmentsTable.id,
       date: appointmentsTable.date,
       startTime: appointmentsTable.startTime,
       endTime: appointmentsTable.endTime,
       scheduleId: appointmentsTable.scheduleId,
+      procedureId: appointmentsTable.procedureId,
     })
     .from(appointmentsTable)
     .where(
@@ -188,17 +220,88 @@ async function findConflictingAppointments(
         sql`${appointmentsTable.status} NOT IN ('cancelado','faltou','remarcado')`,
       ),
     );
+}
 
-  const out: Array<{ slot: HoldSlot; appointmentId: number }> = [];
+// ─── Conflitos com appointments existentes ────────────────────────────────
+
+/**
+ * Verifica conflitos dos slots contra appointments já existentes,
+ * respeitando a lógica de capacidade para sessões em grupo.
+ *
+ * - Individual (maxCapacity <= 1): qualquer sobreposição em (date, scheduleId)
+ *   é conflito — comportamento original.
+ * - Grupo (maxCapacity > 1): conflito apenas se a sessão estiver LOTADA
+ *   (count de mesma procedureId+startTime >= maxCapacity) ou se existir
+ *   outra sessão do mesmo procedimento com startTime diferente sobreposto.
+ */
+function findConflictingAppointments(
+  slots: HoldSlot[],
+  rows: AppointmentRow[],
+  capacityMap: Map<number, ProcedureCapacity>,
+): Array<{ slot: HoldSlot; appointmentId: number; message: string }> {
+  const out: Array<{ slot: HoldSlot; appointmentId: number; message: string }> = [];
+
   for (const slot of slots) {
-    const hit = rows.find(
-      (r) =>
-        r.date === slot.date &&
-        r.scheduleId === slot.scheduleId &&
-        intervalsOverlap(slot.startTime, slot.endTime, r.startTime, r.endTime),
-    );
-    if (hit) out.push({ slot, appointmentId: hit.id });
+    const proc = capacityMap.get(slot.procedureId);
+    const maxCap = proc?.maxCapacity ?? 1;
+    const procName = proc?.name ?? "";
+
+    if (maxCap > 1) {
+      // ── Sessão em grupo: espelha checkConflict() do módulo de appointments ──
+
+      // 1) Sessão do MESMO procedimento, startTime DIFERENTE, que se sobrepõe?
+      //    → bloqueia (não é a mesma sessão; times divergem).
+      const conflictingOther = rows.find(
+        (r) =>
+          r.date === slot.date &&
+          r.scheduleId === slot.scheduleId &&
+          r.procedureId === slot.procedureId &&
+          r.startTime !== slot.startTime &&
+          intervalsOverlap(slot.startTime, slot.endTime, r.startTime, r.endTime),
+      );
+      if (conflictingOther) {
+        out.push({
+          slot,
+          appointmentId: conflictingOther.id,
+          message: `Horário ${slot.date} ${slot.startTime}${procName ? ` para "${procName}"` : ""} conflita com outra sessão que começa às ${conflictingOther.startTime}.`,
+        });
+        continue;
+      }
+
+      // 2) Sessão LOTADA (mesmo procedureId + mesmo startTime)?
+      const sameSession = rows.filter(
+        (r) =>
+          r.date === slot.date &&
+          r.scheduleId === slot.scheduleId &&
+          r.procedureId === slot.procedureId &&
+          r.startTime === slot.startTime,
+      );
+      if (sameSession.length >= maxCap) {
+        out.push({
+          slot,
+          appointmentId: sameSession[0].id,
+          message: `Horário ${slot.date} ${slot.startTime}${procName ? ` para "${procName}"` : ""} está lotado (${sameSession.length}/${maxCap} vagas).`,
+        });
+      }
+      // Se sameSession.length < maxCap → há vagas → sem conflito.
+    } else {
+      // ── Procedimento individual: qualquer sobreposição em (date, scheduleId) ──
+      const hit = rows.find(
+        (r) =>
+          r.date === slot.date &&
+          r.scheduleId === slot.scheduleId &&
+          intervalsOverlap(slot.startTime, slot.endTime, r.startTime, r.endTime),
+      );
+      if (hit) {
+        out.push({
+          slot,
+          appointmentId: hit.id,
+          message: `Horário ${slot.date} ${slot.startTime} já tem consulta marcada nesta agenda.`,
+        });
+      }
+    }
   }
+
   return out;
 }
 
@@ -228,24 +331,85 @@ async function loadLiveHoldsExcept(planId: number): Promise<OtherPlanHoldRow[]> 
   return rows;
 }
 
-async function findConflictingHolds(
+/**
+ * Verifica conflitos dos slots contra holds vivos de outros planos,
+ * respeitando capacidade para sessões em grupo.
+ *
+ * - Individual: qualquer sobreposição em (date, scheduleId) é conflito.
+ * - Grupo: conflito apenas quando (appointments existentes + holds de
+ *   outros planos) para o mesmo (date, scheduleId, procedureId, startTime)
+ *   já preenchem todas as vagas.
+ *
+ * @param existingAppts Appointments já carregados (evita query dupla).
+ */
+function findConflictingHolds(
   slots: HoldSlot[],
-  excludePlanId: number,
-): Promise<Array<{ slot: HoldSlot; planId: number }>> {
-  if (slots.length === 0) return [];
-  const others = await loadLiveHoldsExcept(excludePlanId);
+  others: OtherPlanHoldRow[],
+  capacityMap: Map<number, ProcedureCapacity>,
+  existingAppts: AppointmentRow[],
+): Array<{ slot: HoldSlot; planId: number; message: string }> {
   if (others.length === 0) return [];
-  const out: Array<{ slot: HoldSlot; planId: number }> = [];
+
+  const out: Array<{ slot: HoldSlot; planId: number; message: string }> = [];
+
   for (const slot of slots) {
-    for (const other of others) {
-      const otherSlots = parseHoldsSafe(other.json);
-      const hit = otherSlots.find((b) => slotsConflict(slot, b));
-      if (hit) {
-        out.push({ slot, planId: other.planId });
-        break; // 1 conflito por slot é suficiente para a UI
+    const proc = capacityMap.get(slot.procedureId);
+    const maxCap = proc?.maxCapacity ?? 1;
+    const procName = proc?.name ?? "";
+
+    if (maxCap > 1) {
+      // ── Sessão em grupo ──────────────────────────────────────────────────
+      // Conta appointments existentes nesta mesma sessão.
+      const aptCount = existingAppts.filter(
+        (r) =>
+          r.date === slot.date &&
+          r.scheduleId === slot.scheduleId &&
+          r.procedureId === slot.procedureId &&
+          r.startTime === slot.startTime,
+      ).length;
+
+      // Conta holds de outros planos para a mesma sessão.
+      let holdCount = 0;
+      let firstConflictingPlanId: number | null = null;
+      for (const other of others) {
+        const otherSlots = parseHoldsSafe(other.json);
+        const matching = otherSlots.filter(
+          (b) =>
+            b.date === slot.date &&
+            b.scheduleId === slot.scheduleId &&
+            b.procedureId === slot.procedureId &&
+            b.startTime === slot.startTime,
+        );
+        if (matching.length > 0 && firstConflictingPlanId === null) {
+          firstConflictingPlanId = other.planId;
+        }
+        holdCount += matching.length;
+      }
+
+      if (aptCount + holdCount >= maxCap && firstConflictingPlanId !== null) {
+        out.push({
+          slot,
+          planId: firstConflictingPlanId,
+          message: `Horário ${slot.date} ${slot.startTime}${procName ? ` para "${procName}"` : ""} está sendo reservado por outro plano e não há vagas disponíveis (${aptCount + holdCount}/${maxCap}).`,
+        });
+      }
+    } else {
+      // ── Procedimento individual: qualquer sobreposição em (date, scheduleId) ──
+      for (const other of others) {
+        const otherSlots = parseHoldsSafe(other.json);
+        const hit = otherSlots.find((b) => slotsConflictIndividual(slot, b));
+        if (hit) {
+          out.push({
+            slot,
+            planId: other.planId,
+            message: `Horário ${slot.date} ${slot.startTime} foi reservado por outro plano em andamento.`,
+          });
+          break;
+        }
       }
     }
   }
+
   return out;
 }
 
@@ -263,6 +427,10 @@ export interface CreateHoldsResult {
  * Cria ou renova holds para um plano. Substitui qualquer hold anterior do
  * MESMO plano (idempotente). Falha (409) se algum slot conflita com
  * appointment existente OU com hold vivo de outro plano.
+ *
+ * Para sessões em grupo (maxCapacity > 1), o conflito só é emitido quando
+ * as vagas disponíveis estão esgotadas — espelhando a lógica de
+ * `getAvailableSlots()` e `checkConflict()`.
  */
 export async function createOrRenewHolds(
   planId: number,
@@ -309,8 +477,7 @@ export async function createOrRenewHolds(
     }
   }
 
-  // 2) Valida que o plano existe e ainda não foi materializado (hold em
-  //    plano materializado não faz sentido — os appointments já existem).
+  // 2) Valida que o plano existe e ainda não foi materializado.
   const [plan] = await db
     .select({
       id: treatmentPlansTable.id,
@@ -327,24 +494,36 @@ export async function createOrRenewHolds(
     );
   }
 
-  // 3) Detecta conflitos (appointments + holds de outros planos).
-  const [aptHits, holdHits] = await Promise.all([
-    findConflictingAppointments(slots),
-    findConflictingHolds(slots, planId),
+  // 3) Carrega capacidades de todos os procedimentos dos slots (uma query).
+  const uniqueProcedureIds = Array.from(new Set(slots.map((s) => s.procedureId)));
+  const capacityMap = await loadProcedureCapacities(uniqueProcedureIds);
+
+  // 4) Carrega appointments existentes uma única vez (compartilhado entre as
+  //    duas checagens de conflito para evitar queries redundantes).
+  const dates = Array.from(new Set(slots.map((s) => s.date)));
+  const scheduleIds = Array.from(new Set(slots.map((s) => s.scheduleId)));
+  const [existingAppts, liveHolds] = await Promise.all([
+    loadExistingAppointments(dates, scheduleIds),
+    loadLiveHoldsExcept(planId),
   ]);
+
+  // 5) Detecta conflitos aplicando regras de capacidade.
+  const aptHits = findConflictingAppointments(slots, existingAppts, capacityMap);
+  const holdHits = findConflictingHolds(slots, liveHolds, capacityMap, existingAppts);
+
   if (aptHits.length > 0 || holdHits.length > 0) {
     const conflicts: HoldConflict[] = [
-      ...aptHits.map(({ slot, appointmentId }) => ({
+      ...aptHits.map(({ slot, appointmentId, message }) => ({
         source: "appointment" as const,
         conflictingAppointmentId: appointmentId,
         slot,
-        message: `Horário ${slot.date} ${slot.startTime} já tem consulta marcada nesta agenda.`,
+        message,
       })),
-      ...holdHits.map(({ slot, planId: otherPlanId }) => ({
+      ...holdHits.map(({ slot, planId: otherPlanId, message }) => ({
         source: "hold" as const,
         conflictingPlanId: otherPlanId,
         slot,
-        message: `Horário ${slot.date} ${slot.startTime} foi reservado por outro plano em andamento.`,
+        message,
       })),
     ];
     throw new HttpError(
@@ -354,7 +533,7 @@ export async function createOrRenewHolds(
     );
   }
 
-  // 4) Persiste. Substitui hold anterior do mesmo plano.
+  // 6) Persiste. Substitui hold anterior do mesmo plano.
   const expiresAt = new Date(Date.now() + ttl * 60 * 1000);
   await db
     .update(treatmentPlansTable)
@@ -408,9 +587,8 @@ export async function getHolds(planId: number): Promise<HoldStatus> {
 
 /**
  * Conflitos para a materialização do plano. Enumera o que será criado e
- * checa contra holds vivos de OUTROS planos. Usado pelo orquestrador
- * `acceptAndMaterializePlan` para falhar com 409 antes de materializar
- * (evita rollback caro).
+ * checa contra holds vivos de OUTROS planos, respeitando capacidade de
+ * sessões em grupo.
  *
  * Não checa contra appointments — `materializeTreatmentPlan` já tem sua
  * própria validação de conflito.
@@ -421,9 +599,7 @@ export async function findConflictsForPlanMaterialization(
   const preview = await enumeratePlanAppointments(planId);
   if (preview.appointments.length === 0) return [];
 
-  // Para checar holds, precisamos do scheduleId de cada slot. O preview já
-  // contém date/startTime/endTime/itemId mas NÃO scheduleId — busca os
-  // scheduleIds dos itens de uma vez.
+  // Busca scheduleId e procedureId reais de cada item do plano.
   const itemIds = Array.from(new Set(preview.appointments.map((a) => a.itemId)));
   const itemRows = await db
     .select({
@@ -433,32 +609,49 @@ export async function findConflictsForPlanMaterialization(
     })
     .from(treatmentPlanProceduresTable)
     .where(inArray(treatmentPlanProceduresTable.id, itemIds));
+
   const scheduleByItem = new Map<number, number | null>(
     itemRows.map((r) => [r.id, r.scheduleId]),
+  );
+  const procedureByItem = new Map<number, number | null>(
+    itemRows.map((r) => [r.id, r.procedureId]),
   );
 
   const slots: HoldSlot[] = preview.appointments
     .map((a) => {
       const sId = scheduleByItem.get(a.itemId);
-      if (sId == null) return null; // sem agenda → mensalidades sem schedule
+      const pId = procedureByItem.get(a.itemId);
+      if (sId == null || pId == null) return null;
       return {
         itemId: a.itemId,
         date: a.date,
         startTime: a.startTime,
         endTime: a.endTime,
         scheduleId: sId,
-        procedureId: 0, // não usado na detecção
+        procedureId: pId,
       } as HoldSlot;
     })
     .filter((s): s is HoldSlot => s !== null);
 
   if (slots.length === 0) return [];
-  const hits = await findConflictingHolds(slots, planId);
-  return hits.map(({ slot, planId: otherPlanId }) => ({
+
+  // Carrega capacidades e appointments existentes para a checagem de grupo.
+  const uniqueProcedureIds = Array.from(new Set(slots.map((s) => s.procedureId)));
+  const dates = Array.from(new Set(slots.map((s) => s.date)));
+  const scheduleIds = Array.from(new Set(slots.map((s) => s.scheduleId)));
+
+  const [capacityMap, existingAppts, liveHolds] = await Promise.all([
+    loadProcedureCapacities(uniqueProcedureIds),
+    loadExistingAppointments(dates, scheduleIds),
+    loadLiveHoldsExcept(planId),
+  ]);
+
+  const hits = findConflictingHolds(slots, liveHolds, capacityMap, existingAppts);
+  return hits.map(({ slot, planId: otherPlanId, message }) => ({
     source: "hold" as const,
     conflictingPlanId: otherPlanId,
     slot,
-    message: `Horário ${slot.date} ${slot.startTime} foi reservado por outro plano em andamento.`,
+    message,
   }));
 }
 
