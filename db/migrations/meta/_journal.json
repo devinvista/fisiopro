@@ -162,6 +162,27 @@
       "when": 1778014500000,
       "tag": "0022_drop_global_cpf_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778020000000,
+      "tag": "0023_clinical_records_clinic_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778021000000,
+      "tag": "0024_patient_clinics_global",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778022000000,
+      "tag": "0025_clinic_id_not_null",
+      "breakpoints": true
     }
   ]
 }
