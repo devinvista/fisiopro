@@ -52,7 +52,7 @@ export async function listAppointments(filters: {
   const cursor = decodeCursor(filters.cursor);
 
   const conditions: any[] = [];
-  if (!ctx.isSuperAdmin && ctx.clinicId) {
+  if (ctx.clinicId) {
     conditions.push(eq(appointmentsTable.clinicId, ctx.clinicId));
   }
   if (!isAdminOrSecretary(ctx) && ctx.userRoles.includes("profissional") && ctx.userId) {
@@ -149,7 +149,7 @@ export async function getAvailableSlots(params: {
     .where(and(...apptConditions));
 
   const blockedConditions: any[] = [eq(blockedSlotsTable.date, date)];
-  if (!ctx.isSuperAdmin && ctx.clinicId) blockedConditions.push(eq(blockedSlotsTable.clinicId, ctx.clinicId));
+  if (ctx.clinicId) blockedConditions.push(eq(blockedSlotsTable.clinicId, ctx.clinicId));
   if (resolvedScheduleId) blockedConditions.push(eq(blockedSlotsTable.scheduleId, resolvedScheduleId));
 
   const blockedSlots = await db
@@ -356,7 +356,7 @@ export async function updateAppointment(id: number, body: {
     updateFields.confirmedAt = new Date();
   }
 
-  const updateWhere = (!ctx.isSuperAdmin && ctx.clinicId)
+  const updateWhere = ctx.clinicId
     ? and(eq(appointmentsTable.id, id), eq(appointmentsTable.clinicId, ctx.clinicId))
     : eq(appointmentsTable.id, id);
 
@@ -387,7 +387,7 @@ export async function updateAppointment(id: number, body: {
 
 // ─── Delete ──────────────────────────────────────────────────────────────────
 export async function deleteAppointment(id: number, ctx: AuthCtx) {
-  const whereClause = (!ctx.isSuperAdmin && ctx.clinicId)
+  const whereClause = ctx.clinicId
     ? and(eq(appointmentsTable.id, id), eq(appointmentsTable.clinicId, ctx.clinicId))
     : eq(appointmentsTable.id, id);
   const [deleted] = await db.delete(appointmentsTable).where(whereClause).returning({ id: appointmentsTable.id });

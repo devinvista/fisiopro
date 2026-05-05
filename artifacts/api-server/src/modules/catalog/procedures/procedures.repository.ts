@@ -11,7 +11,7 @@ import type { AppointmentStatus } from "@workspace/shared-constants";
 
 /** Filtro de tenant: clinic-specific OR global (clinicId IS NULL). */
 export function tenantScopeCondition(clinicId: number | null | undefined, isSuperAdmin: boolean) {
-  if (isSuperAdmin || !clinicId) return undefined;
+  if (!clinicId) return undefined;
   return or(isNull(proceduresTable.clinicId), eq(proceduresTable.clinicId, clinicId));
 }
 
@@ -26,7 +26,7 @@ export async function listProceduresWithCosts(opts: {
   const { clinicId, isSuperAdmin, isAdmin, category, includeInactive } = opts;
 
   const conditions: any[] = [];
-  if (!isSuperAdmin && clinicId) {
+  if (clinicId) {
     conditions.push(or(isNull(proceduresTable.clinicId), eq(proceduresTable.clinicId, clinicId)));
   }
   if (category) conditions.push(ilike(proceduresTable.category, category));

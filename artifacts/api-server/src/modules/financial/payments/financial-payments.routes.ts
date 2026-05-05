@@ -76,7 +76,7 @@ router.get("/patients/:patientId/summary", requirePermission("financial.read"), 
     }
 
     const balances = await getAccountingBalances({
-      clinicId: (req as AuthRequest).isSuperAdmin ? null : (req as AuthRequest).clinicId,
+      clinicId: (req as AuthRequest).clinicId ?? null,
       patientId,
     });
     const balanceByCode = new Map(balances.map((row) => [row.code, { debit: Number(row.debit), credit: Number(row.credit) }]));

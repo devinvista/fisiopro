@@ -22,7 +22,7 @@ type P = { patientId: string };
 type PS = { patientId: string; stepId: string };
 
 async function checkClinicAccess(req: AuthRequest, patientId: number): Promise<boolean> {
-  if (req.isSuperAdmin || !req.clinicId) return true;
+  if (!req.clinicId) return true;
   const [patient] = await db
     .select({ id: patientsTable.id })
     .from(patientsTable)

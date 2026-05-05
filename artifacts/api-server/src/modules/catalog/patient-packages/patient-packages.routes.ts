@@ -59,7 +59,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
 
     const conditions: any[] = [];
     if (patientId) conditions.push(eq(patientPackagesTable.patientId, patientId));
-    if (!req.isSuperAdmin && req.clinicId) {
+    if (req.clinicId) {
       conditions.push(eq(patientPackagesTable.clinicId, req.clinicId));
     }
 
@@ -240,7 +240,7 @@ router.patch("/:id/consume-session", requirePermission("appointments.update"), a
   try {
     const id = parseInt(req.params.id as string);
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(patientPackagesTable.id, id)
       : and(eq(patientPackagesTable.id, id), eq(patientPackagesTable.clinicId, req.clinicId!));
 
@@ -280,7 +280,7 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
   try {
     const id = parseInt(req.params.id as string);
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(patientPackagesTable.id, id)
       : and(eq(patientPackagesTable.id, id), eq(patientPackagesTable.clinicId, req.clinicId!));
 
@@ -316,7 +316,7 @@ router.delete("/:id", requirePermission("patients.delete"), async (req: AuthRequ
   try {
     const id = parseInt(req.params.id as string);
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(patientPackagesTable.id, id)
       : and(eq(patientPackagesTable.id, id), eq(patientPackagesTable.clinicId, req.clinicId!));
 

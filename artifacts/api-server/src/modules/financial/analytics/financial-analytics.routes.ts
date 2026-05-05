@@ -252,7 +252,7 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
               ? and(cc, revenueSummarySql(), recordDateFilter(s, e))
               : and(revenueSummarySql(), recordDateFilter(s, e)),
           ),
-        getAccountingTotals({ clinicId: req.isSuperAdmin ? null : clinicId, startDate: s, endDate: e }),
+        getAccountingTotals({ clinicId: clinicId ?? null, startDate: s, endDate: e }),
       ]);
 
       const revenue = Number(revRow?.total ?? 0);

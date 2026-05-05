@@ -11,17 +11,17 @@ const router = Router();
 router.use(authMiddleware);
 
 function apptClinicFilter(req: AuthRequest) {
-  if (req.isSuperAdmin || !req.clinicId) return null;
+  if (!req.clinicId) return null;
   return eq(appointmentsTable.clinicId, req.clinicId);
 }
 
 function patientClinicFilter(req: AuthRequest) {
-  if (req.isSuperAdmin || !req.clinicId) return null;
+  if (!req.clinicId) return null;
   return eq(patientsTable.clinicId, req.clinicId);
 }
 
 function financialClinicFilter(req: AuthRequest) {
-  if (req.isSuperAdmin || !req.clinicId) return null;
+  if (!req.clinicId) return null;
   return eq(financialRecordsTable.clinicId, req.clinicId);
 }
 

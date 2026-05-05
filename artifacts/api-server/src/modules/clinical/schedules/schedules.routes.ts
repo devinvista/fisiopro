@@ -49,7 +49,7 @@ async function getScheduleWithProfessional(id: number) {
 router.get("/", requirePermission("appointments.read"), async (req: AuthRequest, res) => {
   try {
     const conditions = [];
-    if (!req.isSuperAdmin && req.clinicId) {
+    if (req.clinicId) {
       conditions.push(eq(schedulesTable.clinicId, req.clinicId));
     }
 
@@ -171,7 +171,7 @@ router.delete("/:id", requirePermission("settings.manage"), async (req: AuthRequ
   try {
     const id = parseInt(req.params.id as string);
 
-    const whereClause = (!req.isSuperAdmin && req.clinicId)
+    const whereClause = req.clinicId
       ? and(eq(schedulesTable.id, id), eq(schedulesTable.clinicId, req.clinicId))
       : eq(schedulesTable.id, id);
 

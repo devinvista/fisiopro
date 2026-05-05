@@ -55,7 +55,7 @@ router.get("/", requirePermission("procedures.manage"), async (req: AuthRequest,
     const packageType = req.query.packageType as string | undefined;
 
     const conditions: any[] = [];
-    if (!req.isSuperAdmin && req.clinicId) {
+    if (req.clinicId) {
       conditions.push(eq(packagesTable.clinicId, req.clinicId));
     }
     if (!includeInactive) {
@@ -108,7 +108,7 @@ router.get("/", requirePermission("procedures.manage"), async (req: AuthRequest,
 router.get("/:id", requirePermission("procedures.manage"), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(packagesTable.id, id)
       : and(eq(packagesTable.id, id), eq(packagesTable.clinicId, req.clinicId!));
 
@@ -167,7 +167,7 @@ router.put("/:id", requirePermission("procedures.manage"), async (req: AuthReque
     const body = validateBody(updatePackageSchema, req.body, res);
     if (!body) return;
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(packagesTable.id, id)
       : and(eq(packagesTable.id, id), eq(packagesTable.clinicId, req.clinicId!));
 
@@ -205,7 +205,7 @@ router.put("/:id", requirePermission("procedures.manage"), async (req: AuthReque
 router.delete("/:id", requirePermission("procedures.manage"), async (req: AuthRequest, res) => {
   try {
     const id = parseInt(req.params.id as string);
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? eq(packagesTable.id, id)
       : and(eq(packagesTable.id, id), eq(packagesTable.clinicId, req.clinicId!));
 

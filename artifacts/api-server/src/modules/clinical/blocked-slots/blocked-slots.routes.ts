@@ -33,7 +33,7 @@ router.get("/", requirePermission("appointments.read"), async (req: AuthRequest,
     if (endDate) conditions.push(lte(blockedSlotsTable.date, endDate as string));
     if (scheduleId) conditions.push(eq(blockedSlotsTable.scheduleId, parseInt(scheduleId as string)));
 
-    if (!req.isSuperAdmin && req.clinicId) {
+    if (req.clinicId) {
       conditions.push(eq(blockedSlotsTable.clinicId, req.clinicId));
     }
 
@@ -171,7 +171,7 @@ router.put("/:id", requirePermission("appointments.create"), async (req: AuthReq
       return;
     }
 
-    if (!req.isSuperAdmin && req.clinicId && existing.clinicId !== req.clinicId) {
+    if (req.clinicId && existing.clinicId !== req.clinicId) {
       res.status(403).json({ error: "Forbidden", message: "Acesso negado a este bloqueio" });
       return;
     }
@@ -214,7 +214,7 @@ router.delete("/:id", requirePermission("appointments.delete"), async (req: Auth
         res.status(404).json({ error: "Not Found", message: "Bloqueio não encontrado" });
         return;
       }
-      if (!req.isSuperAdmin && req.clinicId && slot.clinicId !== req.clinicId) {
+      if (req.clinicId && slot.clinicId !== req.clinicId) {
         res.status(403).json({ error: "Forbidden", message: "Acesso negado a este bloqueio" });
         return;
       }
@@ -237,7 +237,7 @@ router.delete("/:id", requirePermission("appointments.delete"), async (req: Auth
       res.status(404).json({ error: "Not Found", message: "Bloqueio não encontrado" });
       return;
     }
-    if (!req.isSuperAdmin && req.clinicId && slot.clinicId !== req.clinicId) {
+    if (req.clinicId && slot.clinicId !== req.clinicId) {
       res.status(403).json({ error: "Forbidden", message: "Acesso negado a este bloqueio" });
       return;
     }

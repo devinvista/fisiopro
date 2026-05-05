@@ -59,7 +59,7 @@ router.get("/wallet", requirePermission("patients.read"), async (req: AuthReques
       return;
     }
 
-    const clinicId = req.isSuperAdmin ? null : (req.clinicId ?? null);
+    const clinicId = req.clinicId ?? null;
 
     const wallet = await getOrCreateWallet(patientId, clinicId);
 
@@ -100,7 +100,7 @@ router.post("/wallet/deposit", requirePermission("financial.write"), async (req:
     const body = validateBody(depositSchema, req.body, res);
     if (!body) return;
 
-    const clinicId = req.isSuperAdmin ? null : (req.clinicId ?? null);
+    const clinicId = req.clinicId ?? null;
 
     // Busca nome do paciente
     const [patient] = await db
@@ -192,7 +192,7 @@ const walletListRouter = Router();
 
 walletListRouter.get("/wallet", authMiddleware as any, requirePermission("financial.read"), async (req: AuthRequest, res) => {
   try {
-    const clinicId = req.isSuperAdmin ? null : (req.clinicId ?? null);
+    const clinicId = req.clinicId ?? null;
 
     const conditions: any[] = [];
     if (clinicId) conditions.push(eq(patientWalletTable.clinicId, clinicId));

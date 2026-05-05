@@ -54,7 +54,7 @@ router.get("/monthly-revenue", requirePermission("reports.read"), async (req: Au
     const yearStartStr = `${year}-01-01`;
     const yearEndStr = `${year}-12-31`;
 
-    const clinicFilter = req.isSuperAdmin || !req.clinicId ? null : eq(financialRecordsTable.clinicId, req.clinicId);
+    const clinicFilter = !req.clinicId ? null : eq(financialRecordsTable.clinicId, req.clinicId);
     const dateInYear = recordDateFilter(yearStartStr, yearEndStr);
     const monthExpr = sql<number>`EXTRACT(MONTH FROM ${effectiveDateSql})::int`;
 
@@ -109,7 +109,7 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
     const year = parseInt(req.query.year as string) || brt.year;
     const { startDate, endDate } = monthDateRange(year, month);
 
-    const clinicId = req.isSuperAdmin || !req.clinicId ? null : req.clinicId;
+    const clinicId = req.clinicId ?? null;
 
     // Estratégia: resolver o procedure_id de cada financial_record numa subquery
     // (direto via fr.procedure_id; via fr.appointment_id → appointments.procedure_id como fallback),
@@ -182,7 +182,7 @@ router.get("/schedule-occupation", requirePermission("reports.read"), async (req
     const year = parseInt(authReq.query.year as string) || brt.year;
     const { startDate, endDate } = monthDateRange(year, month);
 
-    const clinicFilter = authReq.isSuperAdmin || !authReq.clinicId
+    const clinicFilter = !authReq.clinicId
       ? null
       : eq(appointmentsTable.clinicId, authReq.clinicId);
 

@@ -79,7 +79,7 @@ router.use(authMiddleware);
 router.use(requireActiveSubscription());
 
 function clinicFilter(req: AuthRequest) {
-  if (req.isSuperAdmin || !req.clinicId) return isNull(patientsTable.deletedAt);
+  if (!req.clinicId) return isNull(patientsTable.deletedAt);
   return and(eq(patientsTable.clinicId, req.clinicId), isNull(patientsTable.deletedAt));
 }
 
@@ -386,7 +386,7 @@ router.get("/:id", requirePermission("patients.read"), async (req: AuthRequest, 
   try {
     const id = parseIntParam(req.params.id, res, "ID do paciente");
     if (id === null) return;
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
       : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
 
@@ -455,7 +455,7 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
       cpf = normalizedCpf;
     }
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
       : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
 
@@ -526,7 +526,7 @@ router.delete("/:id", requirePermission("patients.delete"), async (req: AuthRequ
     const id = parseIntParam(req.params.id, res, "ID do paciente");
     if (id === null) return;
 
-    const condition = req.isSuperAdmin || !req.clinicId
+    const condition = !req.clinicId
       ? and(eq(patientsTable.id, id), isNull(patientsTable.deletedAt))
       : and(eq(patientsTable.id, id), eq(patientsTable.clinicId, req.clinicId!), isNull(patientsTable.deletedAt));
 

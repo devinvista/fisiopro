@@ -43,7 +43,7 @@ function patientIdParam(req: Request<P>): number {
 // ─── Tenant isolation: garante que o paciente pertence à clínica do usuário ──
 
 router.use(asyncHandler(async (req: AuthRequest, _res, next: NextFunction) => {
-  if (req.isSuperAdmin || !req.clinicId) return next();
+  if (!req.clinicId) return next();
   const patientId = parseInt(req.params.patientId as string);
   if (isNaN(patientId)) throw HttpError.badRequest("patientId inválido");
   const [patient] = await db

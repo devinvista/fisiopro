@@ -133,6 +133,41 @@ Any runtime, framework, or package manager dependency added to the project **MUS
 
 **Deployment:** `pnpm run build` then `pnpm run start` (runs `node artifacts/api-server/dist/index.cjs` which serves the built SPA from `artifacts/fisiogest/dist/public`).
 
+## Multi-Tenant Clinic Filter Rule
+
+**Critical pattern:** ALL clinic-scoped endpoints must use `!req.clinicId` (NOT `req.isSuperAdmin || !req.clinicId`) as the bypass condition for the clinic filter.
+
+**Correct pattern:**
+```typescript
+// ✅ Correct — filters by clinicId when present, even for super admins
+if (!req.clinicId) return null;
+return eq(table.clinicId, req.clinicId);
+
+// ❌ WRONG — super admin bypasses the filter even after switchClinic
+if (req.isSuperAdmin || !req.clinicId) return null;
+```
+
+**Why:** Super admins can call `POST /api/auth/switch-clinic` to get a JWT scoped to a specific clinic (clinicId encoded in the token). If the filter ignores clinicId for super admins, they will see ALL tenants' data pooled together — leaking one tenant's data into another tenant's view. Only a super admin with `clinicId = null` (no clinic context) should see cross-clinic data.
+
+**Files fixed (2025-05):**
+- `dashboard.routes.ts` — 3 helper functions
+- `financial/financial.repository.ts` — `clinicCond`, `apptClinicCond`, `assertPatientInClinic`
+- `financial/reports/reports.routes.ts` — `monthly-revenue`, `procedure-revenue`, `schedule-occupation`
+- `financial/dashboard/financial-dashboard.routes.ts` — 4 instances
+- `financial/analytics/financial-analytics.routes.ts`
+- `financial/patient-wallet/patient-wallet.routes.ts` — 3 instances
+- `financial/payments/financial-payments.routes.ts`
+- `catalog/procedures/procedures.repository.ts` — `tenantScopeCondition`, `listProceduresWithCosts`
+- `catalog/packages/packages.routes.ts` — 4 instances
+- `catalog/patient-packages/patient-packages.routes.ts` — 4 instances
+- `catalog/treatment-plan-procedures/treatment-plan-procedures.routes.ts` — 2 functions
+- `clinical/appointments/appointments.service.ts` — `listAppointments`, slots, update, delete
+- `clinical/patients/patients.routes.ts` — list filter + 3 individual operations
+- `clinical/patient-journey/patient-journey.routes.ts`
+- `clinical/medical-records/medical-records.routes.ts`
+- `clinical/schedules/schedules.routes.ts` — list + delete
+- `clinical/blocked-slots/blocked-slots.routes.ts` — list + ownership checks
+
 ## Cross-Clinic Patient Identity
 
 Implemented in migration `0021_patient_cross_clinic.sql`:

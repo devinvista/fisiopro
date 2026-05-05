@@ -36,8 +36,8 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
     const ac = apptClinicCond(req);
 
     const [accountingTotals, accountingBalances, revenueRow] = await Promise.all([
-      getAccountingTotals({ clinicId: req.isSuperAdmin ? null : req.clinicId, startDate, endDate }),
-      getAccountingBalances({ clinicId: req.isSuperAdmin ? null : req.clinicId }),
+      getAccountingTotals({ clinicId: req.clinicId ?? null, startDate, endDate }),
+      getAccountingBalances({ clinicId: req.clinicId ?? null }),
       // Receita: fonte única de verdade = financial_records (revenueSummarySql + recordDateFilter)
       db
         .select({ total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)` })
@@ -63,7 +63,7 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
     // usa due_date do financial_record vinculado (não entry_date, que reflete o
     // aceite do plano e agrupa todos os meses futuros no mesmo dia).
     const customerAdvances = await getCustomerAdvancesByCompetence({
-      clinicId: req.isSuperAdmin ? null : req.clinicId,
+      clinicId: req.clinicId ?? null,
       startDate,
       endDate,
     });
@@ -134,7 +134,7 @@ router.get("/dashboard", requirePermission("financial.read"), asyncHandler(async
       isNotNull(treatmentPlansTable.acceptedAt),
       inArray(treatmentPlansTable.status, ["vigente", "ativo"]),
     );
-    const planClinicCond = req.isSuperAdmin || !req.clinicId
+    const planClinicCond = !req.clinicId
       ? planActiveCond
       : and(planActiveCond, eq(treatmentPlansTable.clinicId, req.clinicId!));
 

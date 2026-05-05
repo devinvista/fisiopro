@@ -9,7 +9,7 @@ const router = Router({ mergeParams: true });
 router.use(authMiddleware);
 
 async function verifyPlanOwnership(planId: number, req: AuthRequest): Promise<boolean> {
-  if (req.isSuperAdmin || !req.clinicId) return true;
+  if (!req.clinicId) return true;
   const [row] = await db
     .select({ clinicId: patientsTable.clinicId })
     .from(treatmentPlansTable)
@@ -20,7 +20,7 @@ async function verifyPlanOwnership(planId: number, req: AuthRequest): Promise<bo
 }
 
 async function verifyItemOwnership(itemId: number, req: AuthRequest): Promise<boolean> {
-  if (req.isSuperAdmin || !req.clinicId) return true;
+  if (!req.clinicId) return true;
   const [row] = await db
     .select({ clinicId: patientsTable.clinicId })
     .from(treatmentPlanProceduresTable)
