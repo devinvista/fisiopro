@@ -112,10 +112,28 @@ GET https://seu-dominio.com.br/api/healthz
 
 ## Primeira vez num banco já existente (baseline)
 
-Se o banco já possui tabelas criadas via `drizzle-kit push` (sem histórico de migrations), rode uma vez:
+Se o banco já tem tabelas criadas via `drizzle-kit push` (sem histórico de migrations), o servidor vai tentar executar SQL que já foi aplicado e falhar.
 
-```bash
-node server/migrate.cjs --baseline
+**Solução:** adicione `MIGRATE_BASELINE=true` ao `.env` **apenas para o primeiro start**:
+
+```env
+# .env — apenas para o primeiro deploy em banco já existente
+MIGRATE_BASELINE=true
 ```
 
-Isso registra todas as migrations atuais como aplicadas sem executar o SQL, evitando conflitos.
+O `start.cjs` vai detectar a variável e registrar todas as migrations como já aplicadas, sem executar o SQL. Após confirmar que subiu corretamente:
+
+```bash
+# Remova a linha do .env:
+# MIGRATE_BASELINE=true   ← apague esta linha
+```
+
+> **Atenção:** deixar `MIGRATE_BASELINE=true` permanentemente faz com que novas migrations nunca sejam aplicadas.
+
+### Variáveis de controle disponíveis
+
+| Variável              | Comportamento                                                                 |
+|-----------------------|-------------------------------------------------------------------------------|
+| *(ausente)*           | Aplica migrations pendentes normalmente (modo padrão, idempotente)           |
+| `MIGRATE_BASELINE=true` | Registra migrations como aplicadas sem executar SQL — use só na 1ª vez     |
+| `MIGRATE_SKIP=true`   | Pula migrations completamente (não recomendado)                               |
