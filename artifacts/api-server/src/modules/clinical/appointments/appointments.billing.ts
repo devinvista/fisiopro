@@ -446,6 +446,25 @@ export async function applyBillingRules(
         startTime,
       );
 
+      // ── Gap 2: mensalConsolidado — decrementa recognitionCreditsTotal na
+      // faturaPlanoAvulsoMensal do mês quando um agendamento é cancelado.
+      // Garante que o closeAvulsoMonth trabalhe com contagem correta de sessões
+      // confirmadas, sem esperar até o EOM para corrigir a estimativa.
+      const apptMonthStartForCancel = monthRangeFromDate(appointmentDate).startDate;
+      await db
+        .update(financialRecordsTable)
+        .set({
+          recognitionCreditsTotal: sql`GREATEST(1, ${financialRecordsTable.recognitionCreditsTotal} - 1)`,
+        })
+        .where(
+          and(
+            eq(financialRecordsTable.treatmentPlanProcedureId, planProcId),
+            eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+            eq(financialRecordsTable.planMonthRef, apptMonthStartForCancel),
+            eq(financialRecordsTable.status, "pendente"),
+          ),
+        );
+
       if (procedureId) {
         const { sessionCreditsTable: scTable } = await import("@workspace/db");
         const existing = await db
@@ -984,6 +1003,63 @@ export async function applyBillingRules(
             amount:            String(fr.amount),
             type:              "estorno",
             description:       `Estorno de cancelamento — consulta #${appointmentId}`,
+            appointmentId,
+            financialRecordId: fr.id,
+          });
+
+          await tx
+            .update(financialRecordsTable)
+            .set({ status: "estornado" })
+            .where(eq(financialRecordsTable.id, fr.id));
+        }
+      });
+    }
+
+    // ── Gap 1: Estorno de debitoServico avulso (porSessao) ───────────────────
+    // Quando um agendamento avulso porSessao já confirmado é cancelado, o
+    // debitoServico gerado na carteira precisa ser revertido: saldo restaurado
+    // e transação de estorno registrada. Idêntico ao fluxo usoCarteira acima.
+    const debitoServico = await db
+      .select()
+      .from(financialRecordsTable)
+      .where(
+        and(
+          eq(financialRecordsTable.appointmentId, appointmentId),
+          eq(financialRecordsTable.transactionType, "debitoServico"),
+          eq(financialRecordsTable.status, "pendente"),
+        ),
+      )
+      .limit(1);
+
+    if (debitoServico.length > 0 && resolvedClinicId) {
+      const fr = debitoServico[0];
+      await db.transaction(async (tx) => {
+        const [wallet] = await tx
+          .select()
+          .from(patientWalletTable)
+          .where(
+            and(
+              eq(patientWalletTable.patientId, patientId),
+              eq(patientWalletTable.clinicId, resolvedClinicId!),
+            ),
+          )
+          .for("update")
+          .limit(1);
+
+        if (wallet) {
+          const restoredBalance = (Number(wallet.balance) + Number(fr.amount)).toFixed(2);
+          await tx
+            .update(patientWalletTable)
+            .set({ balance: restoredBalance, updatedAt: new Date() })
+            .where(eq(patientWalletTable.id, wallet.id));
+
+          await tx.insert(patientWalletTransactionsTable).values({
+            walletId:          wallet.id,
+            patientId,
+            clinicId:          resolvedClinicId!,
+            amount:            String(fr.amount),
+            type:              "estorno",
+            description:       `Estorno avulso porSessao — cancelamento consulta #${appointmentId}`,
             appointmentId,
             financialRecordId: fr.id,
           });

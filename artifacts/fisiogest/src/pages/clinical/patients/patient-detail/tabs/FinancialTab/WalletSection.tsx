@@ -71,7 +71,7 @@ export function WalletSection({ patientId }: { patientId: number }) {
           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
             <Wallet className="w-4 h-4 text-primary shrink-0" /> Carteira de Crédito
           </h4>
-          <p className="text-xs text-slate-500">Saldo pré-pago em R$ para abatimento automático nas sessões</p>
+          <p className="text-xs text-slate-500">Saldo da carteira de serviços — depósitos, débitos de sessões avulsas e estornos</p>
         </div>
         <Button className="w-full sm:w-auto h-10 rounded-xl gap-1.5" variant={showDeposit ? "outline" : "default"}
           onClick={() => { setShowDeposit(v => !v); setDepositForm({ amount: "", paymentMethod: "", description: "" }); }}>
