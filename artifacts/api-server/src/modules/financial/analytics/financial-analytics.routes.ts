@@ -4,6 +4,7 @@ import {
   appointmentsTable, financialRecordsTable, proceduresTable,
   procedureCostsTable, schedulesTable, recurringExpensesTable,
   treatmentPlansTable, treatmentPlanProceduresTable, packagesTable,
+  patientsTable,
 } from "@workspace/db";
 import { eq, and, sql, gte, lte, inArray, isNull, isNotNull, or, count } from "drizzle-orm";
 import type { AuthRequest } from "../../../middleware/auth.js";
@@ -352,6 +353,61 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
       pct: current.totalExpenses > 0 ? Math.round((val / current.totalExpenses) * 10000) / 100 : 0,
     })).sort((a, b) => b.amount - a.amount);
 
+    // ── Per-patient revenue breakdown ──────────────────────────────────────────
+    const [mrrByPatientRows, pendByPatientRows] = await Promise.all([
+      // MRR per patient (same filter as total MRR above)
+      db
+        .select({
+          patientId: treatmentPlansTable.patientId,
+          patientName: patientsTable.name,
+          mrr: sql<number>`COALESCE(SUM(GREATEST(0,
+            COALESCE(${treatmentPlanProceduresTable.unitMonthlyPrice}, ${packagesTable.monthlyPrice}, ${treatmentPlanProceduresTable.unitPrice})::numeric
+            - COALESCE(${treatmentPlanProceduresTable.discount}, 0)::numeric
+          )), 0)`,
+        })
+        .from(treatmentPlanProceduresTable)
+        .innerJoin(treatmentPlansTable, eq(treatmentPlansTable.id, treatmentPlanProceduresTable.treatmentPlanId))
+        .innerJoin(patientsTable, eq(patientsTable.id, treatmentPlansTable.patientId))
+        .leftJoin(packagesTable, eq(packagesTable.id, treatmentPlanProceduresTable.packageId))
+        .where(and(planClinicCond, isRecurringItem))
+        .groupBy(treatmentPlansTable.patientId, patientsTable.name),
+      // Pending receivables per patient (same filter as total pending above)
+      db
+        .select({
+          patientId: financialRecordsTable.patientId,
+          patientName: patientsTable.name,
+          pending: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
+        })
+        .from(financialRecordsTable)
+        .innerJoin(patientsTable, eq(patientsTable.id, financialRecordsTable.patientId))
+        .where(and(pendCond, isNotNull(financialRecordsTable.patientId)))
+        .groupBy(financialRecordsTable.patientId, patientsTable.name),
+    ]);
+
+    // Merge MRR + pending into a single per-patient map
+    const patientMap = new Map<number, { patientId: number; patientName: string; mrr: number; pending: number }>();
+    for (const r of mrrByPatientRows) {
+      patientMap.set(r.patientId, { patientId: r.patientId, patientName: r.patientName, mrr: Number(r.mrr), pending: 0 });
+    }
+    for (const r of pendByPatientRows) {
+      const pid = r.patientId!;
+      const existing = patientMap.get(pid);
+      if (existing) {
+        existing.pending = Number(r.pending);
+      } else {
+        patientMap.set(pid, { patientId: pid, patientName: r.patientName, mrr: 0, pending: Number(r.pending) });
+      }
+    }
+    const revenueByPatient = Array.from(patientMap.values())
+      .map(p => ({
+        patientId: p.patientId,
+        patientName: p.patientName,
+        mrr: Math.round(p.mrr * 100) / 100,
+        pending: Math.round(p.pending * 100) / 100,
+        total: Math.round((p.mrr + p.pending) * 100) / 100,
+      }))
+      .sort((a, b) => b.total - a.total);
+
     res.json({
       month, year,
       current: {
@@ -375,6 +431,7 @@ router.get("/dre", requireFeature("financial.view.dre"), requirePermission("fina
         pendingReceivable: Math.round(pendingReceivable * 100) / 100,
         revenueSource: configuredRevenueGoal !== null ? "configured" : "computed",
         expensesSource: configuredExpenseBudget !== null ? "configured" : "recurring",
+        revenueByPatient,
       },
       variance: {
         revenue: Math.round((current.revenue - estimatedRevenue) * 100) / 100,
