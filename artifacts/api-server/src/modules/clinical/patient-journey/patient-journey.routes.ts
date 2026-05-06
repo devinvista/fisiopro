@@ -81,7 +81,7 @@ async function computeAutoStatus(patientId: number): Promise<AutoStatus> {
     anamnese: hasAnamnesis ? "completed" : "pending",
     avaliacao: hasEvaluation ? "completed" : "pending",
     plano_tratamento: hasTreatmentPlan ? "completed" : "pending",
-    procedimentos: hasPackages ? "completed" : "pending",
+    procedimentos: (hasPackages || hasTreatmentPlan) ? "completed" : "pending",
     agendamento: hasAppointment ? "completed" : "pending",
     tratamento: hasDischarge ? "completed" : hasCompletedSession ? "in_progress" : "pending",
     alta: hasDischarge ? "completed" : "pending",
