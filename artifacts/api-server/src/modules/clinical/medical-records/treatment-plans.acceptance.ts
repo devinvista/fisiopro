@@ -310,7 +310,16 @@ export async function acceptPlanFinancials(
           tx as any,
         );
 
+        // Controla o saldo de sessões ainda não faturadas. O faturamento mensal
+        // nunca deve ultrapassar o total contratado — ex.: plano de 10 sessões
+        // em 2 meses com seg/qua teria 17 ocorrências no calendário, mas a soma
+        // das faturas deve ser exatamente 10 × preço_efetivo.
+        let remainingSessions = contractedTotalSessions;
+
         for (let m = 0; m < durationMonths; m++) {
+          // Saldo zerado: todas as sessões contratadas já foram faturadas.
+          if (remainingSessions <= 0) break;
+
           const itemMonthRef = planMonthRefOf(planStart, m);
           const nextMonthRef = planMonthRefOf(planStart, m + 1);
           const dueDate = planInstallmentDueDate(planStart, billingDay, m);
@@ -320,13 +329,16 @@ export async function acceptPlanFinancials(
           // clipadas ao período real do plano. Sem weekDays (raro), recai na estimativa.
           const monthStart = itemMonthRef > planStart ? itemMonthRef : planStart;
           const monthEnd = nextMonthRef < planEnd ? nextMonthRef : planEnd;
-          const sessionsInMonth = hasRealWeekDays
+          const rawSessionsInMonth = hasRealWeekDays
             ? Math.max(1, countSessionsInRange(monthStart, monthEnd, parsedWeekDays))
             : (() => {
                 const [mY, mM] = itemMonthRef.split("-").map(Number);
                 const daysInMonth = new Date(Date.UTC(mY, mM, 0)).getUTCDate();
                 return Math.max(1, Math.round(sessionsPerWeek * daysInMonth / 7));
               })();
+          // Cap: nunca faturar mais do que o saldo remanescente de sessões contratadas.
+          const sessionsInMonth = Math.min(rawSessionsInMonth, remainingSessions);
+          remainingSessions -= sessionsInMonth;
           const monthlyAmount = unitEffective * sessionsInMonth;
 
           // Idempotência: 1 fatura por (plano, item, mês de competência).
