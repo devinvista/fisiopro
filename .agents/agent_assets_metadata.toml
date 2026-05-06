@@ -6,3 +6,9 @@ id = "7PafeRhkWRnX15_B3nI9a"
 uri = "file://fisiogest-pro.zip"
 type = "unspecified"
 title = "fisiogest-pro.zip — com correções contábeis de pagamentos parciais e antecipados"
+
+[[outputs]]
+id = "f8ewibrbm9cDDLIhpRB21"
+uri = "file://fisiogest-pro-hostinger.zip"
+type = "unspecified"
+title = "fisiogest-pro-hostinger.zip — Deploy Hostinger"
