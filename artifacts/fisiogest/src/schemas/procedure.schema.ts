@@ -35,6 +35,8 @@ export const procedureFormSchema = z
     // Sub-conta contábil de receita para este procedimento.
     // String vazia → null no payload (usa conta padrão 4.1.1/4.1.2).
     accountingAccountId: z.string().optional(),
+    // Quando true e o usuário for super admin, cria como global (clinic_id = null).
+    isGlobal: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
     if (data.modalidade === "grupo" && data.maxCapacity < 2) {
@@ -61,6 +63,7 @@ export const procedureFormDefaults: ProcedureFormValues = {
   monthlyPrice: undefined,
   billingDay: undefined,
   accountingAccountId: undefined,
+  isGlobal: false,
 };
 
 export function buildProcedurePayload(values: ProcedureFormValues) {
@@ -80,6 +83,7 @@ export function buildProcedurePayload(values: ProcedureFormValues) {
       values.accountingAccountId && values.accountingAccountId !== ""
         ? Number(values.accountingAccountId)
         : null,
+    isGlobal: values.isGlobal ?? false,
   };
 }
 

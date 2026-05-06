@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Globe } from "lucide-react";
 import { getMargin } from "../constants";
 import { MarginBadge } from "./MarginBadge";
 
@@ -27,12 +27,10 @@ type ProcedureFormState = {
   onlineBookingEnabled: boolean;
   monthlyPrice?: string;
   billingDay?: string;
-  // Sub-conta contábil de receita para este procedimento.
-  // "" → conta padrão (4.1.1/4.1.2).
   accountingAccountId?: string;
+  isGlobal?: boolean;
 };
 
-// Sub-conta de receita exibida no Select. Listada via /api/financial/accounting/accounts.
 export interface AccountingAccountOption {
   id: number;
   code: string;
@@ -48,8 +46,8 @@ interface ProcedureFormModalProps {
   setForm: React.Dispatch<React.SetStateAction<ProcedureFormState>>;
   onSubmit: () => void;
   accountingAccounts?: AccountingAccountOption[];
-  /** Quando undefined, a clínica não possui o feature `financial.view.accounting`. */
   showAccountingField?: boolean;
+  isSuperAdmin?: boolean;
 }
 
 export function ProcedureFormModal({
@@ -61,8 +59,8 @@ export function ProcedureFormModal({
   onSubmit,
   accountingAccounts = [],
   showAccountingField = false,
+  isSuperAdmin = false,
 }: ProcedureFormModalProps) {
-  // Apenas contas de receita (sub-contas de 4.1.1/4.1.2 etc) fazem sentido aqui.
   const revenueAccounts = accountingAccounts.filter((a) => a.type === "revenue");
   const formMargin = getMargin(form.price, form.cost);
 
@@ -198,6 +196,24 @@ export function ProcedureFormModal({
               onCheckedChange={v => setForm(f => ({ ...f, onlineBookingEnabled: v }))}
             />
           </div>
+
+          {isSuperAdmin && !editingProcedure && (
+            <div className="sm:col-span-2 flex items-center justify-between gap-3 p-3 rounded-2xl bg-amber-50 border border-amber-200">
+              <div className="flex items-center gap-2.5">
+                <Globe className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium text-amber-800">Procedimento Global</Label>
+                  <p className="text-[10px] text-amber-600 uppercase font-semibold tracking-wider">
+                    Disponível para todas as clínicas — não editável por clínicas
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={form.isGlobal ?? false}
+                onCheckedChange={v => setForm(f => ({ ...f, isGlobal: v }))}
+              />
+            </div>
+          )}
 
           {showAccountingField && (
             <div className="sm:col-span-2 space-y-1.5">

@@ -277,6 +277,7 @@ export default function Procedimentos() {
       accountingAccountId: (proc as any).accountingAccountId
         ? String((proc as any).accountingAccountId)
         : "",
+      isGlobal: proc.isGlobal ?? false,
     });
     setIsModalOpen(true);
   }
@@ -485,6 +486,7 @@ export default function Procedimentos() {
         onSubmit={handleSubmit}
         accountingAccounts={accountingAccounts}
         showAccountingField={showAccountingField}
+        isSuperAdmin={isSuperAdmin}
       />
 
       <CatalogModal

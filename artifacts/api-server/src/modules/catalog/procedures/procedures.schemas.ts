@@ -60,6 +60,8 @@ const procedureBaseSchema = z.object({
       .refine((v) => v === null || (Number.isInteger(v) && v > 0), "accountingAccountId deve ser inteiro positivo")
       .optional()
       .nullable(),
+    // Quando true e o actor for super admin, o procedimento é criado como global (clinic_id = null).
+    isGlobal: z.boolean().optional().default(false),
   });
 
 export const createProcedureSchema = procedureBaseSchema.refine(

@@ -122,6 +122,13 @@ export async function createProcedure(scope: ActorScope, body: CreateProcedureIn
       ? 2
       : 10;
 
+  const {
+    isGlobal,
+  } = body;
+
+  // Apenas super admins podem criar procedimentos globais (clinic_id = null).
+  const resolvedClinicId = (isGlobal && scope.isSuperAdmin) ? null : (scope.clinicId ?? null);
+
   const procedure = await repo.insertProcedure({
     name,
     category,
@@ -137,7 +144,7 @@ export async function createProcedure(scope: ActorScope, body: CreateProcedureIn
     billingDay: billingDay ?? null,
     accountingAccountId: accountingAccountId ?? null,
     isActive: true,
-    clinicId: scope.clinicId ?? null,
+    clinicId: resolvedClinicId,
   });
 
   return decorateProcedure(procedure);
