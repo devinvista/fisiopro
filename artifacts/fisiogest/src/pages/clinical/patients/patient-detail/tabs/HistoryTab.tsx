@@ -268,6 +268,7 @@ export function txTypeLabel(transactionType: string | null | undefined): { label
     case "cobrancaSessao":  return { label: "A Receber (Sessão)", color: "border-blue-200 text-blue-700 bg-blue-50", icon: "↑" };
     case "cobrancaMensal":  return { label: "Mensalidade", color: "border-violet-200 text-violet-700 bg-violet-50", icon: "↑" };
     case "pagamento":       return { label: "Pagamento", color: "border-green-200 text-green-700 bg-green-50", icon: "✓" };
+    case "usoCarteira":     return { label: "Uso de Carteira", color: "border-rose-200 text-rose-700 bg-rose-50", icon: "−" };
     case "usoCredito":      return { label: "Uso de Crédito", color: "border-amber-200 text-amber-700 bg-amber-50", icon: "C" };
     case "creditoSessao":   return { label: "Crédito de Sessão", color: "border-teal-200 text-teal-700 bg-teal-50", icon: "C" };
     case "ajuste":          return { label: "Ajuste", color: "border-orange-200 text-orange-700 bg-orange-50", icon: "~" };

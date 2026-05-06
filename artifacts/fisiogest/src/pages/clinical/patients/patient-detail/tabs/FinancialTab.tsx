@@ -282,6 +282,7 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                 const stInfo = statusLabel(record.status);
                 const isSessionType = record.transactionType === "usoCredito" || record.transactionType === "creditoSessao";
                 const isPayment = record.transactionType === "pagamento";
+                const isWalletUsage = record.transactionType === "usoCarteira";
                 const isReceivable = record.transactionType === "creditoAReceber" || record.transactionType === "cobrancaSessao" || record.transactionType === "cobrancaMensal";
                 const isEstornado = record.status === "estornado";
                 const canEstorno = !isEstornado && !isSessionType && Number(record.amount) > 0;
@@ -290,14 +291,16 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                   ? "border-slate-100 bg-slate-50/50 opacity-60"
                   : isPayment
                     ? "border-green-100 bg-green-50/30"
-                    : isReceivable
-                      ? "border-blue-100 bg-blue-50/20"
-                      : isSessionType
-                        ? "border-teal-100 bg-teal-50/20"
-                        : "border-slate-200";
+                    : isWalletUsage
+                      ? "border-rose-100 bg-rose-50/20"
+                      : isReceivable
+                        ? "border-blue-100 bg-blue-50/20"
+                        : isSessionType
+                          ? "border-teal-100 bg-teal-50/20"
+                          : "border-slate-200";
 
-                const iconBg = isPayment ? "bg-green-100" : isReceivable ? "bg-blue-100" : isSessionType ? "bg-teal-100" : "bg-slate-100";
-                const amountColor = isEstornado ? "text-slate-400 line-through" : isPayment ? "text-green-600" : isReceivable ? "text-blue-600" : isSessionType ? "text-teal-600" : "text-slate-600";
+                const iconBg = isPayment ? "bg-green-100" : isWalletUsage ? "bg-rose-100" : isReceivable ? "bg-blue-100" : isSessionType ? "bg-teal-100" : "bg-slate-100";
+                const amountColor = isEstornado ? "text-slate-400 line-through" : isPayment ? "text-green-600" : isWalletUsage ? "text-rose-600" : isReceivable ? "text-blue-600" : isSessionType ? "text-teal-600" : "text-slate-600";
 
                 return (
                   <Card key={record.id} className={`border shadow-sm group ${cardBg}`}>
@@ -312,7 +315,13 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                               <p className={`font-semibold text-sm truncate ${isEstornado ? "text-slate-400" : "text-slate-800"}`}>{record.description}</p>
                             </div>
                             <p className={`text-sm font-bold text-right shrink-0 whitespace-nowrap ${amountColor}`}>
-                              {isSessionType ? (Number(record.amount) === 0 ? "—" : formatCurrency(Number(record.amount))) : (isPayment ? "+" : "↑") + (Number(record.amount) === 0 ? "Crédito" : formatCurrency(Number(record.amount)))}
+                              {isSessionType
+                                ? (Number(record.amount) === 0 ? "—" : formatCurrency(Number(record.amount)))
+                                : isPayment
+                                  ? "+" + formatCurrency(Number(record.amount))
+                                  : isWalletUsage
+                                    ? "−" + formatCurrency(Number(record.amount))
+                                    : (Number(record.amount) === 0 ? "Crédito" : "↑" + formatCurrency(Number(record.amount)))}
                             </p>
                             {canEstorno && (
                               <button

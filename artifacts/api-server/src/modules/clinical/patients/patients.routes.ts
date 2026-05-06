@@ -8,7 +8,7 @@ import {
   clinicsTable,
   subscriptionPlansTable,
 } from "@workspace/db";
-import { eq, ilike, or, and, sql, desc, isNull, lt } from "drizzle-orm";
+import { eq, ilike, or, and, sql, desc, isNull, lt, notInArray, ne } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { requireActiveSubscription, enforceLimit, getPlanLimits, findRequiredPlan } from "../../../middleware/subscription.js";
@@ -510,14 +510,17 @@ router.get("/:id", requirePermission("patients.read"), async (req: AuthRequest, 
       db
         .select({ total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)` })
         .from(financialRecordsTable)
-        .leftJoin(appointmentsTable, eq(financialRecordsTable.appointmentId, appointmentsTable.id))
         .where(
           and(
+            eq(financialRecordsTable.patientId, id),
             eq(financialRecordsTable.type, "receita"),
-            or(
-              eq(financialRecordsTable.patientId, id),
-              eq(appointmentsTable.patientId, id),
-            ),
+            ne(financialRecordsTable.status, "estornado"),
+            notInArray(financialRecordsTable.transactionType, [
+              "usoCarteira",
+              "usoCredito",
+              "creditoSessao",
+              "creditoAReceber",
+            ]),
           ),
         ),
     ]);
