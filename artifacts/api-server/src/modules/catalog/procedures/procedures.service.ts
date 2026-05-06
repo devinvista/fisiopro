@@ -166,7 +166,7 @@ export async function updateProcedure(
     accountingAccountId,
   } = body;
 
-  const scoped = repo.tenantScopeCondition(scope.clinicId, scope.isSuperAdmin);
+  const scoped = repo.tenantWriteScopeCondition(scope.clinicId, scope.isSuperAdmin);
   const procedure = await repo.updateProcedureWhere(id, scoped, {
     name,
     category,
@@ -195,7 +195,7 @@ export async function toggleProcedureActive(scope: ActorScope, id: number) {
   if (!scope.isAdmin) {
     throw HttpError.forbidden("Apenas administradores podem ativar/desativar procedimentos.");
   }
-  const scoped = repo.tenantScopeCondition(scope.clinicId, scope.isSuperAdmin);
+  const scoped = repo.tenantWriteScopeCondition(scope.clinicId, scope.isSuperAdmin);
   const existing = await repo.findProcedureScoped(id, scoped);
   if (!existing) throw HttpError.notFound();
   const updated = await repo.setProcedureActive(id, !existing.isActive);
@@ -205,7 +205,7 @@ export async function toggleProcedureActive(scope: ActorScope, id: number) {
 // ── Delete ──────────────────────────────────────────────────────────────────
 
 export async function deleteProcedure(scope: ActorScope, id: number) {
-  const scoped = repo.tenantScopeCondition(scope.clinicId, scope.isSuperAdmin);
+  const scoped = repo.tenantWriteScopeCondition(scope.clinicId, scope.isSuperAdmin);
   const total = await repo.countAppointmentsForProcedure(id);
   if (total > 0) {
     throw HttpError.conflict(

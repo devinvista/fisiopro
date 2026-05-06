@@ -6,13 +6,23 @@ import {
   financialRecordsTable,
   schedulesTable,
 } from "@workspace/db";
-import { and, count, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gte, ilike, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AppointmentStatus } from "@workspace/shared-constants";
 
-/** Filtro de tenant: clinic-specific OR global (clinicId IS NULL). */
+/** Filtro de leitura: inclui procedimentos globais (clinicId IS NULL) + próprios da clínica. */
 export function tenantScopeCondition(clinicId: number | null | undefined, isSuperAdmin: boolean) {
   if (!clinicId) return undefined;
   return or(isNull(proceduresTable.clinicId), eq(proceduresTable.clinicId, clinicId));
+}
+
+/**
+ * Filtro de escrita: apenas procedimentos próprios da clínica (clinic_id = X).
+ * Super admins sem contexto de clínica podem operar em qualquer procedimento.
+ * Impede que uma clínica modifique procedimentos globais (clinic_id IS NULL).
+ */
+export function tenantWriteScopeCondition(clinicId: number | null | undefined, isSuperAdmin: boolean) {
+  if (!clinicId) return undefined; // super admin sem clínica: sem restrição
+  return eq(proceduresTable.clinicId, clinicId);
 }
 
 /** SELECT base de procedure JOIN procedure_costs (override por clínica). */
@@ -102,7 +112,7 @@ export async function insertProcedure(values: typeof proceduresTable.$inferInser
 
 export async function updateProcedureWhere(
   id: number,
-  scopedCondition: ReturnType<typeof tenantScopeCondition>,
+  scopedCondition: SQL | undefined,
   values: Partial<typeof proceduresTable.$inferInsert>
 ) {
   const condition = scopedCondition
@@ -114,7 +124,7 @@ export async function updateProcedureWhere(
 
 export async function findProcedureScoped(
   id: number,
-  scopedCondition: ReturnType<typeof tenantScopeCondition>
+  scopedCondition: SQL | undefined
 ) {
   const condition = scopedCondition
     ? and(eq(proceduresTable.id, id), scopedCondition)
@@ -134,7 +144,7 @@ export async function setProcedureActive(id: number, isActive: boolean) {
 
 export async function deleteProcedureWhere(
   id: number,
-  scopedCondition: ReturnType<typeof tenantScopeCondition>
+  scopedCondition: SQL | undefined
 ) {
   const condition = scopedCondition
     ? and(eq(proceduresTable.id, id), scopedCondition)
