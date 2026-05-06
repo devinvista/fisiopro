@@ -206,10 +206,8 @@ async function getOrCreateSteps(patientId: number, clinicId: number | null | und
     .orderBy(patientJourneyStepsTable.stepOrder);
 
   if (steps.length === 0) {
-    if (!clinicId) {
-      return [];
-    }
-    const now = new Date();
+    if (!clinicId) return [];
+
     const toInsert = JOURNEY_STEP_DEFS.map((def) => ({
       patientId,
       clinicId,
@@ -225,12 +223,69 @@ async function getOrCreateSteps(patientId: number, clinicId: number | null | und
       updatedByUserName: null as string | null,
     }));
     await db.insert(patientJourneyStepsTable).values(toInsert);
-    steps = await db
-      .select()
-      .from(patientJourneyStepsTable)
-      .where(eq(patientJourneyStepsTable.patientId, patientId))
-      .orderBy(patientJourneyStepsTable.stepOrder);
+  } else {
+    // Self-heal: fix stale step keys left from pre-migration schema (e.g. agendamento → geracao_agenda).
+    const RENAMES: Record<string, { newKey: string; newOrder: number }> = {
+      agendamento: { newKey: "geracao_agenda", newOrder: 7 },
+    };
+    // Also correct step orders that are out of date.
+    const CANONICAL_ORDER: Record<string, number> = Object.fromEntries(
+      JOURNEY_STEP_DEFS.map((d) => [d.key, d.order]),
+    );
+
+    for (const step of steps) {
+      const rename = RENAMES[step.stepKey];
+      if (rename) {
+        await db
+          .update(patientJourneyStepsTable)
+          .set({ stepKey: rename.newKey, stepOrder: rename.newOrder })
+          .where(eq(patientJourneyStepsTable.id, step.id));
+        step.stepKey = rename.newKey;
+        step.stepOrder = rename.newOrder;
+      } else {
+        const canonical = CANONICAL_ORDER[step.stepKey];
+        if (canonical !== undefined && step.stepOrder !== canonical) {
+          await db
+            .update(patientJourneyStepsTable)
+            .set({ stepOrder: canonical })
+            .where(eq(patientJourneyStepsTable.id, step.id));
+          step.stepOrder = canonical;
+        }
+      }
+    }
+
+    // Insert any step keys defined in JOURNEY_STEP_DEFS that are still missing.
+    const existingKeys = new Set(steps.map((s) => s.stepKey));
+    const resolvedClinicId = clinicId ?? steps[0]?.clinicId;
+    if (resolvedClinicId) {
+      const missing = JOURNEY_STEP_DEFS.filter((def) => !existingKeys.has(def.key));
+      if (missing.length > 0) {
+        await db.insert(patientJourneyStepsTable).values(
+          missing.map((def) => ({
+            patientId,
+            clinicId: resolvedClinicId,
+            stepKey: def.key,
+            stepOrder: def.order,
+            status: "pending",
+            startedAt: null as Date | null,
+            completedAt: null as Date | null,
+            cancelledAt: null as Date | null,
+            notes: null as string | null,
+            responsibleName: null as string | null,
+            updatedByUserId: null as number | null,
+            updatedByUserName: null as string | null,
+          })),
+        );
+      }
+    }
   }
+
+  // Always re-fetch so the result is consistent (covers both branches above)
+  steps = await db
+    .select()
+    .from(patientJourneyStepsTable)
+    .where(eq(patientJourneyStepsTable.patientId, patientId))
+    .orderBy(patientJourneyStepsTable.stepOrder);
 
   return steps;
 }
