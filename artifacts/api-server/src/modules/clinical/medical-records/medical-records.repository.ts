@@ -159,12 +159,14 @@ export async function listTreatmentPlanProceduresWithCatalog(planId: number) {
   return db
     .select({
       id: treatmentPlanProceduresTable.id,
+      kind: treatmentPlanProceduresTable.kind,
       procedureId: treatmentPlanProceduresTable.procedureId,
       packageId: treatmentPlanProceduresTable.packageId,
       unitPrice: treatmentPlanProceduresTable.unitPrice,
       discount: treatmentPlanProceduresTable.discount,
       totalSessions: treatmentPlanProceduresTable.totalSessions,
       sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
+      weekDays: treatmentPlanProceduresTable.weekDays,
       tablePrice: proceduresTable.price,
       procedureName: proceduresTable.name,
     })

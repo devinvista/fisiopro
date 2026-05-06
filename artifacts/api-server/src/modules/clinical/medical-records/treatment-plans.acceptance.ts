@@ -144,8 +144,9 @@ async function loadAcceptanceItems(planId: number): Promise<PlanItem[]> {
 /**
  * Conta quantas ocorrências dos `weekDays` caem no intervalo [startISO, endExclISO).
  * Usado para calcular sessões reais por mês de calendário em avulsos.
+ * Exportada para reutilização no snapshot de aceite (medical-records.service.ts).
  */
-function countSessionsInRange(
+export function countSessionsInRange(
   startISO: string,
   endExclISO: string,
   weekDays: string[],

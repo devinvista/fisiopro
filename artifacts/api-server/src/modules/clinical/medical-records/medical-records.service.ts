@@ -7,7 +7,8 @@ import { HttpError } from "../../../utils/httpError.js";
 import { logAudit } from "../../../utils/auditLog.js";
 import { deleteCloudinaryAsset, extractPublicId } from "../../../utils/cloudinary.js";
 import * as repo from "./medical-records.repository.js";
-import { acceptPlanFinancials } from "./treatment-plans.acceptance.js";
+import { acceptPlanFinancials, countSessionsInRange } from "./treatment-plans.acceptance.js";
+import { planMonthRefOf } from "./treatment-plans.billing-dates.js";
 import { buildAcceptedClausesSnapshot } from "../contract-clauses/contract-clauses.service.js";
 
 export type AuthCtx = { userId?: number; clinicId?: number | null };
@@ -527,12 +528,46 @@ export async function acceptPatientTreatmentPlan(
     if (snapshot) acceptedClausesJsonStr = JSON.stringify(snapshot);
   }
 
+  const planStartDate = existing.startDate ?? new Date().toISOString().slice(0, 10);
+  const planDurationMonths = existing.durationMonths ?? 12;
+  // planEnd = primeiro dia do mês APÓS o término do plano (igual ao planMonthRefOf do billing).
+  const planEnd = planMonthRefOf(planStartDate, planDurationMonths);
+
   let totalRevenue = 0;
   const frozenItems: FrozenPriceItem[] = items.map((row) => {
     const unit = Number(row.unitPrice ?? row.tablePrice ?? 0);
-    const discount = Math.max(0, Number(row.discount ?? 0));
-    const effective = Math.max(0, unit - discount);
-    const sessions = row.totalSessions ?? 0;
+    const totalDiscountStored = Math.max(0, Number(row.discount ?? 0));
+    const isAvulso = !row.packageId && (row.kind == null || row.kind === "avulso");
+
+    // item.discount armazena o desconto TOTAL (discountPerSessão × nSessões),
+    // NÃO o desconto unitário. Precisamos recuperar o por sessão para calcular
+    // effectivePrice corretamente no snapshot.
+    let discountPerSession = totalDiscountStored;
+    let estimatedSessions = row.totalSessions ?? 0;
+
+    if (totalDiscountStored > 0) {
+      if ((row.totalSessions ?? 0) > 0) {
+        // Itens com sessões totais fixas: desconto por sessão = total / nSessões.
+        discountPerSession = totalDiscountStored / row.totalSessions!;
+      } else if (isAvulso) {
+        // Avulso sem totalSessions fixo: conta as sessões reais pelo calendário.
+        const parsedWeekDays: string[] = (() => {
+          if (!row.weekDays) return [];
+          try {
+            const p = JSON.parse(row.weekDays);
+            return Array.isArray(p) ? p : [];
+          } catch { return []; }
+        })();
+        const calendarSessions = parsedWeekDays.length > 0
+          ? countSessionsInRange(planStartDate, planEnd, parsedWeekDays)
+          : Math.max(1, Math.round((row.sessionsPerWeek ?? 1) * planDurationMonths * 4.33));
+        estimatedSessions = calendarSessions;
+        discountPerSession = calendarSessions > 0 ? totalDiscountStored / calendarSessions : totalDiscountStored;
+      }
+    }
+
+    const effective = Math.max(0, unit - discountPerSession);
+    const sessions = row.totalSessions ?? estimatedSessions;
     const totalForItem = effective * sessions;
     totalRevenue += totalForItem;
     return {
@@ -540,10 +575,10 @@ export async function acceptPatientTreatmentPlan(
       packageId: row.packageId,
       procedureName: row.procedureName,
       unitPrice: toMoney(unit),
-      discount: toMoney(discount),
+      discount: toMoney(discountPerSession),
       effectivePrice: toMoney(effective),
       tablePrice: toMoney(Number(row.tablePrice ?? 0)),
-      totalSessions: row.totalSessions,
+      totalSessions: sessions > 0 ? sessions : null,
       estimatedTotalRevenue: toMoney(totalForItem),
     };
   });
