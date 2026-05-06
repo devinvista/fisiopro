@@ -446,15 +446,15 @@ export async function applyBillingRules(
         startTime,
       );
 
-      // ── Gap 2: mensalConsolidado — decrementa recognitionCreditsTotal na
+      // ── mensalConsolidado — decrementa recognitionCreditsTotal na
       // faturaPlanoAvulsoMensal do mês quando um agendamento é cancelado.
-      // Garante que o closeAvulsoMonth trabalhe com contagem correta de sessões
-      // confirmadas, sem esperar até o EOM para corrigir a estimativa.
+      // Se o total chegar a 0 e nenhuma sessão foi reconhecida, cancela a fatura
+      // automaticamente (proposta: "se zero → cancela fatura").
       const apptMonthStartForCancel = monthRangeFromDate(appointmentDate).startDate;
-      await db
+      const updatedInvoices = await db
         .update(financialRecordsTable)
         .set({
-          recognitionCreditsTotal: sql`GREATEST(1, ${financialRecordsTable.recognitionCreditsTotal} - 1)`,
+          recognitionCreditsTotal: sql`GREATEST(0, ${financialRecordsTable.recognitionCreditsTotal} - 1)`,
         })
         .where(
           and(
@@ -463,7 +463,26 @@ export async function applyBillingRules(
             eq(financialRecordsTable.planMonthRef, apptMonthStartForCancel),
             eq(financialRecordsTable.status, "pendente"),
           ),
-        );
+        )
+        .returning({
+          id: financialRecordsTable.id,
+          creditsTotal: financialRecordsTable.recognitionCreditsTotal,
+          creditsConsumed: financialRecordsTable.recognitionCreditsConsumed,
+        });
+
+      // Auto-cancela a fatura se não restou nenhum agendamento previsto E
+      // nenhuma sessão já foi reconhecida contabilmente.
+      for (const inv of updatedInvoices) {
+        if (
+          (inv.creditsTotal === 0 || inv.creditsTotal === null) &&
+          (inv.creditsConsumed === 0 || inv.creditsConsumed === null)
+        ) {
+          await db
+            .update(financialRecordsTable)
+            .set({ status: "cancelado" })
+            .where(eq(financialRecordsTable.id, inv.id));
+        }
+      }
 
       if (procedureId) {
         const { sessionCreditsTable: scTable } = await import("@workspace/db");

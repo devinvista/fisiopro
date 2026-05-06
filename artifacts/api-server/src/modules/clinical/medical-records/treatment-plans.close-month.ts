@@ -24,7 +24,7 @@ import {
   patientsTable,
   clinicsTable,
 } from "@workspace/db";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, inArray } from "drizzle-orm";
 
 export interface CloseMonthResult {
   planId: number;
@@ -147,6 +147,40 @@ export async function closeAvulsoMonth(
       let totalRealAmount = 0;
       let totalConfirmedSessions = 0;
 
+      // Carrega netUnitPrice de todos os itens do plano de uma vez.
+      // Preferimos netUnitPrice persistido (proposta); fallback para ratio
+      // storedAmount/estimatedCredits em itens legados sem o campo.
+      const planProcIds = pregenEstimates
+        .map((e) => e.treatmentPlanProcedureId)
+        .filter((id): id is number => id != null);
+      const netUnitPriceMap = new Map<number, number>();
+      if (planProcIds.length > 0) {
+        const itemRows = await tx
+          .select({
+            id: treatmentPlanProceduresTable.id,
+            netUnitPrice: treatmentPlanProceduresTable.netUnitPrice,
+            unitPrice: treatmentPlanProceduresTable.unitPrice,
+            discount: treatmentPlanProceduresTable.discount,
+            totalSessions: treatmentPlanProceduresTable.totalSessions,
+            sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
+          })
+          .from(treatmentPlanProceduresTable)
+          .where(inArray(treatmentPlanProceduresTable.id, planProcIds));
+        for (const row of itemRows) {
+          if (row.netUnitPrice != null) {
+            netUnitPriceMap.set(row.id, Math.max(0, Number(row.netUnitPrice)));
+          } else if (row.unitPrice != null) {
+            // Fallback legado: recalcula para itens sem netUnitPrice persistido.
+            const unit = Number(row.unitPrice ?? 0);
+            const disc = Math.max(0, Number(row.discount ?? 0));
+            const sess = row.totalSessions && row.totalSessions > 0
+              ? row.totalSessions
+              : Math.max(1, Math.round((row.sessionsPerWeek ?? 1) * 4.333 * 12));
+            netUnitPriceMap.set(row.id, Math.max(0, unit - disc / sess));
+          }
+        }
+      }
+
       for (const est of pregenEstimates) {
         // Conta sessões REAIS confirmadas para este item do plano neste mês.
         // Usa treatmentPlanProcedureId para correlacionar ao item correto.
@@ -162,14 +196,16 @@ export async function closeAvulsoMonth(
           );
         const confirmedSessions = Number(sessionRows[0]?.count ?? 0);
 
-        // Recupera unitEffective a partir dos dados armazenados.
-        // amount = unitEffective × recognitionCreditsTotal (estimado).
-        // Se recognitionCreditsTotal é null/0, usa amount como valor fixo.
-        const estimatedCredits = Number(est.recognitionCreditsTotal ?? 0);
+        // Resolve preço unitário efetivo:
+        //   1. netUnitPrice do item (persistido no cadastro — fonte da verdade)
+        //   2. Fallback: ratio storedAmount/estimatedCredits (itens legados)
         const storedAmount = Number(est.amount ?? 0);
-        const unitEffective = estimatedCredits > 0
-          ? storedAmount / estimatedCredits
-          : storedAmount;
+        const estimatedCredits = Number(est.recognitionCreditsTotal ?? 0);
+        const unitEffective = netUnitPriceMap.has(est.treatmentPlanProcedureId!)
+          ? netUnitPriceMap.get(est.treatmentPlanProcedureId!)!
+          : estimatedCredits > 0
+            ? storedAmount / estimatedCredits
+            : storedAmount;
 
         // Usa ao menos 1 sessão para não zerar a fatura (sessões reais podem
         // ser 0 se nenhuma foi realizada ainda — nesse caso mantém a estimativa).
