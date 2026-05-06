@@ -263,17 +263,24 @@ export async function acceptPlanFinancials(
         })();
         const hasRealWeekDays = parsedWeekDays.length > 0;
 
-        // Sessões totais do plano — para recuperar o desconto unitário.
-        const totalSessions = hasRealWeekDays
-          ? Math.max(1, countSessionsInRange(planStart, planEnd, parsedWeekDays))
-          : (() => {
-              const [psy, psm, psd] = planStart.split("-").map(Number);
-              const planTotalDays =
-                (Date.UTC(psy, psm - 1 + durationMonths, psd) - Date.UTC(psy, psm - 1, psd)) /
-                (1000 * 60 * 60 * 24);
-              return Math.max(1, Math.round(sessionsPerWeek * planTotalDays / 7));
-            })();
-        const unitDiscount = totalDiscount / totalSessions;
+        // Sessões totais contratadas — usadas para recuperar o desconto unitário.
+        // IMPORTANTE: deve-se usar item.totalSessions (sessões contratadas no plano)
+        // como divisor do desconto total, e NÃO o total calculado pelo calendário.
+        // O calendário pode retornar mais ocorrências do que as sessões contratadas
+        // (ex.: 17 ocorrências seg/qua em 2 meses, mas o plano contrata apenas 10),
+        // o que distorce o desconto por sessão e gera valores errados nas faturas.
+        const contractedTotalSessions = item.totalSessions != null && item.totalSessions > 0
+          ? item.totalSessions
+          : (hasRealWeekDays
+              ? Math.max(1, countSessionsInRange(planStart, planEnd, parsedWeekDays))
+              : (() => {
+                  const [psy, psm, psd] = planStart.split("-").map(Number);
+                  const planTotalDays =
+                    (Date.UTC(psy, psm - 1 + durationMonths, psd) - Date.UTC(psy, psm - 1, psd)) /
+                    (1000 * 60 * 60 * 24);
+                  return Math.max(1, Math.round(sessionsPerWeek * planTotalDays / 7));
+                })());
+        const unitDiscount = totalDiscount / contractedTotalSessions;
         const unitEffective = Math.max(0, unit - unitDiscount);
         if (unitEffective <= 0) continue;
 
