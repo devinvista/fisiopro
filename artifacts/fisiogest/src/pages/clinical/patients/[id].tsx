@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchJson } from "@/lib/api";
 import { downloadPatientExport } from "@/lib/lgpd";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -640,6 +640,36 @@ export default function PatientDetail() {
     return validTabs.includes(tabParam ?? "") ? (tabParam as string) : "jornada";
   });
 
+  const { data: journeyData } = useQuery<{
+    steps: unknown[];
+    meta: {
+      firstConsultationCompleted: boolean;
+      hasDischarge: boolean;
+      treatmentPlanProgress: { isNearingCompletion: boolean } | null;
+    };
+  }>({
+    queryKey: [`/api/patients/${patientId}/journey`],
+    queryFn: () => apiFetchJson(`/api/patients/${patientId}/journey`),
+    enabled: !!patientId,
+    staleTime: 0,
+  });
+
+  const journeyPhase: 1 | 2 | 3 = !journeyData
+    ? 1
+    : !journeyData.meta?.firstConsultationCompleted
+    ? 1
+    : journeyData.meta?.hasDischarge || journeyData.meta?.treatmentPlanProgress?.isNearingCompletion
+    ? 3
+    : 2;
+
+  const showJornadaTab = journeyPhase !== 2;
+
+  useEffect(() => {
+    if (activeTab === "jornada" && journeyPhase === 2) {
+      setActiveTab("evolutions");
+    }
+  }, [activeTab, journeyPhase]);
+
   const canEdit = hasPermission("patients.update");
   const canDelete = hasPermission("patients.delete");
 
@@ -849,12 +879,14 @@ export default function PatientDetail() {
               {/* ───── Mobile (<lg): single horizontally-scrollable bar ───── */}
               <div className="lg:hidden -mx-1 px-1 overflow-x-auto">
                 <TabsList className="inline-flex w-auto min-w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto gap-1">
-                  <TabsTrigger
-                    value="jornada"
-                    className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
-                  >
-                    <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada
-                  </TabsTrigger>
+                  {showJornadaTab && (
+                    <TabsTrigger
+                      value="jornada"
+                      className="shrink-0 whitespace-nowrap rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2 px-3 flex items-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
+                    >
+                      <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada
+                    </TabsTrigger>
+                  )}
                   {[
                     { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: "Anamnese" },
                     { value: "evaluations", icon: <Activity className="w-3.5 h-3.5 shrink-0" />,      label: "Avaliações" },
@@ -893,15 +925,17 @@ export default function PatientDetail() {
 
               {/* ───── Desktop (≥lg): grouped 3-row layout ───── */}
               <div className="hidden lg:block space-y-1">
-                {/* Jornada do Cliente — featured tab */}
-                <TabsList className="w-full bg-gradient-to-r from-primary/5 to-emerald-50 p-1 rounded-xl shadow-sm border border-primary/20 h-auto flex">
-                  <TabsTrigger
-                    value="jornada"
-                    className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
-                  >
-                    <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada do Cliente
-                  </TabsTrigger>
-                </TabsList>
+                {/* Jornada do Cliente — featured tab (only in phase 1 or 3) */}
+                {showJornadaTab && (
+                  <TabsList className="w-full bg-gradient-to-r from-primary/5 to-emerald-50 p-1 rounded-xl shadow-sm border border-primary/20 h-auto flex">
+                    <TabsTrigger
+                      value="jornada"
+                      className="flex-1 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white text-xs py-2.5 flex items-center justify-center gap-1.5 data-[state=inactive]:text-primary font-semibold"
+                    >
+                      <Milestone className="w-3.5 h-3.5 shrink-0" /> Jornada do Cliente
+                    </TabsTrigger>
+                  </TabsList>
+                )}
                 {/* Main 6 tabs */}
                 <TabsList className="w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto flex gap-1">
                   {[

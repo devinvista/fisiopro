@@ -568,6 +568,36 @@ function NearingCompletionPhase({
         </div>
       )}
 
+      {/* Renewal step card */}
+      {!meta.hasDischarge && (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+              <RefreshCw className="w-4 h-4 text-indigo-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-0.5">
+                Etapa adicional — Renovação
+              </p>
+              <p className="text-sm font-bold text-slate-800">Renovar plano de tratamento</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Se o paciente precisar continuar o tratamento, cadastre um novo plano ou estenda o
+                atual com novas sessões antes de emitir a alta fisioterapêutica.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2.5 h-8 gap-1.5 text-xs font-semibold rounded-lg border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300"
+                onClick={() => handleShortcut(steps.find(s => s.stepKey === "plano_tratamento") ?? steps[0])}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Ir para Plano de Tratamento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Completion steps timeline */}
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 px-1">
