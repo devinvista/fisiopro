@@ -169,12 +169,19 @@ export function TreatmentPlanItemsSection({
     const storedDisc = Number(item.discount ?? 0);
     let initialDisc = storedDisc;
     if (isAvulso) {
-      const sessForDiv =
-        item.totalSessions != null
-          ? Number(item.totalSessions)
-          : plannedSessionsForItem(item, planStartDate, planMonths);
-      const safeSess = Math.max(1, sessForDiv);
-      initialDisc = storedDisc / safeSess;
+      // Se netUnitPrice disponível, reconstrói o desconto/sessão diretamente
+      // (evita drift da divisão quando totalSessions era null ao salvar).
+      if (item.netUnitPrice != null) {
+        const unitP = Number(item.unitPrice ?? item.price ?? 0);
+        initialDisc = Math.max(0, unitP - Number(item.netUnitPrice));
+      } else {
+        const sessForDiv =
+          item.totalSessions != null
+            ? Number(item.totalSessions)
+            : plannedSessionsForItem(item, planStartDate, planMonths);
+        const safeSess = Math.max(1, sessForDiv);
+        initialDisc = storedDisc / safeSess;
+      }
     }
     setEditDiscount(String(initialDisc));
     setEditDiscountType("reais");
@@ -222,15 +229,18 @@ export function TreatmentPlanItemsSection({
       return { gross, discount, net: Math.max(0, gross - discount), sessions: 0 };
     }
     const isAvulso = !item.packageId;
-    // Para avulso usa o preço negociado (unitPrice) quando disponível;
-    // caso contrário recai sobre o preço de catálogo (price).
     const unitP = Number(item.unitPrice ?? item.price ?? 0);
-    // Avulso sem totalSessions fixo → usa a previsão (sessões/sem × semanas
-    // de vigência, ou contagem real pelos weekDays se já materializado).
     const sessions = item.totalSessions != null
       ? Number(item.totalSessions)
       : (isAvulso ? plannedSessionsForItem(item, planStartDate, planMonths) : 0);
-    const gross = isAvulso ? unitP * Math.max(1, sessions) : unitP;
+    const sessCount = Math.max(1, sessions);
+    const gross = isAvulso ? unitP * sessCount : unitP;
+    // Se netUnitPrice disponível (preço líquido por sessão gravado no backend),
+    // usa diretamente para calcular o valor líquido — evita recalcular o desconto.
+    if (isAvulso && item.netUnitPrice != null) {
+      const net = Number(item.netUnitPrice) * sessCount;
+      return { gross, discount: Math.max(0, gross - net), net, sessions: sessCount };
+    }
     return { gross, discount, net: Math.max(0, gross - discount), sessions };
   }
 

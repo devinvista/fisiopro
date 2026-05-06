@@ -237,6 +237,10 @@ export const treatmentPlanProceduresTable = pgTable("treatment_plan_procedures",
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }),
   unitMonthlyPrice: numeric("unit_monthly_price", { precision: 10, scale: 2 }),
   discount: numeric("discount", { precision: 10, scale: 2 }).default("0"),
+  // Preço líquido por sessão negociado no contrato (unitPrice − desconto/sessão).
+  // Calculado no cadastro/edição do item avulso e usado pelo billing engine
+  // para imputar o valor correto sem re-estimar sessões a cada atendimento.
+  netUnitPrice: numeric("net_unit_price", { precision: 10, scale: 2 }),
   // ── Materialização (refator pós-sprint financeiro) ────────────────────────
   // Para itens recorrentes (pacote mensal), define os dias da semana em que
   // as consultas serão agendadas. Strings em inglês minúscula (compat com

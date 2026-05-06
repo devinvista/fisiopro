@@ -63,6 +63,8 @@ export interface PlanProcedureItem {
   price?: string | null;
   unitPrice?: string | null;
   discount?: string | null;
+  /** Preço líquido por sessão (unitPrice − desconto/sessão). Calculado pelo backend. */
+  netUnitPrice?: string | null;
   usedSessions?: number;
   weekDays?: string | string[] | null;
   defaultStartTime?: string | null;

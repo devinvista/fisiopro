@@ -3,6 +3,7 @@ import {
   appointmentsTable, financialRecordsTable, sessionCreditsTable,
   patientWalletTable, patientWalletTransactionsTable,
   patientPackagesTable, treatmentPlansTable, packagesTable, clinicsTable,
+  treatmentPlanProceduresTable,
 } from "@workspace/db";
 import { eq, and, gt, sql, asc, desc, inArray } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
@@ -220,9 +221,189 @@ export async function applyBillingRules(
             err,
           );
         }
-        return; // mensalConsolidado: encerrado aqui
+        return; // mensalConsolidado com invoice pré-existente: encerrado aqui
       }
-      // porSessao: não retorna — cai para per-session billing abaixo
+
+      // monthlyInvoiceId ainda null: determina o billing mode do item avulso.
+      // mensalConsolidado → cria faturaPlanoAvulsoMensal on-demand na 1ª confirmação do mês.
+      // porSessao         → gera debitoServico na carteira do paciente.
+      {
+        const [planItem] = await db
+          .select({
+            netUnitPrice:   treatmentPlanProceduresTable.netUnitPrice,
+            unitPrice:      treatmentPlanProceduresTable.unitPrice,
+            discount:       treatmentPlanProceduresTable.discount,
+            totalSessions:  treatmentPlanProceduresTable.totalSessions,
+            sessionsPerWeek: treatmentPlanProceduresTable.sessionsPerWeek,
+            packageId:      treatmentPlanProceduresTable.packageId,
+            avulsoBillingMode: treatmentPlansTable.avulsoBillingMode,
+            planId:         treatmentPlansTable.id,
+          })
+          .from(treatmentPlanProceduresTable)
+          .innerJoin(treatmentPlansTable, eq(treatmentPlanProceduresTable.treatmentPlanId, treatmentPlansTable.id))
+          .where(eq(treatmentPlanProceduresTable.id, planProcId))
+          .limit(1);
+
+        if (planItem && !planItem.packageId) {
+          // Preço líquido/sessão: preferir netUnitPrice persistido; fallback calculado.
+          const netPrice = planItem.netUnitPrice != null
+            ? Math.max(0, Number(planItem.netUnitPrice))
+            : (() => {
+                const unit = Number(planItem.unitPrice ?? 0);
+                const disc = Math.max(0, Number(planItem.discount ?? 0));
+                const sess = planItem.totalSessions && planItem.totalSessions > 0
+                  ? planItem.totalSessions
+                  : Math.max(1, Math.round((planItem.sessionsPerWeek ?? 1) * 4.333 * 12));
+                return Math.max(0, unit - disc / sess);
+              })();
+
+          const billingMode = (planItem.avulsoBillingMode ?? "porSessao") as string;
+          const apptMonthStart = monthRangeFromDate(appointmentDate).startDate;
+
+          // ── mensalConsolidado: invoice on-demand ──────────────────────────
+          if (billingMode === "mensalConsolidado") {
+            const [existingInv] = await db
+              .select({ id: financialRecordsTable.id })
+              .from(financialRecordsTable)
+              .where(and(
+                eq(financialRecordsTable.treatmentPlanProcedureId, planProcId),
+                eq(financialRecordsTable.transactionType, "faturaPlanoAvulsoMensal"),
+                eq(financialRecordsTable.planMonthRef, apptMonthStart),
+              ))
+              .limit(1);
+
+            let onDemandInvoiceId: number;
+            if (existingInv) {
+              onDemandInvoiceId = existingInv.id;
+            } else {
+              // Conta agendamentos não-cancelados do mês para este item.
+              const apptMonthEnd = monthRangeFromDate(appointmentDate).endDate;
+              const [{ monthCount }] = await db
+                .select({ monthCount: sql<number>`count(*)::int` })
+                .from(appointmentsTable)
+                .where(and(
+                  eq(appointmentsTable.treatmentPlanProcedureId, planProcId),
+                  sql`${appointmentsTable.date} >= ${apptMonthStart}::date`,
+                  sql`${appointmentsTable.date} <= ${apptMonthEnd}::date`,
+                  sql`${appointmentsTable.status} NOT IN ('cancelado')`,
+                )) as unknown as [{ monthCount: number }];
+              const totalSessMonth = Math.max(1, Number(monthCount));
+              const monthlyAmount = netPrice * totalSessMonth;
+              const [inserted] = await db
+                .insert(financialRecordsTable)
+                .values({
+                  type: "receita",
+                  amount: monthlyAmount.toFixed(2),
+                  description:
+                    `Avulsos mensalConsolidado — plano #${planItem.planId} — ` +
+                    `${patientName} — ${apptMonthStart.slice(0, 7)} ` +
+                    `(${totalSessMonth}× R$${netPrice.toFixed(2)})`,
+                  category: procedure.category,
+                  patientId,
+                  procedureId,
+                  clinicId: resolvedClinicId,
+                  transactionType: "faturaPlanoAvulsoMensal",
+                  status: "pendente",
+                  dueDate: appointmentDate,
+                  treatmentPlanId: planItem.planId,
+                  treatmentPlanProcedureId: planProcId,
+                  planMonthRef: apptMonthStart,
+                  priceSource: "plano_avulso_on_demand",
+                  originalUnitPrice: planItem.unitPrice,
+                  recognitionCreditsTotal: totalSessMonth,
+                  recognitionCreditsConsumed: 0,
+                  recognizedAmount: "0",
+                })
+                .returning({ id: financialRecordsTable.id });
+              onDemandInvoiceId = inserted.id;
+            }
+
+            try {
+              await recognizeMonthlyInvoiceRevenuePartial({
+                monthlyInvoiceId: onDemandInvoiceId,
+                appointmentId,
+                appointmentDate,
+              });
+            } catch (err) {
+              console.error(
+                `[applyBillingRules] failed to recognize on-demand invoice — invoiceId=${onDemandInvoiceId} appointmentId=${appointmentId}:`,
+                err,
+              );
+            }
+            return;
+          }
+
+          // ── porSessao: debitoServico na carteira ──────────────────────────
+          if (netPrice > 0 && resolvedClinicId) {
+            await db.transaction(async (tx) => {
+              const [wallet] = await tx
+                .select()
+                .from(patientWalletTable)
+                .where(and(
+                  eq(patientWalletTable.patientId, patientId),
+                  eq(patientWalletTable.clinicId, resolvedClinicId!),
+                ))
+                .for("update")
+                .limit(1);
+
+              let walletId: number;
+              let currentBalance: number;
+              if (wallet) {
+                walletId = wallet.id;
+                currentBalance = Number(wallet.balance);
+              } else {
+                const [created] = await tx
+                  .insert(patientWalletTable)
+                  .values({ patientId, clinicId: resolvedClinicId!, balance: "0" })
+                  .returning();
+                walletId = created.id;
+                currentBalance = 0;
+              }
+
+              const newBalance = (currentBalance - netPrice).toFixed(2);
+              await tx
+                .update(patientWalletTable)
+                .set({ balance: newBalance, updatedAt: new Date() })
+                .where(eq(patientWalletTable.id, walletId));
+
+              const [fr] = await tx
+                .insert(financialRecordsTable)
+                .values({
+                  type: "receita",
+                  amount: netPrice.toFixed(2),
+                  description: `Serviço avulso: ${procedure.name} — consulta #${appointmentId} — ${patientName}`,
+                  category: procedure.category,
+                  appointmentId,
+                  patientId,
+                  procedureId,
+                  transactionType: "debitoServico",
+                  status: "pendente",
+                  dueDate: appointmentDate,
+                  clinicId: resolvedClinicId,
+                  treatmentPlanId: planItem.planId,
+                  treatmentPlanProcedureId: planProcId,
+                  planMonthRef: apptMonthStart,
+                  priceSource: "plano_tratamento",
+                  originalUnitPrice: planItem.unitPrice,
+                })
+                .returning();
+
+              await tx.insert(patientWalletTransactionsTable).values({
+                walletId,
+                patientId,
+                clinicId: resolvedClinicId!,
+                amount: `-${netPrice.toFixed(2)}`,
+                type: "debitoServico",
+                description: `Serviço prestado: ${procedure.name} — consulta #${appointmentId}`,
+                appointmentId,
+                financialRecordId: fr.id,
+              });
+            });
+          }
+          return; // porSessao avulso: encerrado aqui
+        }
+        // Não é item avulso (packageId set ou item não encontrado): cai para billing padrão abaixo.
+      }
     } else if (absenceSet.includes(newStatus) && !absenceSet.includes(oldStatus)) {
       // Falta em plano materializado SEMPRE gera crédito de sessão (a vaga
       // foi paga, o paciente tem direito a remarcar). Não há estorno.

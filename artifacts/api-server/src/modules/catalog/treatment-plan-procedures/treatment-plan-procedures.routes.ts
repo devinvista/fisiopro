@@ -2,8 +2,44 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { treatmentPlanProceduresTable, treatmentPlansTable, proceduresTable, packagesTable, patientsTable, patientClinicsTable, appointmentsTable, usersTable } from "@workspace/db";
 import { eq, and, or, inArray, isNull } from "drizzle-orm";
+
 import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
+
+// ─── Helpers financeiros ───────────────────────────────────────────────────────
+
+/**
+ * Calcula o preço líquido por sessão (netUnitPrice) para itens avulso.
+ * Fórmula: unitPrice − (totalDiscount / sessions)
+ * onde sessions = totalSessions explícito OU estimativa pela vigência do plano.
+ */
+async function computeNetUnitPrice(
+  planId: number,
+  unitPriceRaw: unknown,
+  discountRaw: unknown,
+  totalSessionsRaw: unknown,
+  sessionsPerWeekRaw: unknown,
+): Promise<string | null> {
+  const unit = Number(unitPriceRaw ?? 0);
+  if (unit <= 0) return null;
+  const disc = Math.max(0, Number(discountRaw ?? 0));
+  const totalSessions = totalSessionsRaw ? parseInt(String(totalSessionsRaw)) : null;
+  let sessions: number;
+  if (totalSessions && totalSessions > 0) {
+    sessions = totalSessions;
+  } else {
+    const [planInfo] = await db
+      .select({ durationMonths: treatmentPlansTable.durationMonths })
+      .from(treatmentPlansTable)
+      .where(eq(treatmentPlansTable.id, planId))
+      .limit(1);
+    const dur = planInfo?.durationMonths ?? 12;
+    const spw = Math.max(1, sessionsPerWeekRaw ? parseInt(String(sessionsPerWeekRaw)) : 1);
+    sessions = Math.max(1, Math.round(spw * 4.333 * dur));
+  }
+  const unitDisc = disc / sessions;
+  return Math.max(0, unit - unitDisc).toFixed(2);
+}
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -165,6 +201,7 @@ router.get("/", requirePermission("patients.read"), async (req: AuthRequest, res
           unitPrice: treatmentPlanProceduresTable.unitPrice,
           unitMonthlyPrice: treatmentPlanProceduresTable.unitMonthlyPrice,
           discount: treatmentPlanProceduresTable.discount,
+          netUnitPrice: treatmentPlanProceduresTable.netUnitPrice,
           priority: treatmentPlanProceduresTable.priority,
           notes: treatmentPlanProceduresTable.notes,
           weekDays: treatmentPlanProceduresTable.weekDays,
@@ -374,6 +411,12 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
       return;
     }
 
+    // Para itens avulso (procedureId set, sem packageId), calcula o preço
+    // líquido contratado por sessão e persiste na coluna `net_unit_price`.
+    const netUnitPriceVal = (!packageId && procedureId && unitPrice != null)
+      ? await computeNetUnitPrice(planId, unitPrice, discount, totalSessions, sessionsPerWeek)
+      : null;
+
     const [item] = await db
       .insert(treatmentPlanProceduresTable)
       .values({
@@ -385,6 +428,7 @@ router.post("/", requirePermission("medical.write"), async (req: AuthRequest, re
         unitPrice: unitPrice != null ? String(unitPrice) : null,
         unitMonthlyPrice: unitMonthlyPrice != null ? String(unitMonthlyPrice) : null,
         discount: discount != null ? String(discount) : "0",
+        netUnitPrice: netUnitPriceVal,
         priority: priority ? parseInt(priority) : 1,
         notes: notes || null,
         weekDays: weekDays ?? null,
@@ -550,6 +594,28 @@ router.put("/:id", requirePermission("medical.write"), async (req: AuthRequest, 
     if (scheduleId !== undefined) updateData.scheduleId = scheduleId != null ? Number(scheduleId) : null;
     // Duração da consulta vem SEMPRE do procedimento vinculado — sem
     // override por item. Se algum cliente legado mandar o campo, ignora.
+
+    // Recalcula netUnitPrice para itens avulso quando algum campo financeiro mudou.
+    // Usa os valores efetivos pós-merge (updateData tem prioridade sobre existing).
+    const effectiveProcedureId = updateData.procedureId !== undefined ? updateData.procedureId : existing.procedureId;
+    const effectivePackageId   = updateData.packageId   !== undefined ? updateData.packageId   : existing.packageId;
+    const isAvulsoItem = !!effectiveProcedureId && !effectivePackageId;
+    const financialFieldsChanged = [
+      "unitPrice", "discount", "totalSessions", "sessionsPerWeek",
+    ].some(k => updateData[k] !== undefined);
+    if (isAvulsoItem && financialFieldsChanged) {
+      const effUnitPrice     = updateData.unitPrice      ?? existing.unitPrice;
+      const effDiscount      = updateData.discount       ?? existing.discount;
+      const effTotalSessions = updateData.totalSessions  !== undefined ? updateData.totalSessions  : existing.totalSessions;
+      const effSpw           = updateData.sessionsPerWeek !== undefined ? updateData.sessionsPerWeek : existing.sessionsPerWeek;
+      updateData.netUnitPrice = await computeNetUnitPrice(
+        existing.treatmentPlanId,
+        effUnitPrice,
+        effDiscount,
+        effTotalSessions,
+        effSpw,
+      );
+    }
 
     if (Object.keys(updateData).length === 0) {
       res.json(existing);

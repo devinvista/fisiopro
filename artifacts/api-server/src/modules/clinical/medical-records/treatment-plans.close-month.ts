@@ -228,7 +228,7 @@ export async function closeAvulsoMonth(
           eq(financialRecordsTable.treatmentPlanId, planId),
           eq(financialRecordsTable.status, "pendente"),
           isNull(financialRecordsTable.parentRecordId),
-          sql`${financialRecordsTable.transactionType} IN ('creditoAReceber','pendenteFatura')`,
+          sql`${financialRecordsTable.transactionType} IN ('creditoAReceber','pendenteFatura','debitoServico')`,
           sql`(
             (${financialRecordsTable.planMonthRef} = ${normalizedRef}::date)
             OR (
