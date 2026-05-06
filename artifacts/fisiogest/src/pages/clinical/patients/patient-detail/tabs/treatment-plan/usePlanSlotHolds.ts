@@ -118,8 +118,8 @@ export async function reservePlanSlots(
 
   if (res.status === 409) {
     const conflicts =
-      (body as { issues?: { conflicts?: PlanHoldConflict[] } } | null)
-        ?.issues?.conflicts ?? [];
+      (body as { details?: { conflicts?: PlanHoldConflict[] } } | null)
+        ?.details?.conflicts ?? [];
     return { ok: false, conflicts };
   }
   if (!res.ok) {

@@ -302,7 +302,7 @@ router.get(
 //
 // POST: cria/renova hold. Body `{ slots: [{itemId,date,startTime,endTime,scheduleId,procedureId}], ttlMinutes? }`.
 //   - 200 com `{ ok, planId, slots, expiresAt, ttlSecondsRemaining }`.
-//   - 409 com `{ issues: { code:"slot_conflict", conflicts:[...] } }` se
+//   - 409 com `{ details: { code:"slot_conflict", conflicts:[...] } }` se
 //     algum slot já está ocupado por appointment ou hold de outro plano.
 //   - 400 se algum slot é mal-formado ou item não pertence ao plano.
 //   - 404 se planId não pertence ao patientId da rota.
