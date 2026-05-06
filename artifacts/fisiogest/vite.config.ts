@@ -60,7 +60,7 @@ export default defineConfig({
   },
   server: {
     port,
-    host: "::",
+    host: "0.0.0.0",
     allowedHosts: true,
     proxy: {
       "/api": {
@@ -75,7 +75,7 @@ export default defineConfig({
   },
   preview: {
     port,
-    host: "::",
+    host: "0.0.0.0",
     allowedHosts: true,
   },
 });
