@@ -1458,6 +1458,8 @@ function StepContrato({
             <CloseMonthBlock
               patientId={patientId}
               planId={selectedPlanId}
+              startDate={selectedPlan?.startDate ?? form.startDate ?? null}
+              durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? null}
               onClosed={onChanged}
             />
           )}

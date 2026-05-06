@@ -1,20 +1,74 @@
 import { useState } from "react";
 import { CalendarDays, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
 import { apiSendJson } from "@/lib/api";
 
 interface Props {
   patientId: number;
   planId: number;
+  startDate?: string | null;
+  durationMonths?: number | null;
   onClosed: () => void;
 }
 
-export function CloseMonthBlock({ patientId, planId, onClosed }: Props) {
+function buildMonthOptions(startDate?: string | null, durationMonths?: number | null) {
+  const months: { value: string; label: string }[] = [];
+
+  const MONTH_NAMES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  ];
+
+  if (startDate && durationMonths && durationMonths > 0) {
+    const [y, m] = startDate.split("-").map(Number);
+    for (let i = 0; i < durationMonths; i++) {
+      const totalMonths = m - 1 + i;
+      const year = y + Math.floor(totalMonths / 12);
+      const month = (totalMonths % 12) + 1;
+      const value = `${year}-${String(month).padStart(2, "0")}`;
+      const label = `${MONTH_NAMES[month - 1]} ${year}`;
+      months.push({ value, label });
+    }
+  } else {
+    // Fallback: últimos 12 meses + mês atual
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = d.getFullYear();
+      const month = d.getMonth() + 1;
+      const value = `${year}-${String(month).padStart(2, "0")}`;
+      const MONTH_NAMES_LOCAL = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+      ];
+      months.push({ value, label: `${MONTH_NAMES_LOCAL[month - 1]} ${year}` });
+    }
+  }
+
+  return months;
+}
+
+export function CloseMonthBlock({ patientId, planId, startDate, durationMonths, onClosed }: Props) {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const [ref, setRef] = useState(() => new Date().toISOString().slice(0, 7));
+
+  const options = buildMonthOptions(startDate, durationMonths);
+
+  const defaultRef = (() => {
+    const current = new Date().toISOString().slice(0, 7);
+    if (options.some((o) => o.value === current)) return current;
+    return options[0]?.value ?? current;
+  })();
+
+  const [ref, setRef] = useState(defaultRef);
 
   async function doClose() {
     setBusy(true);
@@ -54,11 +108,18 @@ export function CloseMonthBlock({ patientId, planId, onClosed }: Props) {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="month" value={ref}
-          onChange={(e) => setRef(e.target.value)}
-          className="h-10 w-44 bg-white"
-        />
+        <Select value={ref} onValueChange={setRef}>
+          <SelectTrigger className="h-10 w-52 bg-white">
+            <SelectValue placeholder="Selecione o mês" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button
           size="sm"
           className="h-10 gap-1.5 rounded-xl"
