@@ -26,6 +26,17 @@ import { RecordsTable } from "./lancamentos/RecordsTable";
 // TAB 1: LANÇAMENTOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Tipos de receita que NÃO representam receita competência (não entram no total
+// de receita reconhecida). Espelha NON_COMPETENCY_REVENUE_TYPES do backend.
+const NON_REVENUE_TX_TYPES = new Set([
+  "pagamento",        // entrada de caixa / adiantamento para carteira
+  "depositoCarteira", // depósito direto na carteira
+  "vendaPacote",      // passivo (obrigação de sessões)
+  "faturaConsolidada", // agrupador legado (filhos já contados)
+  "faturaMensalAvulso", // agrupador mensal (filhos já contados)
+  "pendenteFatura",   // sessão aguardando fatura — sem receita ainda
+]);
+
 export function LancamentosTab({ month, year }: { month: number; year: number }) {
   const [typeFilter, setTypeFilter] = useState<"all" | "receita" | "despesa">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,7 +73,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     return sorted.filter((r) => r.type === typeFilter);
   }, [rawRecords, typeFilter]);
 
-  const totalReceitas = useMemo(() => records.filter((r) => r.type === "receita" && (r as any).status !== "cancelado" && (r as any).status !== "estornado" && (r as any).transactionType !== "pendenteFatura").reduce((s, r) => s + Number(r.amount), 0), [records]);
+  const totalReceitas = useMemo(() => records.filter((r) => r.type === "receita" && (r as any).status !== "cancelado" && (r as any).status !== "estornado" && !NON_REVENUE_TX_TYPES.has((r as any).transactionType)).reduce((s, r) => s + Number(r.amount), 0), [records]);
   const totalDespesas = useMemo(() => records.filter((r) => r.type === "despesa" && (r as any).status !== "cancelado" && (r as any).status !== "estornado").reduce((s, r) => s + Number(r.amount), 0), [records]);
 
   const pieData = useMemo(() => {

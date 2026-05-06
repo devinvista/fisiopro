@@ -133,7 +133,7 @@ router.get("/procedure-revenue", requirePermission("reports.read"), async (req: 
         LEFT JOIN appointments a ON a.id = fr.appointment_id
         WHERE fr.type = 'receita'
           AND fr.status NOT IN ('estornado', 'cancelado')
-          AND (fr.transaction_type IS NULL OR fr.transaction_type NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada'))
+          AND (fr.transaction_type IS NULL OR fr.transaction_type NOT IN ('depositoCarteira', 'vendaPacote', 'pagamento', 'faturaConsolidada', 'faturaMensalAvulso'))
           AND (CASE
                  WHEN fr.transaction_type = 'faturaPlano' AND fr.plan_month_ref IS NOT NULL
                  THEN fr.plan_month_ref::date
@@ -286,7 +286,10 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
         sql`(${financialRecordsTable.transactionType} IS NULL OR ${financialRecordsTable.transactionType} = ANY(${RECEIVABLE_TYPES}))`,
       ].filter(Boolean) as any[]));
 
-    // ─── 3. Caixa recebido (settlements pagos na janela) ───────────────────
+    // ─── 3. Caixa recebido (apenas pagamentos diretos na janela) ───────────
+    // Somente transaction_type='pagamento' representa entradas reais de caixa.
+    // 'usoCarteira' é reconhecimento de receita a partir de adiantamento
+    // pré-pago — NÃO é nova entrada de caixa e não deve constar aqui.
     const [opCashIn] = await db
       .select({
         total: sql<number>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
@@ -295,6 +298,7 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
       .where(and(...[
         clinicFilter,
         eq(financialRecordsTable.type, "receita"),
+        eq(financialRecordsTable.transactionType, "pagamento"),
         eq(financialRecordsTable.status, "pago"),
         gte(financialRecordsTable.paymentDate, fromStr),
         lte(financialRecordsTable.paymentDate, toStr),
