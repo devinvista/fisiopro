@@ -8,7 +8,7 @@ import {
 import { eq, and, gt, sql, asc, desc, inArray } from "drizzle-orm";
 import { todayBRT } from "../../../utils/dateUtils.js";
 import {
-  postPackageCreditUsage, postReceivableRevenue, postWalletUsage, resolveAccountCodeById,
+  postPackageCreditUsage, postReceivableRevenue, postReversal, postWalletUsage, resolveAccountCodeById,
 } from "../../shared/accounting/accounting.service.js";
 import { recognizeMonthlyInvoiceRevenuePartial } from "../medical-records/treatment-plans.revenue-recognition.js";
 import { addDaysToDate, monthRangeFromDate } from "./appointments.helpers.js";
@@ -388,16 +388,38 @@ export async function applyBillingRules(
                 })
                 .returning();
 
-              await tx.insert(patientWalletTransactionsTable).values({
+              // amount armazenado SEMPRE positivo — o campo `type` indica a direção.
+              const [walletTx] = await tx.insert(patientWalletTransactionsTable).values({
                 walletId,
                 patientId,
                 clinicId: resolvedClinicId!,
-                amount: `-${netPrice.toFixed(2)}`,
+                amount: netPrice.toFixed(2),
                 type: "debitoServico",
                 description: `Serviço prestado: ${procedure.name} — consulta #${appointmentId}`,
                 appointmentId,
                 financialRecordId: fr.id,
-              });
+              }).returning();
+
+              // Lançamento contábil: D 1.1.2 (Contas a Receber) / C 4.1.1 (Receita)
+              // Registra o direito da empresa à cobrança e a receita pelo serviço prestado.
+              const accountingEntry = await postReceivableRevenue({
+                clinicId: resolvedClinicId,
+                entryDate: appointmentDate,
+                amount: netPrice,
+                description: `Receita avulso porSessao — ${procedure.name} — consulta #${appointmentId} — ${patientName}`,
+                sourceType: "patient_wallet_transaction",
+                sourceId: walletTx.id,
+                patientId,
+                appointmentId,
+                procedureId,
+                walletTransactionId: walletTx.id,
+                financialRecordId: fr.id,
+              }, tx as any);
+
+              await tx
+                .update(financialRecordsTable)
+                .set({ accountingEntryId: accountingEntry.id })
+                .where(eq(financialRecordsTable.id, fr.id));
             });
           }
           return; // porSessao avulso: encerrado aqui
@@ -844,12 +866,13 @@ export async function applyBillingRules(
               ...priceAuditFields,
             }).returning();
 
+            // amount armazenado SEMPRE positivo — o campo `type` indica a direção.
             const [walletTransaction] = await tx.insert(patientWalletTransactionsTable).values({
               walletId:          wallet.id,
               patientId,
               clinicId:          resolvedClinicId,
-              amount:            `-${effectivePrice}`,
-              type:              "debito",
+              amount:            String(effectivePrice),
+              type:              "usoCarteira",
               description:       `Sessão: ${procedure.name} — consulta #${appointmentId}`,
               appointmentId,
               financialRecordId: fr.id,
@@ -1015,11 +1038,12 @@ export async function applyBillingRules(
             .set({ balance: restoredBalance, updatedAt: new Date() })
             .where(eq(patientWalletTable.id, wallet.id));
 
+          // amount armazenado SEMPRE positivo — tipo "estorno" indica crédito.
           await tx.insert(patientWalletTransactionsTable).values({
             walletId:          wallet.id,
             patientId,
             clinicId:          resolvedClinicId,
-            amount:            String(fr.amount),
+            amount:            String(Math.abs(Number(fr.amount))),
             type:              "estorno",
             description:       `Estorno de cancelamento — consulta #${appointmentId}`,
             appointmentId,
@@ -1030,11 +1054,25 @@ export async function applyBillingRules(
             .update(financialRecordsTable)
             .set({ status: "estornado" })
             .where(eq(financialRecordsTable.id, fr.id));
+
+          // Estorno contábil: reverte o postWalletUsage original
+          // (D 2.1.1 Adiantamentos / C 4.1.x Receita) → passivo volta + receita cancelada.
+          if (fr.accountingEntryId) {
+            await postReversal(fr.accountingEntryId, {
+              clinicId: resolvedClinicId,
+              entryDate: todayBRT(),
+              description: `Estorno uso de carteira — cancelamento consulta #${appointmentId} — ${patientName}`,
+              sourceType: "patient_wallet_transaction",
+              patientId,
+              appointmentId,
+              financialRecordId: fr.id,
+            }, tx as any);
+          }
         }
       });
     }
 
-    // ── Gap 1: Estorno de debitoServico avulso (porSessao) ───────────────────
+    // ── Estorno de debitoServico avulso (porSessao) ───────────────────────────
     // Quando um agendamento avulso porSessao já confirmado é cancelado, o
     // debitoServico gerado na carteira precisa ser revertido: saldo restaurado
     // e transação de estorno registrada. Idêntico ao fluxo usoCarteira acima.
@@ -1072,11 +1110,12 @@ export async function applyBillingRules(
             .set({ balance: restoredBalance, updatedAt: new Date() })
             .where(eq(patientWalletTable.id, wallet.id));
 
+          // amount armazenado SEMPRE positivo — tipo "estorno" indica crédito.
           await tx.insert(patientWalletTransactionsTable).values({
             walletId:          wallet.id,
             patientId,
             clinicId:          resolvedClinicId!,
-            amount:            String(fr.amount),
+            amount:            String(Math.abs(Number(fr.amount))),
             type:              "estorno",
             description:       `Estorno avulso porSessao — cancelamento consulta #${appointmentId}`,
             appointmentId,
@@ -1087,6 +1126,20 @@ export async function applyBillingRules(
             .update(financialRecordsTable)
             .set({ status: "estornado" })
             .where(eq(financialRecordsTable.id, fr.id));
+
+          // Estorno contábil: reverte o postReceivableRevenue original
+          // (D 1.1.2 Recebíveis / C 4.1.1 Receita) → direito cancelado + receita revertida.
+          if (fr.accountingEntryId) {
+            await postReversal(fr.accountingEntryId, {
+              clinicId: resolvedClinicId,
+              entryDate: todayBRT(),
+              description: `Estorno debitoServico avulso — cancelamento consulta #${appointmentId} — ${patientName}`,
+              sourceType: "patient_wallet_transaction",
+              patientId,
+              appointmentId,
+              financialRecordId: fr.id,
+            }, tx as any);
+          }
         }
       });
     }

@@ -153,7 +153,9 @@ export function WalletSection({ patientId }: { patientId: number }) {
         <div className="space-y-2">
           {transactions.map((tx: any) => {
             const info = WALLET_TX_LABELS[tx.type] ?? { label: tx.type, color: "text-slate-700 bg-slate-50 border-slate-200", sign: "" as const };
-            const amt = Number(tx.amount);
+            // Sempre exibe o valor absoluto; o campo `sign` do label indica a direção.
+            // Suporte a registros históricos onde amount era gravado negativo para débitos.
+            const amt = Math.abs(Number(tx.amount));
             const isCredit = info.sign === "+";
             return (
               <Card key={tx.id} className="border border-slate-100 shadow-none hover:border-slate-200 transition-colors">
