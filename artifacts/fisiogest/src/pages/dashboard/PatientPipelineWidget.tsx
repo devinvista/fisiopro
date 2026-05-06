@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users, ArrowRight, AlertTriangle, ClipboardList, Activity,
-  Target, CalendarDays, Zap, CheckCircle2, Clock, TrendingUp, UserPlus,
+  Target, CalendarDays, Zap, CheckCircle2, Clock, TrendingUp, UserPlus, FileText,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -76,15 +76,15 @@ const STAGE_CONFIG: Record<string, {
     ctaLabel: "Criar plano",
     tab: "treatment",
   },
-  agendamento: {
-    label: "Aguardando agendamento",
-    shortLabel: "Agendar",
-    icon: <CalendarDays className="w-3 h-3" />,
+  aceite_plano: {
+    label: "Aguardando aceite do plano",
+    shortLabel: "Aceite",
+    icon: <FileText className="w-3 h-3" />,
     color: "text-amber-700",
     bg: "bg-amber-50",
     ring: "ring-amber-200",
-    ctaLabel: "Agendar",
-    tab: "",
+    ctaLabel: "Aceitar Plano",
+    tab: "treatment",
   },
   aguardando_sessao: {
     label: "Aguardando 1ª sessão",
@@ -98,7 +98,7 @@ const STAGE_CONFIG: Record<string, {
   },
 };
 
-const STAGE_ORDER = ["anamnese", "avaliacao", "plano_tratamento", "agendamento", "aguardando_sessao"];
+const STAGE_ORDER = ["anamnese", "avaliacao", "plano_tratamento", "aceite_plano", "aguardando_sessao"];
 
 function InitialAvatar({ name, className = "" }: { name: string; className?: string }) {
   const initials = name

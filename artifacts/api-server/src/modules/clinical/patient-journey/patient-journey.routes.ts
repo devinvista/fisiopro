@@ -8,11 +8,12 @@ import {
   anamnesisTable,
   evaluationsTable,
   treatmentPlansTable,
+  treatmentPlanProceduresTable,
   appointmentsTable,
   dischargeSummariesTable,
   patientPackagesTable,
 } from "@workspace/db";
-import { eq, and, or, gt, count, isNull, sql } from "drizzle-orm";
+import { eq, and, or, gt, count, isNull, sql, isNotNull } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { logAudit } from "../../../utils/auditLog.js";
 
@@ -42,7 +43,8 @@ interface AutoStatus {
   avaliacao: "pending" | "completed";
   plano_tratamento: "pending" | "completed";
   procedimentos: "pending" | "completed";
-  agendamento: "pending" | "completed";
+  aceite_plano: "pending" | "in_progress" | "completed";
+  geracao_agenda: "pending" | "in_progress" | "completed";
   tratamento: "pending" | "in_progress" | "completed";
   alta: "pending" | "completed";
 }
@@ -53,36 +55,69 @@ async function computeAutoStatus(patientId: number): Promise<AutoStatus> {
     evaluationsRows,
     [treatmentPlan],
     packagesRows,
-    appointmentsRows,
+    planProceduresRows,
     completedRows,
     [discharge],
   ] = await Promise.all([
-    db.select({ id: anamnesisTable.id }).from(anamnesisTable).where(eq(anamnesisTable.patientId, patientId)).limit(1),
-    db.select({ id: evaluationsTable.id }).from(evaluationsTable).where(eq(evaluationsTable.patientId, patientId)).limit(1),
-    db.select({ id: treatmentPlansTable.id }).from(treatmentPlansTable).where(eq(treatmentPlansTable.patientId, patientId)).limit(1),
-    db.select({ id: patientPackagesTable.id }).from(patientPackagesTable).where(eq(patientPackagesTable.patientId, patientId)).limit(1),
-    db.select({ id: appointmentsTable.id }).from(appointmentsTable).where(eq(appointmentsTable.patientId, patientId)).limit(1),
-    db.select({ id: appointmentsTable.id }).from(appointmentsTable).where(
-      and(eq(appointmentsTable.patientId, patientId), or(eq(appointmentsTable.status, "concluido"), eq(appointmentsTable.status, "presenca")))
-    ).limit(1),
-    db.select({ id: dischargeSummariesTable.id }).from(dischargeSummariesTable).where(eq(dischargeSummariesTable.patientId, patientId)).limit(1),
+    db.select({ id: anamnesisTable.id })
+      .from(anamnesisTable)
+      .where(eq(anamnesisTable.patientId, patientId))
+      .limit(1),
+    db.select({ id: evaluationsTable.id })
+      .from(evaluationsTable)
+      .where(eq(evaluationsTable.patientId, patientId))
+      .limit(1),
+    db.select({
+      id: treatmentPlansTable.id,
+      acceptedAt: treatmentPlansTable.acceptedAt,
+      materializedAt: treatmentPlansTable.materializedAt,
+    })
+      .from(treatmentPlansTable)
+      .where(eq(treatmentPlansTable.patientId, patientId))
+      .limit(1),
+    db.select({ id: patientPackagesTable.id })
+      .from(patientPackagesTable)
+      .where(eq(patientPackagesTable.patientId, patientId))
+      .limit(1),
+    db.select({ id: treatmentPlanProceduresTable.id })
+      .from(treatmentPlanProceduresTable)
+      .innerJoin(treatmentPlansTable, eq(treatmentPlanProceduresTable.treatmentPlanId, treatmentPlansTable.id))
+      .where(eq(treatmentPlansTable.patientId, patientId))
+      .limit(1),
+    db.select({ id: appointmentsTable.id })
+      .from(appointmentsTable)
+      .where(and(
+        eq(appointmentsTable.patientId, patientId),
+        or(eq(appointmentsTable.status, "concluido"), eq(appointmentsTable.status, "presenca")),
+      ))
+      .limit(1),
+    db.select({ id: dischargeSummariesTable.id })
+      .from(dischargeSummariesTable)
+      .where(eq(dischargeSummariesTable.patientId, patientId))
+      .limit(1),
   ]);
 
   const hasAnamnesis = !!anamnesis;
   const hasEvaluation = evaluationsRows.length > 0;
   const hasTreatmentPlan = !!treatmentPlan;
+  const hasPlanProcedures = planProceduresRows.length > 0;
   const hasPackages = packagesRows.length > 0;
-  const hasAppointment = appointmentsRows.length > 0;
   const hasCompletedSession = completedRows.length > 0;
   const hasDischarge = !!discharge;
+  const planAccepted = !!treatmentPlan?.acceptedAt;
+  const planMaterialized = !!treatmentPlan?.materializedAt;
 
   return {
     cadastro: "completed",
     anamnese: hasAnamnesis ? "completed" : "pending",
     avaliacao: hasEvaluation ? "completed" : "pending",
     plano_tratamento: hasTreatmentPlan ? "completed" : "pending",
-    procedimentos: (hasPackages || hasTreatmentPlan) ? "completed" : "pending",
-    agendamento: hasAppointment ? "completed" : "pending",
+    // completed when plan has itemised procedures, a standalone package, or the plan exists
+    procedimentos: (hasPlanProcedures || hasPackages || hasTreatmentPlan) ? "completed" : "pending",
+    // in_progress = plan exists but not yet accepted; completed = patient signed
+    aceite_plano: planAccepted ? "completed" : hasTreatmentPlan ? "in_progress" : "pending",
+    // in_progress = accepted but appointments not yet generated; completed = materialised
+    geracao_agenda: planMaterialized ? "completed" : planAccepted ? "in_progress" : "pending",
     tratamento: hasDischarge ? "completed" : hasCompletedSession ? "in_progress" : "pending",
     alta: hasDischarge ? "completed" : "pending",
   };

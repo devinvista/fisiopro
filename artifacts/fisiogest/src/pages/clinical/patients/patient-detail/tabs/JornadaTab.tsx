@@ -73,7 +73,8 @@ const STEP_NAMES: Record<string, string> = {
   avaliacao:        "Avaliação Física",
   plano_tratamento: "Plano de Tratamento",
   procedimentos:    "Procedimentos / Pacotes",
-  agendamento:      "Agendamento",
+  aceite_plano:     "Aceite do Plano",
+  geracao_agenda:   "Geração da Agenda",
   tratamento:       "Tratamento em Andamento",
   alta:             "Alta Fisioterapêutica",
 };
@@ -83,8 +84,9 @@ const STEP_DESC: Record<string, string> = {
   anamnese:         "Histórico clínico, queixa principal e escala de dor coletados",
   avaliacao:        "Avaliação física, funcional e postural realizada",
   plano_tratamento: "Objetivos, técnicas e frequência de tratamento definidos",
-  procedimentos:    "Pacote de sessões ou procedimentos vinculado ao plano",
-  agendamento:      "Primeira consulta agendada no sistema",
+  procedimentos:    "Procedimentos, pacotes de sessões e preços configurados no plano",
+  aceite_plano:     "Paciente assinou e aceitou formalmente o contrato e o plano de tratamento",
+  geracao_agenda:   "Consultas geradas automaticamente conforme o plano aceito",
   tratamento:       "Sessões de fisioterapia em execução",
   alta:             "Alta fisioterapêutica formal emitida (COFFITO)",
 };
@@ -93,14 +95,14 @@ const STEP_TO_TAB: Record<string, string> = {
   anamnese:         "anamnesis",
   avaliacao:        "evaluations",
   plano_tratamento: "treatment",
+  procedimentos:    "treatment",
+  aceite_plano:     "treatment",
+  geracao_agenda:   "treatment",
   tratamento:       "evolutions",
   alta:             "discharge",
 };
 
-const STEP_TO_ROUTE: Record<string, string> = {
-  procedimentos: "/pacotes",
-  agendamento:   "/agenda",
-};
+const STEP_TO_ROUTE: Record<string, string> = {};
 
 const STEP_ICON: Record<string, React.ReactNode> = {
   cadastro:         <User className="w-4 h-4" />,
@@ -108,7 +110,8 @@ const STEP_ICON: Record<string, React.ReactNode> = {
   avaliacao:        <Activity className="w-4 h-4" />,
   plano_tratamento: <Target className="w-4 h-4" />,
   procedimentos:    <Package className="w-4 h-4" />,
-  agendamento:      <CalendarDays className="w-4 h-4" />,
+  aceite_plano:     <FileText className="w-4 h-4" />,
+  geracao_agenda:   <CalendarDays className="w-4 h-4" />,
   tratamento:       <TrendingUp className="w-4 h-4" />,
   alta:             <BadgeCheck className="w-4 h-4" />,
 };
@@ -117,8 +120,9 @@ const STEP_CTA: Record<string, string> = {
   anamnese:         "Preencher Anamnese",
   avaliacao:        "Registrar Avaliação",
   plano_tratamento: "Criar Plano",
-  procedimentos:    "Ver Pacotes",
-  agendamento:      "Agendar Consulta",
+  procedimentos:    "Ver Procedimentos",
+  aceite_plano:     "Aceitar Plano",
+  geracao_agenda:   "Ver Plano",
   tratamento:       "Ver Evoluções",
   alta:             "Emitir Alta",
 };
@@ -193,7 +197,7 @@ function OnboardingPhase({
   cancelConfirmStep: JourneyStep | null;
   resetConfirmOpen: boolean;
 }) {
-  const ONBOARDING_STEPS = ["cadastro", "anamnese", "avaliacao", "plano_tratamento", "procedimentos", "agendamento"];
+  const ONBOARDING_STEPS = ["cadastro", "anamnese", "avaliacao", "plano_tratamento", "procedimentos", "aceite_plano", "geracao_agenda"];
   const TREATMENT_STEPS = ["tratamento", "alta"];
 
   const onboardingSteps = steps.filter(s => ONBOARDING_STEPS.includes(s.stepKey));

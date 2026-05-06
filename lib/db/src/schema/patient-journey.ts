@@ -7,10 +7,11 @@ export const JOURNEY_STEP_DEFS = [
   { key: "anamnese",         order: 2, name: "Anamnese" },
   { key: "avaliacao",        order: 3, name: "Avaliação" },
   { key: "plano_tratamento", order: 4, name: "Plano de Tratamento" },
-  { key: "procedimentos",    order: 5, name: "Procedimentos / Pacotes" },
-  { key: "agendamento",      order: 6, name: "Agendamento" },
-  { key: "tratamento",       order: 7, name: "Tratamento em andamento" },
-  { key: "alta",             order: 8, name: "Alta" },
+  { key: "procedimentos",    order: 5, name: "Procedimentos" },
+  { key: "aceite_plano",     order: 6, name: "Aceite do Plano" },
+  { key: "geracao_agenda",   order: 7, name: "Geração da Agenda" },
+  { key: "tratamento",       order: 8, name: "Tratamento em andamento" },
+  { key: "alta",             order: 9, name: "Alta" },
 ] as const;
 
 export type JourneyStepKey = (typeof JOURNEY_STEP_DEFS)[number]["key"];

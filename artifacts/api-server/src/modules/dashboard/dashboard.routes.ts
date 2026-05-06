@@ -272,7 +272,7 @@ router.get("/patient-pipeline", requirePermission("patients.read"), async (req, 
         if (!hasAnamnesis.has(id)) return "anamnese";
         if (!hasEvaluation.has(id)) return "avaliacao";
         if (!hasTreatmentPlan.has(id)) return "plano_tratamento";
-        if (!hasAnyAppt.has(id)) return "agendamento";
+        if (!hasAnyAppt.has(id)) return "aceite_plano";
         return "aguardando_sessao";
       };
 
