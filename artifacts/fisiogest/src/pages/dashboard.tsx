@@ -21,6 +21,7 @@ import {
 import { format, parseISO, differenceInYears } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link, useLocation } from "wouter";
+import { PatientPipelineWidget } from "./dashboard/PatientPipelineWidget";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -346,6 +347,9 @@ export default function Dashboard() {
             }
           />
         </div>
+
+        {/* ── Patient Pipeline Widget ── */}
+        <PatientPipelineWidget />
 
         {/* ── Online Booking Portal (compact banner) ── */}
         <div className="bg-gradient-to-r from-teal-600 to-teal-500 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 sm:gap-4 shadow-sm">

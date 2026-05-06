@@ -12,7 +12,7 @@ import {
   dischargeSummariesTable,
   patientPackagesTable,
 } from "@workspace/db";
-import { eq, and, or, gt, count, isNull } from "drizzle-orm";
+import { eq, and, or, gt, count, isNull, sql } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../../middleware/auth.js";
 import { logAudit } from "../../../utils/auditLog.js";
 
@@ -88,6 +88,70 @@ async function computeAutoStatus(patientId: number): Promise<AutoStatus> {
   };
 }
 
+async function computeJourneyMeta(patientId: number, clinicId: number | null | undefined) {
+  const clinicFilter = clinicId
+    ? and(eq(appointmentsTable.patientId, patientId), eq(appointmentsTable.clinicId, clinicId))
+    : eq(appointmentsTable.patientId, patientId);
+
+  const [
+    completedApptRows,
+    activePlanRows,
+    [discharge],
+  ] = await Promise.all([
+    // Count completed appointments
+    db.select({ count: sql<number>`count(*)::int` })
+      .from(appointmentsTable)
+      .where(and(
+        clinicFilter,
+        sql`${appointmentsTable.status} IN ('concluido', 'presenca')`,
+      )),
+    // Get most recent active treatment plan
+    db.select({
+      id: treatmentPlansTable.id,
+      estimatedSessions: treatmentPlansTable.estimatedSessions,
+      status: treatmentPlansTable.status,
+      startDate: treatmentPlansTable.startDate,
+    })
+      .from(treatmentPlansTable)
+      .where(and(
+        eq(treatmentPlansTable.patientId, patientId),
+        sql`${treatmentPlansTable.status} IN ('ativo', 'vigente')`,
+      ))
+      .limit(1),
+    // Check discharge
+    db.select({ id: dischargeSummariesTable.id })
+      .from(dischargeSummariesTable)
+      .where(eq(dischargeSummariesTable.patientId, patientId))
+      .limit(1),
+  ]);
+
+  const firstConsultationCompleted = Number(completedApptRows[0]?.count ?? 0) > 0;
+  const plan = activePlanRows[0] ?? null;
+  const hasDischarge = !!discharge;
+
+  let treatmentPlanProgress = null;
+  if (plan && plan.estimatedSessions && plan.estimatedSessions > 0) {
+    const completedSessions = Number(completedApptRows[0]?.count ?? 0);
+    const totalSessions = plan.estimatedSessions;
+    const pct = Math.min(100, Math.round((completedSessions / totalSessions) * 100));
+    treatmentPlanProgress = {
+      planId: plan.id,
+      estimatedSessions: totalSessions,
+      completedSessions,
+      pct,
+      isNearingCompletion: pct >= 80,
+      planStatus: plan.status ?? "ativo",
+      startDate: plan.startDate,
+    };
+  }
+
+  return {
+    firstConsultationCompleted,
+    hasDischarge,
+    treatmentPlanProgress,
+  };
+}
+
 function mergeStatus(
   dbStatus: string,
   autoStatus: string
@@ -107,10 +171,13 @@ async function getOrCreateSteps(patientId: number, clinicId: number | null | und
     .orderBy(patientJourneyStepsTable.stepOrder);
 
   if (steps.length === 0) {
+    if (!clinicId) {
+      return [];
+    }
     const now = new Date();
     const toInsert = JOURNEY_STEP_DEFS.map((def) => ({
       patientId,
-      clinicId: clinicId ?? null,
+      clinicId,
       stepKey: def.key,
       stepOrder: def.order,
       status: "pending",
@@ -145,8 +212,11 @@ router.get("/journey", async (req: Request<P>, res) => {
     }
 
     const clinicId = authReq.clinicId ?? null;
-    const steps = await getOrCreateSteps(patientId, clinicId);
-    const auto = await computeAutoStatus(patientId);
+    const [steps, auto, meta] = await Promise.all([
+      getOrCreateSteps(patientId, clinicId),
+      computeAutoStatus(patientId),
+      computeJourneyMeta(patientId, clinicId),
+    ]);
 
     const merged = steps.map((step) => {
       const autoForStep = auto[step.stepKey as keyof AutoStatus] ?? "pending";
@@ -154,7 +224,7 @@ router.get("/journey", async (req: Request<P>, res) => {
       return { ...step, status: effectiveStatus, autoStatus: autoForStep };
     });
 
-    res.json(merged);
+    res.json({ steps: merged, meta });
   } catch (err) {
     console.error("[journey] GET error:", err);
     res.status(500).json({ error: "Internal Server Error" });
@@ -257,8 +327,11 @@ router.post("/journey/reset", async (req: Request<P>, res) => {
       .where(eq(patientJourneyStepsTable.patientId, patientId));
 
     const clinicId = authReq.clinicId ?? null;
-    const steps = await getOrCreateSteps(patientId, clinicId);
-    const auto = await computeAutoStatus(patientId);
+    const [steps, auto, meta] = await Promise.all([
+      getOrCreateSteps(patientId, clinicId),
+      computeAutoStatus(patientId),
+      computeJourneyMeta(patientId, clinicId),
+    ]);
 
     await logAudit({
       userId: authReq.userId ?? null,
@@ -273,7 +346,7 @@ router.post("/journey/reset", async (req: Request<P>, res) => {
       return { ...step, status: mergeStatus(step.status, autoForStep), autoStatus: autoForStep };
     });
 
-    res.json(merged);
+    res.json({ steps: merged, meta });
   } catch (err) {
     console.error("[journey] reset error:", err);
     res.status(500).json({ error: "Internal Server Error" });
