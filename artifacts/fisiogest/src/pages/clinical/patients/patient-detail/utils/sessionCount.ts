@@ -114,7 +114,15 @@ export function plannedSessionsForItem(item: {
   // 1. Pacote com sessões fixas (contratado): valor fixo.
   if (isFixedPackage) return Number(item.totalSessions);
 
-  // 2. Se já há weekDays (escolha de agenda / materialização): contagem real.
+  // 1b. Avulso sem pacote com quantidade explicitamente definida: respeita o
+  //     contratado. weekDays define QUANDO agendar (ritmo), não QUANTAS sessões
+  //     existem — evita divergência entre previsão financeira e rodapé de sessões.
+  if (!isMensal && !item.packageId && item.totalSessions != null) {
+    return Number(item.totalSessions);
+  }
+
+  // 2. Se já há weekDays (escolha de agenda): contagem real pelo calendário.
+  //    Aplica-se a itens mensais e avulsos SEM quantidade explícita definida.
   const real = countRecurringSessions(planStartDate, planDurationMonths, item.weekDays);
   if (real > 0) return real;
 
@@ -128,8 +136,7 @@ export function plannedSessionsForItem(item: {
 
   // 4. Fallbacks finais (sem dados suficientes para projetar).
   if (!isMensal) {
-    if (item.totalSessions != null) return Number(item.totalSessions);
-    return item.packageId ? 0 : 1; // avulso solto = 1 sessão
+    return item.packageId ? 0 : 1; // avulso solto sem dados = 1 sessão
   }
   return 0;
 }
@@ -148,10 +155,25 @@ export function isPlannedEstimate(item: {
   weekDays?: string | string[] | null;
 }, planStartDate: string | null | undefined, planDurationMonths: number | null | undefined): boolean {
   const isMensal = item.packageType === "mensal";
-  const isFixedPackage = !isMensal && !!item.packageId && item.totalSessions != null;
-  if (isFixedPackage) return false;
+  // Pacote fixo ou avulso com quantidade explícita: não é estimativa.
+  if (!isMensal && item.totalSessions != null) return false;
   const real = countRecurringSessions(planStartDate, planDurationMonths, item.weekDays);
   if (real > 0) return false;
   const sessionsPerWeek = Math.max(0, Number(item.sessionsPerWeek ?? 0));
   return sessionsPerWeek > 0;
+}
+
+/**
+ * Quantas sessões o calendário REAL geraria (weekDays × vigência), ignorando
+ * `totalSessions`. Útil para detectar divergência entre sessões contratadas
+ * e sessões que seriam efetivamente agendadas.
+ *
+ * Retorna 0 quando weekDays não estão configurados.
+ */
+export function scheduledSessionCount(
+  item: { weekDays?: string | string[] | null },
+  planStartDate: string | null | undefined,
+  planDurationMonths: number | null | undefined,
+): number {
+  return countRecurringSessions(planStartDate, planDurationMonths, item.weekDays);
 }

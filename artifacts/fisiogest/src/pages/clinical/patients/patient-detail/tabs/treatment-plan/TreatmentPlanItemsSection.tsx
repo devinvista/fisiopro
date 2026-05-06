@@ -19,7 +19,7 @@ import {
 
 import type { PkgOption, PlanProcedureItem } from "../../types";
 import { fmtCur } from "../../utils/format";
-import { plannedSessionsForItem, isPlannedEstimate } from "../../utils/sessionCount";
+import { plannedSessionsForItem, isPlannedEstimate, scheduledSessionCount } from "../../utils/sessionCount";
 import { apiFetchJson, apiSendJson } from "@/lib/api";
 
 export function TreatmentPlanItemsSection({
@@ -252,6 +252,20 @@ export function TreatmentPlanItemsSection({
     }, 0);
   const hasMensal = planItems.some(i => i.packageType === "mensal");
   const hasSessoes = planItems.some(i => i.packageType !== "mensal");
+
+  // Detecta itens com quantidade contratada (totalSessions) diferente da
+  // quantidade que o calendário de weekDays geraria na vigência do plano.
+  const sessionMismatchItems = planItems
+    .filter(i => i.packageType !== "mensal" && !i.packageId && i.totalSessions != null)
+    .map(i => {
+      const contracted = Number(i.totalSessions);
+      const scheduled = scheduledSessionCount(i, planStartDate, planMonths);
+      if (scheduled > 0 && scheduled !== contracted) {
+        return { name: i.packageName ?? i.procedureName ?? "—", contracted, scheduled };
+      }
+      return null;
+    })
+    .filter(Boolean) as { name: string; contracted: number; scheduled: number }[];
 
   if (!planId) {
     return (
@@ -705,6 +719,23 @@ export function TreatmentPlanItemsSection({
               <p className="text-[10px] text-slate-400 italic pt-1">
                 * estimativa baseada na vigência do plano ({planMonths} {planMonths === 1 ? "mês" : "meses"}) × sessões/semana. Atualiza para o número real após escolher as datas na agenda.
               </p>
+            )}
+
+            {/* Aviso de inconsistência: sessões contratadas ≠ sessões que o calendário geraria */}
+            {sessionMismatchItems.length > 0 && (
+              <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1">
+                <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5 shrink-0" /> Inconsistência de sessões detectada
+                </p>
+                {sessionMismatchItems.map((m) => (
+                  <p key={m.name} className="text-[10px] text-amber-700">
+                    <strong>{m.name}</strong>: {m.contracted} sessões contratadas (cobrança), mas o calendário semanal geraria <strong>{m.scheduled} sessões</strong> na vigência de {planMonths} {planMonths === 1 ? "mês" : "meses"}.
+                    {m.scheduled > m.contracted
+                      ? ` Reduza a duração do plano para ~${Math.ceil(m.contracted / (planItems.find(i => (i.packageName ?? i.procedureName) === m.name)?.sessionsPerWeek ?? 2))} semanas, ou atualize a quantidade contratada para ${m.scheduled} sessões.`
+                      : ` Aumente a quantidade contratada para ${m.scheduled} sessões ou ajuste os dias da semana.`}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
 
