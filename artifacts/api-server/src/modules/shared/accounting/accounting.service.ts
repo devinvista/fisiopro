@@ -236,6 +236,24 @@ export async function postWalletDeposit(input: Omit<JournalEntryInput, "lines" |
   }, tx);
 }
 
+/**
+ * Devolução em dinheiro de saldo de carteira ao paciente (reembolso).
+ * Inverso do `postWalletDeposit`: passivo reduzido, caixa reduzido.
+ *
+ *   D 2.1.1 Adiantamentos de Clientes  (reduz passivo)
+ *   C 1.1.1 Caixa/Banco                (saída de caixa)
+ */
+export async function postWalletRefund(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number }, tx: Tx = db) {
+  return createJournalEntry({
+    ...input,
+    eventType: "wallet_refund",
+    lines: [
+      { accountCode: ACCOUNT_CODES.customerAdvances, debit: input.amount },
+      { accountCode: ACCOUNT_CODES.cash, credit: input.amount },
+    ],
+  }, tx);
+}
+
 export async function postWalletUsage(input: Omit<JournalEntryInput, "lines" | "eventType"> & { amount: number; revenueAccountCode?: string }, tx: Tx = db) {
   return createJournalEntry({
     ...input,
@@ -363,6 +381,14 @@ export async function postExpense(input: Omit<JournalEntryInput, "lines" | "even
 }
 
 export async function postReversal(originalEntryId: number, input: Omit<JournalEntryInput, "lines" | "eventType" | "reversalOfEntryId"> & { eventType?: string }, tx: Tx = db) {
+  // Idempotência: se já existe uma entry de estorno para este original, retorna ela.
+  const [existingReversal] = await tx
+    .select({ id: accountingJournalEntriesTable.id })
+    .from(accountingJournalEntriesTable)
+    .where(eq(accountingJournalEntriesTable.reversalOfEntryId, originalEntryId))
+    .limit(1);
+  if (existingReversal) return existingReversal;
+
   const originalLines = await tx
     .select({
       accountId: accountingJournalLinesTable.accountId,

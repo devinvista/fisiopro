@@ -21,7 +21,7 @@ import { authMiddleware, AuthRequest } from "../../../middleware/auth.js";
 import { requirePermission } from "../../../middleware/rbac.js";
 import { validateBody } from "../../../utils/validate.js";
 import { todayBRT } from "../../../utils/dateUtils.js";
-import { postWalletDeposit } from "../../shared/accounting/accounting.service.js";
+import { postWalletDeposit, postWalletRefund } from "../../shared/accounting/accounting.service.js";
 import { z } from "zod/v4";
 
 const router = Router({ mergeParams: true });
@@ -180,6 +180,121 @@ router.post("/wallet/deposit", requirePermission("financial.write"), async (req:
       .limit(1);
 
     res.status(201).json({ wallet: updatedWallet, deposited: Number(body.amount) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ─── POST /patients/:patientId/wallet/refund ─────────────────────────────────
+// Reembolsa (devolve em dinheiro) parte ou todo o saldo da carteira ao paciente.
+// Valida que o valor solicitado não excede o saldo atual.
+// Lançamento contábil: D 2.1.1 Adiantamentos / C 1.1.1 Caixa (saída de caixa).
+
+const refundBodySchema = z.object({
+  amount:        z.number().positive(),
+  description:   z.string().optional(),
+  paymentMethod: z.string().optional(),
+});
+
+router.post("/refund", requirePermission("financial.write") as any, async (req: AuthRequest, res) => {
+  try {
+    const patientId = Number((req.params as any).patientId);
+    const clinicId  = req.clinicId ?? null;
+    const body      = validateBody(refundBodySchema, req.body, res);
+    if (!body) return;
+
+    if (!clinicId) return res.status(400).json({ error: "clinicId obrigatório" });
+    if (isNaN(patientId)) return res.status(400).json({ error: "patientId inválido" });
+
+    let updatedWallet: typeof patientWalletTable.$inferSelect | undefined;
+
+    await db.transaction(async (tx) => {
+      const [wallet] = await tx
+        .select()
+        .from(patientWalletTable)
+        .where(and(
+          eq(patientWalletTable.patientId, patientId),
+          eq(patientWalletTable.clinicId, clinicId),
+        ))
+        .for("update")
+        .limit(1);
+
+      if (!wallet) {
+        res.status(404).json({ error: "Carteira não encontrada" });
+        return;
+      }
+
+      const currentBalance = Number(wallet.balance);
+      if (body.amount > currentBalance) {
+        res.status(400).json({
+          error: "Valor de reembolso excede o saldo disponível",
+          saldoAtual: currentBalance,
+        });
+        return;
+      }
+
+      const description = body.description ?? `Reembolso de carteira — ${body.amount.toFixed(2)}`;
+      const newBalance  = (currentBalance - body.amount).toFixed(2);
+
+      await tx
+        .update(patientWalletTable)
+        .set({ balance: newBalance, updatedAt: new Date() })
+        .where(eq(patientWalletTable.id, wallet.id));
+
+      const [fr] = await tx
+        .insert(financialRecordsTable)
+        .values({
+          type:            "despesa",
+          amount:          String(body.amount),
+          description,
+          category:        "Reembolso Carteira",
+          patientId,
+          clinicId,
+          transactionType: "reembolsoCarteira",
+          status:          "pago",
+          paymentMethod:   body.paymentMethod ?? null,
+          dueDate:         todayBRT(),
+          paymentDate:     todayBRT(),
+        })
+        .returning();
+
+      const [walletTx] = await tx.insert(patientWalletTransactionsTable).values({
+        walletId:          wallet.id,
+        patientId,
+        clinicId,
+        amount:            String(body.amount),
+        type:              "estorno",
+        description,
+        financialRecordId: fr.id,
+      }).returning();
+
+      const entry = await postWalletRefund({
+        clinicId,
+        entryDate: todayBRT(),
+        amount: body.amount,
+        description,
+        sourceType: "patient_wallet_transaction",
+        sourceId: walletTx.id,
+        patientId,
+        walletTransactionId: walletTx.id,
+        financialRecordId: fr.id,
+      }, tx as any);
+
+      await tx
+        .update(financialRecordsTable)
+        .set({ accountingEntryId: entry.id })
+        .where(eq(financialRecordsTable.id, fr.id));
+
+      [updatedWallet] = await tx
+        .select()
+        .from(patientWalletTable)
+        .where(eq(patientWalletTable.id, wallet.id))
+        .limit(1);
+    });
+
+    if (!updatedWallet) return;
+    res.status(201).json({ wallet: updatedWallet, refunded: body.amount });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });

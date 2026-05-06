@@ -9,6 +9,11 @@ export const RECEIVABLE_TYPES = [
   "faturaConsolidada",
   "faturaPlano",
   "faturaMensalAvulso",
+  // debitoServico: dívida gerada quando sessão avulsa porSessao consome a carteira
+  // (saldo negativo). Precisa estar aqui para que o fluxo de pagamento possa quitá-la.
+  "debitoServico",
+  // faturaPlanoAvulsoMensal: fatura mensal on-demand criada pelo modo mensalConsolidado.
+  "faturaPlanoAvulsoMensal",
 ];
 
 // Tipos que NÃO entram no sumário de receita por competência:

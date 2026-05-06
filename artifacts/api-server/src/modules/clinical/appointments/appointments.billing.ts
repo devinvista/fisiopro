@@ -336,6 +336,19 @@ export async function applyBillingRules(
           // ── porSessao: debitoServico na carteira ──────────────────────────
           if (netPrice > 0 && resolvedClinicId) {
             await db.transaction(async (tx) => {
+              // Idempotência: evita criar dois debitoServico se o billing
+              // rodar duas vezes para a mesma transição de status.
+              const [existingDebit] = await tx
+                .select({ id: financialRecordsTable.id })
+                .from(financialRecordsTable)
+                .where(and(
+                  eq(financialRecordsTable.appointmentId, appointmentId),
+                  eq(financialRecordsTable.transactionType, "debitoServico"),
+                  sql`${financialRecordsTable.status} NOT IN ('cancelado','estornado')`,
+                ))
+                .limit(1);
+              if (existingDebit) return; // já processado
+
               const [wallet] = await tx
                 .select()
                 .from(patientWalletTable)
@@ -418,7 +431,7 @@ export async function applyBillingRules(
 
               await tx
                 .update(financialRecordsTable)
-                .set({ accountingEntryId: accountingEntry.id })
+                .set({ accountingEntryId: accountingEntry.id, recognizedEntryId: accountingEntry.id })
                 .where(eq(financialRecordsTable.id, fr.id));
             });
           }
@@ -1068,6 +1081,12 @@ export async function applyBillingRules(
               financialRecordId: fr.id,
             }, tx as any);
           }
+        } else {
+          console.error(
+            `[billing] usoCarteira estorno: carteira não encontrada — ` +
+            `patientId=${patientId} clinicId=${resolvedClinicId} appointmentId=${appointmentId} frId=${fr.id}. ` +
+            `Saldo não restaurado. Requer ajuste manual.`,
+          );
         }
       });
     }
@@ -1140,6 +1159,12 @@ export async function applyBillingRules(
               financialRecordId: fr.id,
             }, tx as any);
           }
+        } else {
+          console.error(
+            `[billing] debitoServico estorno: carteira não encontrada — ` +
+            `patientId=${patientId} clinicId=${resolvedClinicId} appointmentId=${appointmentId} frId=${fr.id}. ` +
+            `Saldo não restaurado. Requer ajuste manual.`,
+          );
         }
       });
     }

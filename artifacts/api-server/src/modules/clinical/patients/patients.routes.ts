@@ -520,6 +520,10 @@ router.get("/:id", requirePermission("patients.read"), async (req: AuthRequest, 
               "usoCredito",
               "creditoSessao",
               "creditoAReceber",
+              // debitoServico é um recebível (paciente deve à clínica).
+              // Quando quitado, um registro `pagamento` é criado — ele entra em
+              // totalSpent. Incluir debitoServico aqui evitaria dupla contagem.
+              "debitoServico",
             ]),
           ),
         ),

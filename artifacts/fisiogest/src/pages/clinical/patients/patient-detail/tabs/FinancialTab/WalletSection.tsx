@@ -61,8 +61,17 @@ export function WalletSection({ patientId }: { patientId: number }) {
   if (isLoading) return <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" /></div>;
 
   const balancePositive = balance > 0;
-  const balanceBg   = balancePositive ? "from-emerald-50 to-teal-50 border-emerald-200" : "from-slate-50 to-slate-100 border-slate-200";
-  const balanceText = balancePositive ? "text-emerald-700" : "text-slate-500";
+  const balanceNegative = balance < 0;
+  const balanceBg   = balancePositive
+    ? "from-emerald-50 to-teal-50 border-emerald-200"
+    : balanceNegative
+      ? "from-rose-50 to-red-50 border-rose-200"
+      : "from-slate-50 to-slate-100 border-slate-200";
+  const balanceText = balancePositive
+    ? "text-emerald-700"
+    : balanceNegative
+      ? "text-rose-700"
+      : "text-slate-500";
 
   return (
     <div className="space-y-4">
@@ -84,14 +93,23 @@ export function WalletSection({ patientId }: { patientId: number }) {
       <Card className={`border shadow-sm bg-gradient-to-br ${balanceBg} overflow-hidden`}>
         <CardContent className="p-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Saldo disponível</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">
+              {balanceNegative ? "Saldo Devedor" : "Saldo disponível"}
+            </p>
             <p className={`text-xl sm:text-3xl font-bold font-display tabular-nums break-words leading-tight ${balanceText}`}>
               {formatCurrency(balance)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">{transactions.length} transação(ões) registrada(s)</p>
+            {balanceNegative && (
+              <p className="text-xs text-rose-600 font-medium mt-1">
+                Paciente deve à clínica — cobrar via pagamento
+              </p>
+            )}
+            {!balanceNegative && (
+              <p className="text-xs text-slate-400 mt-1">{transactions.length} transação(ões) registrada(s)</p>
+            )}
           </div>
-          <div className={`p-4 rounded-2xl ${balancePositive ? "bg-emerald-100/60" : "bg-slate-100"}`}>
-            <Wallet className={`w-8 h-8 ${balancePositive ? "text-emerald-600" : "text-slate-400"}`} />
+          <div className={`p-4 rounded-2xl ${balancePositive ? "bg-emerald-100/60" : balanceNegative ? "bg-rose-100/60" : "bg-slate-100"}`}>
+            <Wallet className={`w-8 h-8 ${balancePositive ? "text-emerald-600" : balanceNegative ? "text-rose-600" : "text-slate-400"}`} />
           </div>
         </CardContent>
       </Card>
