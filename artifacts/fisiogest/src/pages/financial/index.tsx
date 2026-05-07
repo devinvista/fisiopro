@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarDays, Receipt, Wallet, RotateCcw, Settings2 } from "lucide-react";
+import { CalendarDays, Receipt, Wallet, RotateCcw, Settings2, ClipboardList } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -10,6 +10,7 @@ import { LancamentosTab } from "./components/LancamentosTab";
 import { CashFlowTab } from "./components/CashFlowTab";
 import { EstornosTab } from "./components/EstornosTab";
 import { DespesasFixasTab } from "./components/DespesasFixasTab";
+import { ContasReceberTab } from "./components/ContasReceberTab";
 import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
@@ -21,10 +22,11 @@ interface TabDef {
 }
 
 const ALL_TABS: TabDef[] = [
-  { value: "lancamentos",    icon: <Receipt className="w-3.5 h-3.5" />,   label: "Lançamentos",    feature: "financial.view.simple" },
-  { value: "fluxo-caixa",   icon: <Wallet className="w-3.5 h-3.5" />,    label: "Fluxo de Caixa", feature: "financial.view.cash_flow" },
-  { value: "despesas-fixas", icon: <Settings2 className="w-3.5 h-3.5" />, label: "Despesas Fixas", feature: "module.recurring_expenses" },
-  { value: "estornos",       icon: <RotateCcw className="w-3.5 h-3.5" />, label: "Estornos",       feature: "financial.view.simple" },
+  { value: "lancamentos",      icon: <Receipt className="w-3.5 h-3.5" />,       label: "Lançamentos",      feature: "financial.view.simple" },
+  { value: "contas-receber",   icon: <ClipboardList className="w-3.5 h-3.5" />, label: "A Receber",        feature: "financial.view.simple" },
+  { value: "fluxo-caixa",     icon: <Wallet className="w-3.5 h-3.5" />,        label: "Fluxo de Caixa",   feature: "financial.view.cash_flow" },
+  { value: "despesas-fixas",   icon: <Settings2 className="w-3.5 h-3.5" />,     label: "Despesas Fixas",   feature: "module.recurring_expenses" },
+  { value: "estornos",         icon: <RotateCcw className="w-3.5 h-3.5" />,     label: "Estornos",         feature: "financial.view.simple" },
 ];
 
 export default function Financial() {
@@ -89,6 +91,11 @@ export default function Financial() {
         {hasFeature("financial.view.simple") && (
           <TabsContent value="lancamentos">
             <LancamentosTab month={month} year={year} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.simple") && (
+          <TabsContent value="contas-receber">
+            <ContasReceberTab />
           </TabsContent>
         )}
         {hasFeature("financial.view.cash_flow") && (

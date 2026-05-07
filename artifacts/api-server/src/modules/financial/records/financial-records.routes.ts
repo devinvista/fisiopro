@@ -935,4 +935,85 @@ router.delete("/records/:id", requirePermission("financial.write"), async (req: 
   }
 });
 
+// ── GET /receivables — all pending receivables grouped-ready with patient name ──
+router.get("/receivables", requirePermission("financial.read"), async (req: AuthRequest, res) => {
+  try {
+    const cc = clinicCond(req);
+    const today = todayBRT();
+
+    const conditions: any[] = [
+      eq(financialRecordsTable.status, "pendente"),
+      eq(financialRecordsTable.type, "receita"),
+    ];
+    if (cc) conditions.push(cc);
+
+    const rows = await db
+      .select({
+        id: financialRecordsTable.id,
+        description: financialRecordsTable.description,
+        amount: financialRecordsTable.amount,
+        dueDate: financialRecordsTable.dueDate,
+        transactionType: financialRecordsTable.transactionType,
+        category: financialRecordsTable.category,
+        patientId: financialRecordsTable.patientId,
+        patientName: patientsTable.name,
+        procedureId: financialRecordsTable.procedureId,
+        procedureName: proceduresTable.name,
+        createdAt: financialRecordsTable.createdAt,
+        treatmentPlanId: financialRecordsTable.treatmentPlanId,
+        planMonthRef: financialRecordsTable.planMonthRef,
+      })
+      .from(financialRecordsTable)
+      .leftJoin(patientsTable, eq(financialRecordsTable.patientId, patientsTable.id))
+      .leftJoin(proceduresTable, eq(financialRecordsTable.procedureId, proceduresTable.id))
+      .where(and(...conditions))
+      .orderBy(financialRecordsTable.dueDate, financialRecordsTable.id);
+
+    const items = rows.map((r) => {
+      const due = r.dueDate ? String(r.dueDate).slice(0, 10) : null;
+      const aging: "vencido" | "hoje" | "a_vencer" | "sem_vencimento" =
+        !due ? "sem_vencimento"
+        : due < today ? "vencido"
+        : due === today ? "hoje"
+        : "a_vencer";
+
+      return {
+        id: r.id,
+        description: r.description,
+        amount: Number(r.amount),
+        dueDate: due,
+        aging,
+        transactionType: r.transactionType,
+        category: r.category,
+        patientId: r.patientId,
+        patientName: r.patientName,
+        procedureName: r.procedureName,
+        createdAt: r.createdAt,
+        treatmentPlanId: r.treatmentPlanId,
+        planMonthRef: r.planMonthRef ? String(r.planMonthRef).slice(0, 7) : null,
+      };
+    });
+
+    const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+    const overdueAmount = items.filter((i) => i.aging === "vencido").reduce((s, i) => s + i.amount, 0);
+    const todayAmount = items.filter((i) => i.aging === "hoje").reduce((s, i) => s + i.amount, 0);
+    const upcomingAmount = items.filter((i) => i.aging === "a_vencer" || i.aging === "sem_vencimento").reduce((s, i) => s + i.amount, 0);
+
+    res.json({
+      items,
+      summary: {
+        totalAmount,
+        overdueAmount,
+        todayAmount,
+        upcomingAmount,
+        totalCount: items.length,
+        overdueCount: items.filter((i) => i.aging === "vencido").length,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 export default router;
