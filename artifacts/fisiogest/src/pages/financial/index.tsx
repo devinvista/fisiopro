@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { CalendarDays, Receipt, Wallet, RotateCcw, Settings2, ClipboardList } from "lucide-react";
+import {
+  CalendarDays, Receipt, Wallet, RotateCcw, Settings2, ClipboardList, LayoutDashboard,
+} from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MONTH_NAMES, YEARS } from "./constants";
+import { VisaoMesTab } from "./components/VisaoMesTab";
 import { LancamentosTab } from "./components/LancamentosTab";
 import { CashFlowTab } from "./components/CashFlowTab";
 import { EstornosTab } from "./components/EstornosTab";
@@ -22,11 +25,12 @@ interface TabDef {
 }
 
 const ALL_TABS: TabDef[] = [
-  { value: "lancamentos",      icon: <Receipt className="w-3.5 h-3.5" />,       label: "Lançamentos",      feature: "financial.view.simple" },
-  { value: "contas-receber",   icon: <ClipboardList className="w-3.5 h-3.5" />, label: "A Receber",        feature: "financial.view.simple" },
-  { value: "fluxo-caixa",     icon: <Wallet className="w-3.5 h-3.5" />,        label: "Fluxo de Caixa",   feature: "financial.view.cash_flow" },
-  { value: "despesas-fixas",   icon: <Settings2 className="w-3.5 h-3.5" />,     label: "Despesas Fixas",   feature: "module.recurring_expenses" },
-  { value: "estornos",         icon: <RotateCcw className="w-3.5 h-3.5" />,     label: "Estornos",         feature: "financial.view.simple" },
+  { value: "visao-mes",       icon: <LayoutDashboard className="w-3.5 h-3.5" />, label: "Visão do Mês",     feature: "financial.view.simple" },
+  { value: "lancamentos",     icon: <Receipt className="w-3.5 h-3.5" />,         label: "Lançamentos",      feature: "financial.view.simple" },
+  { value: "contas-receber",  icon: <ClipboardList className="w-3.5 h-3.5" />,   label: "A Receber",        feature: "financial.view.simple" },
+  { value: "fluxo-caixa",    icon: <Wallet className="w-3.5 h-3.5" />,           label: "Fluxo de Caixa",   feature: "financial.view.cash_flow" },
+  { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,       label: "Despesas Fixas",   feature: "module.recurring_expenses" },
+  { value: "estornos",        icon: <RotateCcw className="w-3.5 h-3.5" />,       label: "Estornos",         feature: "financial.view.simple" },
 ];
 
 export default function Financial() {
@@ -34,18 +38,25 @@ export default function Financial() {
   const visibleTabs = ALL_TABS.filter((t) => !t.feature || hasFeature(t.feature));
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [activeTab, setActiveTab] = useState<string>(() => visibleTabs[0]?.value ?? "lancamentos");
+  const [activeTab, setActiveTab] = useState<string>(() => visibleTabs[0]?.value ?? "visao-mes");
+
+  const needsDateSelector = ["visao-mes", "lancamentos"].includes(activeTab);
 
   return (
     <AppLayout title="Financeiro">
-      {/* ── Page Header ── */}
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Financeiro</h1>
           <p className="text-sm text-slate-500 mt-0.5">Gestão operacional de caixa, receitas e despesas</p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 w-full sm:w-auto">
+        {/* Month/Year selector — only shown for date-sensitive tabs */}
+        <div
+          className={`flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 w-full sm:w-auto transition-opacity duration-200 ${
+            needsDateSelector ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
           <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
           <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
             <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
@@ -69,6 +80,7 @@ export default function Financial() {
         </div>
       </div>
 
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="relative mb-6">
           <div className="overflow-x-auto pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -88,6 +100,11 @@ export default function Financial() {
           <div className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-background to-transparent sm:hidden" />
         </div>
 
+        {hasFeature("financial.view.simple") && (
+          <TabsContent value="visao-mes">
+            <VisaoMesTab month={month} year={year} />
+          </TabsContent>
+        )}
         {hasFeature("financial.view.simple") && (
           <TabsContent value="lancamentos">
             <LancamentosTab month={month} year={year} />
