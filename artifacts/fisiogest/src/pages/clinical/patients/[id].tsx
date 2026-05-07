@@ -792,17 +792,17 @@ export default function PatientDetail() {
         <div className="min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
 
-            {/* ── Tab bar (underline style) ────────────────────────────────── */}
-            <div className="mb-5 overflow-x-auto scrollbar-none">
-              <TabsList className="inline-flex min-w-full bg-transparent rounded-none border-b border-slate-200 h-auto gap-0 p-0">
+            {/* ── Tab bar — two rows, no scrollbar ─────────────────────── */}
+            <div className="mb-5 space-y-0">
 
-                {/* Primary tabs */}
+              {/* Row 1 — primary underline tabs */}
+              <TabsList className="flex w-full bg-transparent rounded-none border-b border-slate-200 h-auto gap-0 p-0">
                 {primaryTabs.map(tab => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      "shrink-0 whitespace-nowrap rounded-none border-b-2 -mb-px h-11 px-3.5 text-xs gap-1.5 font-medium",
+                      "flex-1 min-w-0 whitespace-nowrap rounded-none border-b-2 -mb-px h-10 px-2 text-[11px] gap-1 font-medium",
                       "bg-transparent shadow-none transition-colors",
                       "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/60",
                       tab.value === "jornada"
@@ -811,36 +811,34 @@ export default function PatientDetail() {
                       "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
                     )}
                   >
-                    {tab.icon} {tab.label}
+                    {tab.icon}
+                    <span className="truncate">{tab.label}</span>
                   </TabsTrigger>
                 ))}
+              </TabsList>
 
-                {/* Separator */}
-                <div className="flex items-center self-stretch px-2">
-                  <div className="w-px h-5 bg-slate-200 my-auto" />
-                </div>
-
-                {/* Secondary tabs */}
+              {/* Row 2 — secondary pill tabs (must be TabsList for Radix roving focus) */}
+              <TabsList className="flex items-center justify-start gap-1.5 pt-2 pb-2 px-0 h-auto bg-transparent rounded-none border-b border-slate-100">
                 {secondaryTabs.map(tab => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      "shrink-0 whitespace-nowrap rounded-none border-b-2 -mb-px h-11 px-3.5 text-xs gap-1.5 font-medium",
-                      "bg-transparent shadow-none transition-colors",
-                      "border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/60",
+                      "inline-flex items-center gap-1 h-7 px-3 rounded-full text-[11px] font-medium transition-colors",
+                      "bg-transparent shadow-none border border-transparent",
+                      "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
                       tab.color === "emerald"
-                        ? "data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-700"
+                        ? "data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:border-emerald-200"
                         : tab.color === "slate"
-                        ? "data-[state=active]:border-slate-600 data-[state=active]:text-slate-700"
-                        : "data-[state=active]:border-primary data-[state=active]:text-primary",
-                      "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                        ? "data-[state=active]:bg-slate-100 data-[state=active]:text-slate-700 data-[state=active]:border-slate-300"
+                        : "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-primary/20",
                     )}
                   >
                     {tab.icon} {tab.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
+
             </div>
 
             {/* ── Tab content ─────────────────────────────────────────────── */}
