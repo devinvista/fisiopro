@@ -507,4 +507,114 @@ router.get("/reconciliation", requirePermission("financial.read"), async (req: A
   }
 });
 
+// ─── Sazonalidade Heatmap ─────────────────────────────────────────────────────
+// GET /api/reports/seasonality?year=2026[&month=5]
+// Retorna a grade (dia-da-semana × hora) com contagem de agendamentos e receita.
+router.get("/seasonality", requirePermission("reports.read"), async (req: AuthRequest, res) => {
+  try {
+    const brt = nowBRT();
+    const year = parseInt(req.query.year as string) || brt.year;
+    const monthParam = req.query.month ? parseInt(req.query.month as string) : null;
+    const clinicId = req.clinicId ?? null;
+
+    let startDate: string;
+    let endDate: string;
+    if (monthParam && monthParam >= 1 && monthParam <= 12) {
+      const lastDay = new Date(year, monthParam, 0).getDate();
+      const mm = String(monthParam).padStart(2, "0");
+      startDate = `${year}-${mm}-01`;
+      endDate   = `${year}-${mm}-${String(lastDay).padStart(2, "0")}`;
+    } else {
+      startDate = `${year}-01-01`;
+      endDate   = `${year}-12-31`;
+    }
+
+    const clinicCond = clinicId ? sql`AND a.clinic_id = ${clinicId}` : sql``;
+
+    const rows = await db.execute<{
+      day_of_week: number;
+      hour: number;
+      appointment_count: string | number;
+      attended_count: string | number;
+      no_show_count: string | number;
+      canceled_count: string | number;
+      revenue: string | number;
+    }>(sql`
+      SELECT
+        EXTRACT(DOW FROM a.date::date)::int            AS day_of_week,
+        SPLIT_PART(a.start_time, ':', 1)::int          AS hour,
+        COUNT(DISTINCT a.id)                            AS appointment_count,
+        COUNT(DISTINCT a.id) FILTER (
+          WHERE a.status IN ('concluido', 'agendado', 'confirmado')
+        )                                               AS attended_count,
+        COUNT(DISTINCT a.id) FILTER (
+          WHERE a.status = 'faltou'
+        )                                               AS no_show_count,
+        COUNT(DISTINCT a.id) FILTER (
+          WHERE a.status = 'cancelado'
+        )                                               AS canceled_count,
+        COALESCE(SUM(fr.amount::numeric), 0)           AS revenue
+      FROM appointments a
+      LEFT JOIN financial_records fr
+        ON  fr.appointment_id = a.id
+        AND fr.type           = 'receita'
+        AND fr.status NOT IN  ('estornado', 'cancelado')
+      WHERE a.date >= ${startDate}::date
+        AND a.date <= ${endDate}::date
+        ${clinicCond}
+      GROUP BY day_of_week, hour
+      ORDER BY day_of_week, hour
+    `);
+
+    const data = ((rows as any).rows ?? rows) as any[];
+
+    // ── summary stats ────────────────────────────────────────────────────────
+    let peakDay   = { dayOfWeek: 0, count: 0 };
+    let peakHour  = { hour: 0, count: 0 };
+    let peakSlot  = { dayOfWeek: 0, hour: 0, count: 0 };
+    const dayTotals: Record<number, number> = {};
+    const hourTotals: Record<number, number> = {};
+
+    for (const r of data) {
+      const dow   = Number(r.day_of_week);
+      const hr    = Number(r.hour);
+      const cnt   = Number(r.appointment_count);
+      dayTotals[dow]  = (dayTotals[dow]  ?? 0) + cnt;
+      hourTotals[hr]  = (hourTotals[hr]  ?? 0) + cnt;
+      if (cnt > peakSlot.count) peakSlot = { dayOfWeek: dow, hour: hr, count: cnt };
+    }
+    for (const [dow, cnt] of Object.entries(dayTotals)) {
+      if (cnt > peakDay.count) peakDay = { dayOfWeek: Number(dow), count: cnt };
+    }
+    for (const [hr, cnt] of Object.entries(hourTotals)) {
+      if (cnt > peakHour.count) peakHour = { hour: Number(hr), count: cnt };
+    }
+
+    const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+    res.json({
+      period: { year, month: monthParam, startDate, endDate },
+      cells: data.map(r => ({
+        dayOfWeek:        Number(r.day_of_week),
+        hour:             Number(r.hour),
+        appointmentCount: Number(r.appointment_count),
+        attendedCount:    Number(r.attended_count),
+        noShowCount:      Number(r.no_show_count),
+        canceledCount:    Number(r.canceled_count),
+        revenue:          Number(r.revenue),
+      })),
+      summary: {
+        totalAppointments: data.reduce((s, r) => s + Number(r.appointment_count), 0),
+        totalRevenue:      data.reduce((s, r) => s + Number(r.revenue), 0),
+        peakDay:  { ...peakDay,  label: DAY_LABELS[peakDay.dayOfWeek] },
+        peakHour: { ...peakHour, label: `${String(peakHour.hour).padStart(2, "0")}:00` },
+        peakSlot: { ...peakSlot, dayLabel: DAY_LABELS[peakSlot.dayOfWeek], hourLabel: `${String(peakSlot.hour).padStart(2, "0")}:00` },
+      },
+    });
+  } catch (err) {
+    console.error("[seasonality]", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 export default router;

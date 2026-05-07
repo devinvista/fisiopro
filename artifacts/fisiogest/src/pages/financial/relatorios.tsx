@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, TrendingUp, TrendingDown, BarChart3,
   AlertTriangle, CheckCircle2, CalendarDays, Stethoscope,
-  Target, DollarSign, Activity, Layers, BookOpen,
+  Target, DollarSign, Activity, Layers, BookOpen, Flame,
 } from "lucide-react";
 
 import { KpiCard } from "./components/KpiCard";
@@ -26,6 +26,7 @@ import { CustosPorProcedimentoTab } from "./components/CustosPorProcedimentoTab"
 import { DreByProcedureTab } from "./components/DreByProcedureTab";
 import { DiagnosticoTab } from "./components/DiagnosticoTab";
 import { ConferenciaContabilTab } from "./components/ConferenciaContabilTab";
+import { SazonalidadeTab } from "./components/SazonalidadeTab";
 import { useAuth } from "@/hooks/use-auth";
 import type { Feature } from "@/utils/plan-features";
 
@@ -43,6 +44,7 @@ interface TabDef {
 
 const ALL_TABS: TabDef[] = [
   { value: "desempenho",       icon: <BarChart3 className="w-3.5 h-3.5" />,    label: "Desempenho",          feature: "financial.view.simple" },
+  { value: "sazonalidade",     icon: <Flame className="w-3.5 h-3.5" />,        label: "Sazonalidade",        feature: "financial.view.simple" },
   { value: "dre",              icon: <Activity className="w-3.5 h-3.5" />,     label: "DRE Mensal",          feature: "financial.view.dre" },
   { value: "orcado",           icon: <Target className="w-3.5 h-3.5" />,       label: "Orçado vs Realizado", feature: "financial.view.budget" },
   { value: "custos",           icon: <DollarSign className="w-3.5 h-3.5" />,   label: "Custo/Procedimento",  feature: "financial.cost_per_procedure" },
@@ -497,6 +499,11 @@ export default function Contabil() {
         {hasFeature("financial.view.simple") && (
           <TabsContent value="desempenho">
             <DesempenhoTab selectedMonth={selectedMonth} selectedYear={selectedYear} />
+          </TabsContent>
+        )}
+        {hasFeature("financial.view.simple") && (
+          <TabsContent value="sazonalidade">
+            <SazonalidadeTab selectedYear={selectedYear} selectedMonth={selectedMonth} />
           </TabsContent>
         )}
         {hasFeature("financial.view.dre") && (
