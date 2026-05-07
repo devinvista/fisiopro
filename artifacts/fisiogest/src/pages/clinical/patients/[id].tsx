@@ -518,8 +518,8 @@ export default function PatientDetail() {
   const showJornadaTab = journeyPhase !== 2;
 
   useEffect(() => {
-    if (activeTab === "jornada" && journeyPhase === 2) setActiveTab("evolutions");
-  }, [activeTab, journeyPhase]);
+    if (journeyPhase === 2) setActiveTab(t => t === "jornada" ? "evolutions" : t);
+  }, [journeyPhase]);
 
   const canEdit = hasPermission("patients.update");
   const canDelete = hasPermission("patients.delete");
@@ -662,34 +662,39 @@ export default function PatientDetail() {
                 )}
               </div>
 
-              {/* Avatar + name */}
-              <div className="flex items-center gap-4 mb-5 relative">
+              {/* Avatar + name — vertical centered layout so long names never clip */}
+              <div className="flex flex-col items-center text-center gap-3 mb-5 relative">
                 <div
-                  className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0 shadow-xl ring-[3px] ring-white/30 select-none"
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0 shadow-xl ring-[3px] ring-white/30 select-none"
                   style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(10px)" }}
                 >
                   {inits}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-extrabold text-lg text-white leading-tight drop-shadow-sm truncate">{patient.name}</h2>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <div className="w-full">
+                  <h2 className="font-extrabold text-lg text-white leading-snug drop-shadow-sm break-words">{patient.name}</h2>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
                     {isDiscarged ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/25 backdrop-blur-sm">
                         <BadgeCheck className="w-2.5 h-2.5" /> Alta emitida
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/25 backdrop-blur-sm">
-                        <CheckCircle className="w-2.5 h-2.5 text-emerald-300" /> Ativo
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-400/30 text-white px-2.5 py-1 rounded-full border border-emerald-300/30">
+                        <CheckCircle className="w-2.5 h-2.5" /> Ativo
                       </span>
                     )}
                     {age !== null && (
-                      <span className="text-[10px] font-semibold text-white/85 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
+                      <span className="text-[10px] font-semibold text-white/90 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
                         {age} anos
                       </span>
                     )}
                     {sex && sex !== "O" && (
-                      <span className="text-[10px] font-semibold text-white/85 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
+                      <span className="text-[10px] font-semibold text-white/90 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
                         {sex === "F" ? "Feminino" : "Masculino"}
+                      </span>
+                    )}
+                    {patient.profession && (
+                      <span className="text-[10px] font-semibold text-white/80 bg-white/10 px-2.5 py-1 rounded-full border border-white/15 italic">
+                        {patient.profession}
                       </span>
                     )}
                   </div>
@@ -698,13 +703,13 @@ export default function PatientDetail() {
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-2.5 relative">
-                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20">
+                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20 text-center">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1">Consultas</p>
                   <p className="text-3xl font-black text-white tabular-nums leading-none">{patient.totalAppointments || 0}</p>
                 </div>
-                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20">
+                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20 text-center">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1">Total gasto</p>
-                  <p className="text-sm font-extrabold text-white tabular-nums leading-tight mt-1.5">{formatCurrency(patient.totalSpent || 0)}</p>
+                  <p className="text-base font-extrabold text-white tabular-nums leading-tight mt-1">{formatCurrency(patient.totalSpent || 0)}</p>
                 </div>
               </div>
             </div>
@@ -729,28 +734,28 @@ export default function PatientDetail() {
               </div>
 
               {/* Contact info */}
-              <div className="space-y-1">
-                <ContactRow icon={<Phone className="w-3.5 h-3.5" />}>
-                  <a href={`tel:${patient.phone}`} className="text-sm text-slate-700 hover:text-primary transition-colors">{patient.phone}</a>
+              <div className="divide-y divide-slate-100 rounded-xl border border-slate-100 overflow-hidden">
+                <ContactRow icon={<Phone className="w-3.5 h-3.5 text-slate-400" />}>
+                  <a href={`tel:${patient.phone}`} className="text-sm text-slate-700 hover:text-primary transition-colors font-medium">{patient.phone}</a>
                 </ContactRow>
                 {patient.email && (
-                  <ContactRow icon={<Mail className="w-3.5 h-3.5" />}>
-                    <a href={`mailto:${patient.email}`} className="text-sm text-slate-700 hover:text-primary transition-colors truncate">{patient.email}</a>
+                  <ContactRow icon={<Mail className="w-3.5 h-3.5 text-slate-400" />}>
+                    <a href={`mailto:${patient.email}`} className="text-sm text-slate-700 hover:text-primary transition-colors break-all">{patient.email}</a>
                   </ContactRow>
                 )}
                 {patient.birthDate && (
-                  <ContactRow icon={<Calendar className="w-3.5 h-3.5" />}>
-                    <span className="text-sm text-slate-700">{formatDate(patient.birthDate)}</span>
+                  <ContactRow icon={<Calendar className="w-3.5 h-3.5 text-slate-400" />}>
+                    <span className="text-sm text-slate-700">{formatDate(patient.birthDate)}{age !== null && <span className="text-slate-400 ml-1.5">({age} anos)</span>}</span>
                   </ContactRow>
                 )}
                 {patient.address && (
-                  <ContactRow icon={<MapPin className="w-3.5 h-3.5" />}>
-                    <span className="text-sm text-slate-600 truncate">{patient.address}</span>
+                  <ContactRow icon={<MapPin className="w-3.5 h-3.5 text-slate-400" />}>
+                    <span className="text-sm text-slate-600 break-words">{patient.address}</span>
                   </ContactRow>
                 )}
                 {patient.cpf && (
-                  <ContactRow icon={<ShieldCheck className="w-3.5 h-3.5" />}>
-                    <span className="text-xs font-mono text-slate-400 tracking-wide">{displayCpf(patient.cpf)}</span>
+                  <ContactRow icon={<ShieldCheck className="w-3.5 h-3.5 text-slate-400" />}>
+                    <span className="text-xs font-mono text-slate-500 tracking-wider">{displayCpf(patient.cpf)}</span>
                   </ContactRow>
                 )}
               </div>
@@ -760,8 +765,8 @@ export default function PatientDetail() {
                 <div className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
                   <ShieldAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Emergência</p>
-                    <p className="text-sm text-slate-700">{patient.emergencyContact}</p>
+                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Contato de emergência</p>
+                    <p className="text-sm text-slate-700 break-words">{patient.emergencyContact}</p>
                   </div>
                 </div>
               )}
@@ -772,7 +777,7 @@ export default function PatientDetail() {
                   <p className="text-[9px] font-bold text-primary uppercase tracking-widest mb-1 flex items-center gap-1">
                     <Building2 className="w-3 h-3" /> Obs. desta clínica
                   </p>
-                  <p className="text-sm text-slate-600 leading-relaxed">{patient.notes}</p>
+                  <p className="text-sm text-slate-600 leading-relaxed break-words">{patient.notes}</p>
                 </div>
               )}
             </div>
