@@ -566,17 +566,22 @@ export default function PatientDetail() {
   const isDiscarged = journeyData?.meta?.hasDischarge;
 
   // ── Tab definitions ──────────────────────────────────────────────────────────
+  // Primary row — active clinical workflow
   const primaryTabs = [
     ...(showJornadaTab ? [{ value: "jornada",    icon: <Milestone className="w-3.5 h-3.5" />,    label: "Jornada"    }] : []),
     { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5" />, label: "Anamnese"   },
     { value: "evaluations", icon: <Activity className="w-3.5 h-3.5" />,      label: "Avaliações" },
     { value: "treatment",   icon: <Target className="w-3.5 h-3.5" />,        label: "Plano"      },
     { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5" />,    label: "Evoluções"  },
-    { value: "history",     icon: <History className="w-3.5 h-3.5" />,       label: "Histórico"  },
-    { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5" />,    label: "Financeiro" },
   ];
 
-  const secondaryTabs = [
+  // Secondary row — grouped by category
+  const historyTabs = [
+    { value: "history",   icon: <History className="w-3.5 h-3.5" />,   label: "Consultas",  color: "primary" },
+    { value: "financial", icon: <DollarSign className="w-3.5 h-3.5" />, label: "Financeiro", color: "primary" },
+  ];
+
+  const documentTabs = [
     { value: "photos",    icon: <Camera className="w-3.5 h-3.5" />,     label: "Fotos",     color: "primary" },
     { value: "atestados", icon: <ScrollText className="w-3.5 h-3.5" />, label: "Atestados", color: "primary" },
     { value: "discharge", icon: <LogOut className="w-3.5 h-3.5" />,     label: "Alta",      color: "emerald" },
@@ -817,14 +822,37 @@ export default function PatientDetail() {
                 ))}
               </TabsList>
 
-              {/* Row 2 — secondary pill tabs (must be TabsList for Radix roving focus) */}
-              <TabsList className="flex items-center justify-start gap-1.5 pt-2 pb-2 px-0 h-auto bg-transparent rounded-none border-b border-slate-100">
-                {secondaryTabs.map(tab => (
+              {/* Row 2 — grouped secondary tabs */}
+              <TabsList className="flex items-center justify-start gap-1 pt-2 pb-2 px-0 h-auto bg-transparent rounded-none border-b border-slate-100">
+
+                {/* Group: Histórico */}
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-300 pr-1 select-none">Histórico</span>
+                {historyTabs.map(tab => (
                   <TabsTrigger
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      "inline-flex items-center gap-1 h-7 px-3 rounded-full text-[11px] font-medium transition-colors",
+                      "inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors",
+                      "bg-transparent shadow-none border border-transparent",
+                      "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
+                      "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:border-primary/20",
+                    )}
+                  >
+                    {tab.icon} {tab.label}
+                  </TabsTrigger>
+                ))}
+
+                {/* Separator */}
+                <div className="w-px h-4 bg-slate-200 mx-1.5 shrink-0" />
+
+                {/* Group: Documentos */}
+                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-300 pr-1 select-none">Documentos</span>
+                {documentTabs.map(tab => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className={cn(
+                      "inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-medium transition-colors",
                       "bg-transparent shadow-none border border-transparent",
                       "text-slate-400 hover:text-slate-600 hover:bg-slate-100",
                       tab.color === "emerald"
@@ -837,6 +865,7 @@ export default function PatientDetail() {
                     {tab.icon} {tab.label}
                   </TabsTrigger>
                 ))}
+
               </TabsList>
 
             </div>
