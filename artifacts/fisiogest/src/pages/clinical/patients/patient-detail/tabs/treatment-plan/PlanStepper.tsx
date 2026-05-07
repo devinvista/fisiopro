@@ -1,14 +1,6 @@
 import { Check, ClipboardList, Wallet, Lock, AlertTriangle, CalendarDays, ScrollText } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-// ───────────────────────────────────────────────────────────────────────────
-// PlanStepper — wizard de 4 etapas:
-//   itens → cobranca → agenda → contrato
-// O aceite acontece na última etapa e dispara o materialize na MESMA
-// transação (endpoint /accept-and-materialize), eliminando o estado
-// "aceito mas não materializado".
-// ───────────────────────────────────────────────────────────────────────────
-
 export type PlanStepKey = "itens" | "cobranca" | "agenda" | "contrato";
 
 export type PlanStepStatus = "done" | "active" | "available" | "locked";
@@ -32,10 +24,8 @@ interface Props {
   hasItems: boolean;
   isAccepted: boolean;
   isStarted: boolean;
-  /** Stats mostrados na etapa "agenda" (configurados/total). */
   aceiteStats?: { configured: number; total: number };
   monthlyMissingCount?: number;
-  /** Indica se a etapa "cobrança" foi salva (libera "agenda"). */
   billingConfigured?: boolean;
   onSelect: (step: PlanStepKey) => void;
 }
@@ -63,13 +53,10 @@ function statusFor(
   if (step === "agenda") {
     if (!hasItems) return "locked";
     if (current === "agenda") return "active";
-    // Considerada concluída quando todos os mensais têm agenda OU quando o
-    // plano já está aceito+materializado (ponto sem volta no fluxo).
     if (isStarted) return "done";
     if (monthlyMissingCount === 0 && hasItems) return "available";
     return "available";
   }
-  // contrato
   if (!hasItems) return "locked";
   if (monthlyMissingCount > 0 && !isStarted) return "locked";
   if (current === "contrato") return "active";
@@ -77,202 +64,139 @@ function statusFor(
   return "available";
 }
 
-const styleByStatus: Record<PlanStepStatus, { circle: string; label: string; line: string }> = {
-  done: {
-    circle: "bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-200",
-    label: "text-slate-700",
-    line: "bg-emerald-300",
-  },
-  active: {
-    circle: "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/30 ring-4 ring-primary/15",
-    label: "text-primary font-semibold",
-    line: "bg-slate-200",
-  },
-  available: {
-    circle: "bg-white text-slate-500 border-slate-300 hover:border-primary/50 hover:text-primary",
-    label: "text-slate-500",
-    line: "bg-slate-200",
-  },
-  locked: {
-    circle: "bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed",
-    label: "text-slate-300",
-    line: "bg-slate-200",
-  },
-};
-
 export function PlanStepper({
-  current,
-  hasItems,
-  isAccepted,
-  isStarted,
-  aceiteStats,
-  monthlyMissingCount = 0,
-  billingConfigured = false,
-  onSelect,
+  current, hasItems, isAccepted, isStarted,
+  aceiteStats, monthlyMissingCount = 0, billingConfigured = false, onSelect,
 }: Props) {
-  // Contador exibido na etapa "agenda".
-  const counterStepKey: PlanStepKey = "agenda";
-  const showCounter =
-    !!aceiteStats && aceiteStats.total > 0 && hasItems && !isStarted;
-  const allSet =
-    showCounter && aceiteStats!.configured === aceiteStats!.total;
+  const showCounter = !!aceiteStats && aceiteStats.total > 0 && hasItems && !isStarted;
+  const allSet = showCounter && aceiteStats!.configured === aceiteStats!.total;
   const pending = showCounter ? aceiteStats!.total - aceiteStats!.configured : 0;
-
-  // Etapa "contrato" pode ficar bloqueada por agenda pendente.
-  const scheduleGatedKey: PlanStepKey = "contrato";
   const scheduleBlocked = hasItems && !isStarted && monthlyMissingCount > 0;
 
   return (
     <TooltipProvider delayDuration={200}>
-    <div
-      className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm"
-      role="tablist"
-      aria-label="Etapas do plano de tratamento"
-    >
-      <ol className="flex items-stretch gap-1 sm:gap-2">
-        {STEPS.map((step, idx) => {
-          const status = statusFor(
-            step.key,
-            current,
-            hasItems,
-            isAccepted,
-            isStarted,
-            monthlyMissingCount,
-            billingConfigured,
-          );
-          const styles = styleByStatus[status];
-          const isLast = idx === STEPS.length - 1;
-          const Icon = step.Icon;
-          const showCheck = status === "done";
-          const blockedByScheduleHere =
-            step.key === scheduleGatedKey && status === "locked" && scheduleBlocked;
-          const showLock = status === "locked" && !blockedByScheduleHere;
-          const showWarning = blockedByScheduleHere;
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <ol className="flex">
+          {STEPS.map((step, idx) => {
+            const status = statusFor(
+              step.key, current, hasItems, isAccepted, isStarted,
+              monthlyMissingCount, billingConfigured,
+            );
+            const isLast = idx === STEPS.length - 1;
+            const isDone = status === "done";
+            const isActive = status === "active";
+            const isLocked = status === "locked";
+            const blockedBySchedule = step.key === "contrato" && isLocked && scheduleBlocked;
+            const Icon = step.Icon;
 
-          const buttonEl = (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={status === "active"}
-              disabled={status === "locked"}
-              onClick={() => status !== "locked" && onSelect(step.key)}
-              className={`flex-1 min-w-0 flex items-center gap-2 sm:gap-3 rounded-xl px-2 py-2 sm:px-3 sm:py-2.5 text-left transition-colors ${
-                status === "active"
-                  ? "bg-primary/5"
-                  : status === "locked"
-                  ? blockedByScheduleHere
-                    ? "opacity-90 bg-amber-50/40"
-                    : "opacity-70"
-                  : "hover:bg-slate-50"
-              }`}
-            >
-              <span
-                className={`relative h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full border flex items-center justify-center text-xs font-bold transition-all ${styles.circle}`}
+            const buttonContent = (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                disabled={isLocked}
+                onClick={() => !isLocked && onSelect(step.key)}
+                className={[
+                  "w-full flex items-center gap-2.5 px-3 py-3.5 text-left transition-colors relative group",
+                  isActive ? "bg-primary/5" : isLocked ? "opacity-60 cursor-not-allowed" : "hover:bg-slate-50 cursor-pointer",
+                ].join(" ")}
               >
-                {showCheck ? (
-                  <Check className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={3} />
-                ) : showWarning ? (
-                  <AlertTriangle className="h-4 w-4 sm:h-4.5 sm:w-4.5" strokeWidth={2.5} />
-                ) : showLock ? (
-                  <Lock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                ) : (
-                  <>
-                    <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-                    <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-white border border-slate-200 text-[9px] font-bold text-slate-600 flex items-center justify-center">
-                      {idx + 1}
-                    </span>
-                  </>
-                )}
-              </span>
-              <span className="min-w-0 hidden sm:flex flex-col leading-tight">
-                <span className={`text-xs ${styles.label} flex items-center gap-1.5`}>
-                  {step.label}
-                  {step.key === counterStepKey && showCounter && (
-                    <span
-                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                {/* Step circle */}
+                <span className={[
+                  "h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-xs font-bold transition-all",
+                  isDone
+                    ? "bg-emerald-500 text-white shadow-sm"
+                    : isActive
+                    ? "bg-primary text-white shadow-md shadow-primary/30 ring-4 ring-primary/10"
+                    : blockedBySchedule
+                    ? "bg-amber-100 text-amber-600 border border-amber-300"
+                    : isLocked
+                    ? "bg-slate-100 text-slate-300 border border-slate-200"
+                    : "bg-white text-slate-500 border border-slate-300 group-hover:border-primary/40",
+                ].join(" ")}>
+                  {isDone ? (
+                    <Check className="w-4 h-4" strokeWidth={2.5} />
+                  ) : blockedBySchedule ? (
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                  ) : isLocked && !blockedBySchedule ? (
+                    <Lock className="w-3 h-3" />
+                  ) : (
+                    <Icon className="w-3.5 h-3.5" />
+                  )}
+                </span>
+
+                {/* Labels (hidden on mobile for non-active) */}
+                <span className="min-w-0 hidden sm:flex flex-col leading-tight">
+                  <span className={[
+                    "text-xs font-semibold flex items-center gap-1.5",
+                    isDone ? "text-slate-600" : isActive ? "text-primary" : isLocked ? "text-slate-300" : "text-slate-600",
+                  ].join(" ")}>
+                    {step.label}
+                    {step.key === "agenda" && showCounter && (
+                      <span className={[
+                        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
                         allSet
                           ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
-                      }`}
-                      aria-label={
-                        allSet
-                          ? `Todas as ${aceiteStats!.total} agendas definidas`
-                          : `${aceiteStats!.configured} de ${aceiteStats!.total} agendas definidas`
-                      }
-                    >
-                      {aceiteStats!.configured}/{aceiteStats!.total}
-                    </span>
-                  )}
-                  {blockedByScheduleHere && (
-                    <span
-                      className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-amber-100 text-amber-800 border border-amber-300"
-                      aria-label={`${monthlyMissingCount} item(ns) recorrente(s) sem agenda`}
-                    >
-                      {monthlyMissingCount}
-                    </span>
-                  )}
-                </span>
-                <span className={`text-[10px] truncate ${blockedByScheduleHere ? "text-amber-700" : "text-slate-400"}`}>
-                  {step.key === counterStepKey && showCounter
-                    ? allSet
-                      ? "Todas as agendas definidas"
-                      : `${pending} pendente${pending > 1 ? "s" : ""}`
-                    : blockedByScheduleHere
-                    ? "Defina as agendas dos itens"
-                    : step.hint}
-                </span>
-              </span>
-              <span className={`sm:hidden text-xs truncate ${styles.label} flex items-center gap-1.5`}>
-                {step.label}
-                {step.key === counterStepKey && showCounter && (
-                  <span
-                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
-                      allSet
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : "bg-amber-50 text-amber-700 border border-amber-200"
-                    }`}
-                  >
-                    {aceiteStats!.configured}/{aceiteStats!.total}
+                          : "bg-amber-50 text-amber-700 border border-amber-200",
+                      ].join(" ")}>
+                        {aceiteStats!.configured}/{aceiteStats!.total}
+                      </span>
+                    )}
+                    {blockedBySchedule && (
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-amber-100 text-amber-800 border border-amber-300">
+                        {monthlyMissingCount}
+                      </span>
+                    )}
                   </span>
-                )}
-                {blockedByScheduleHere && (
-                  <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none bg-amber-100 text-amber-800 border border-amber-300">
-                    {monthlyMissingCount}
+                  <span className={[
+                    "text-[10px] truncate",
+                    blockedBySchedule ? "text-amber-600" : isActive ? "text-primary/60" : "text-slate-400",
+                  ].join(" ")}>
+                    {step.key === "agenda" && showCounter
+                      ? allSet ? "Todas definidas" : `${pending} pendente${pending > 1 ? "s" : ""}`
+                      : blockedBySchedule ? "Configure as agendas"
+                      : step.hint}
                   </span>
-                )}
-              </span>
-            </button>
-          );
+                </span>
 
-          return (
-            <li key={step.key} className="flex-1 flex items-stretch gap-1 sm:gap-2 min-w-0">
-              {blockedByScheduleHere ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0} className="flex-1 min-w-0 flex outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded-xl">
-                      {buttonEl}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-amber-600 text-white max-w-xs">
-                    {monthlyMissingCount === 1
-                      ? `1 item recorrente está sem agenda definida. Volte para a etapa Agenda e configure o dia e o horário antes de avançar.`
-                      : `${monthlyMissingCount} itens recorrentes estão sem agenda definida. Volte para a etapa Agenda e configure os dias e horários antes de avançar.`}
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                buttonEl
-              )}
-              {!isLast && (
-                <span
-                  aria-hidden
-                  className={`hidden sm:block w-6 self-center h-0.5 rounded-full ${styles.line}`}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+                {/* Mobile: step number badge */}
+                <span className={[
+                  "sm:hidden text-[10px] font-bold",
+                  isActive ? "text-primary" : isLocked ? "text-slate-300" : "text-slate-400",
+                ].join(" ")}>
+                  {idx + 1}
+                </span>
+
+                {/* Active indicator bar */}
+                {isActive && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+            );
+
+            return (
+              <li key={step.key} className={["flex-1 min-w-0", !isLast ? "border-r border-slate-100" : ""].join(" ")}>
+                {blockedBySchedule ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="block outline-none">
+                        {buttonContent}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-amber-600 text-white max-w-xs text-xs">
+                      {monthlyMissingCount === 1
+                        ? "1 item recorrente sem agenda. Volte para Agenda e configure o dia e horário."
+                        : `${monthlyMissingCount} itens recorrentes sem agenda. Volte para Agenda e configure os dias e horários.`}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  buttonContent
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
     </TooltipProvider>
   );
 }

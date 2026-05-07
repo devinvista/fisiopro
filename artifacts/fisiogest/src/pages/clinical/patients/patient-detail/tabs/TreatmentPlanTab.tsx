@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Loader2, ClipboardList, History, Plus, Pencil, Trash2, ScrollText, Printer,
+  Loader2, ClipboardList, History, Plus, Trash2, ScrollText, Printer,
   BadgeCheck, Lock, ArrowRight, ChevronDown, ChevronUp, Stethoscope, UserCheck,
   Activity, Sparkles, CalendarRange, AlertTriangle, Clock, RefreshCw,
+  CheckCircle, LayoutDashboard, Wallet, FileText, RotateCcw, CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,19 +49,31 @@ import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
 import { ContractPreviewDialog } from "./treatment-plan/ContractPreviewDialog";
 
-// ───────────────────────────────────────────────────────────────────────────
-// Plano de Tratamento — orquestrador slim do wizard de 4 etapas.
-//
-// Fluxo:
-//   1. ITENS     — define o "o quê" (procedimentos, sessões/sem, valores)
-//   2. COBRANÇA  — modo de cobrança (prepago/postpago, vencimentos, etc.)
-//   3. AGENDA    — dias e horários de cada item (gera o preview do paciente)
-//   4. CONTRATO  — paciente assina e o plano é materializado na MESMA
-//                   transação (endpoint /accept-and-materialize).
-//
-// Todas as clínicas usam o wizard v2 (aceite + materialização atômica).
-// ───────────────────────────────────────────────────────────────────────────
+const HOLD_TTL_OPTIONS = [
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 45, label: "45 min" },
+  { value: 60, label: "1 hora" },
+  { value: 90, label: "1h 30min" },
+  { value: 120, label: "2 horas" },
+];
 
+function fmtBR(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const s = iso.slice(0, 10);
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+}
+
+function formatCountdown(secs: number): string {
+  if (secs <= 0) return "Expirada";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}min ${String(s).padStart(2, "0")}s`;
+}
+
+// ─── Main orchestrator ─────────────────────────────────────────────────────
 export function TreatmentPlanTab({ patientId, patient }: { patientId: number; patient?: PatientBasic }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -69,7 +83,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     staleTime: 60000,
   });
 
-  // ─── Lista de planos do paciente ───────────────────────────────────────
   const plansKey = [`/api/patients/${patientId}/treatment-plans`];
   const { data: allPlans = [], isLoading: plansLoading } = useQuery<any[]>({
     queryKey: plansKey,
@@ -84,10 +97,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   const [clinicalOpen, setClinicalOpen] = useState(false);
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [contractPreviewHtml, setContractPreviewHtml] = useState("");
-  // Marca quando o usuário salvou as configs de cobrança (libera Agenda).
-  // Não persistido no servidor — heurística local para guiar o stepper.
   const [billingConfigured, setBillingConfigured] = useState(false);
-  // Hold de slots: TTL configurável + expiresAt devolvido pelo POST /holds.
   const [holdTtlMinutes, setHoldTtlMinutes] = useState(30);
   const [holdExpiresAt, setHoldExpiresAt] = useState<string | null>(null);
 
@@ -100,7 +110,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   const selectedPlan = allPlans.find(p => p.id === selectedPlanId) ?? null;
 
-  // ─── Itens do plano selecionado ────────────────────────────────────────
   const planItemsKey = selectedPlanId
     ? [`/api/treatment-plans/${selectedPlanId}/procedures`]
     : null;
@@ -127,12 +136,11 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
       apiFetchJson<{ id: number; name: string; roles: string[] }[]>("/api/users/professionals"),
   });
 
-  // ─── Form state (mantém compatibilidade com backend) ───────────────────
   const emptyForm = {
     objectives: "",
     techniques: "",
-    frequency: "",                    // derivado de itens — não exposto no UI
-    estimatedSessions: "" as string | number, // derivado — não exposto no UI
+    frequency: "",
+    estimatedSessions: "" as string | number,
     startDate: "",
     responsibleProfessional: "",
     status: "ativo" as "ativo" | "concluido" | "suspenso",
@@ -142,7 +150,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     replacementCreditValidityDays: "" as string | number,
     avulsoBillingMode: "porSessao" as "porSessao" | "mensalConsolidado",
     avulsoBillingDay: "" as string | number,
-    // Sprint Financeiro 9 (P1) — vencimento da mensalidade escolhido pelo paciente.
     monthlyDueDay: "" as string | number,
     internalNotes: "",
   };
@@ -151,8 +158,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   useEffect(() => {
     planItemsInitRef.current = false;
-    // Limpa o hold quando o plano selecionado muda — o hold anterior pertence
-    // ao plano anterior e não deve aparecer no novo plano aberto.
     setHoldExpiresAt(null);
     if (selectedPlan) {
       setForm({
@@ -178,8 +183,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     }
   }, [selectedPlanId, allPlans]);
 
-  // Auto-sync de frequency/estimatedSessions a partir dos itens. Mantemos o
-  // cálculo interno (backend pode usar), mas o UI não mostra mais esses campos.
   useEffect(() => {
     if (!planItemsInitRef.current) { planItemsInitRef.current = true; return; }
     if (planItems.length === 0) return;
@@ -197,7 +200,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     }));
   }, [planItems]);
 
-  // ─── Métricas derivadas para o header (substituem a aba "Sessões") ──────
   const headerMetrics = useMemo(() => {
     const totalEstSess = Number(form.estimatedSessions || 0);
     const monthlyItems = planItems.filter(i => i.packageType === "mensal");
@@ -214,7 +216,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     };
   }, [form.estimatedSessions, form.durationMonths, planItems, selectedPlan, completedSessions]);
 
-  // ─── Mutations ─────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -319,13 +320,25 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     printDocument(html, `Contrato — ${patient.name}`);
   };
 
-  // ─── Cálculos para o stepper ──────────────────────────────────────────
+  const handleChanged = () => {
+    queryClient.invalidateQueries({ queryKey: plansKey });
+    queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
+    queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}/appointments`] });
+    queryClient.invalidateQueries({
+      queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`],
+    });
+    queryClient.invalidateQueries({
+      queryKey: [`/api/patients/${patientId}/financial-records`],
+    });
+    queryClient.invalidateQueries({
+      queryKey: [`/api/patients/${patientId}/credits`],
+    });
+  };
+
   const hasItems = planItems.length > 0;
   const isAccepted = !!selectedPlan?.acceptedAt;
   const isStarted = !!selectedPlan?.materializedAt;
 
-  // Contagem de itens com agenda completa (agenda + dia(s) + horário)
-  // e contagem de itens MENSAIS pendentes (bloqueiam a materialização do plano).
   const { aceiteStats, monthlyMissingCount } = useMemo(() => {
     if (planItems.length === 0) {
       return { aceiteStats: { configured: 0, total: 0 }, monthlyMissingCount: 0 };
@@ -361,14 +374,12 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     };
   }, [planItems]);
 
-  // Auto-avança visualmente se etapa atual ficou inválida
   useEffect(() => {
     if ((activeStep === "cobranca" || activeStep === "agenda" || activeStep === "contrato") && !hasItems) {
       setActiveStep("itens");
     }
   }, [activeStep, hasItems]);
 
-  // Quando o plano já foi iniciado (materializedAt), considera tudo done.
   useEffect(() => {
     if (isStarted) setBillingConfigured(true);
   }, [isStarted]);
@@ -381,7 +392,7 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     );
   }
 
-  // ─── Estado vazio ─────────────────────────────────────────────────────
+  // ─── Empty state ───────────────────────────────────────────────────────
   if (!selectedPlanId) {
     return (
       <div className="space-y-6">
@@ -392,6 +403,13 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           openHistory={() => setHistoryOpen(true)}
           handleCreatePlan={handleCreatePlan}
           creatingNew={creatingNew}
+        />
+        <PlanHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          plans={allPlans}
+          selectedPlanId={selectedPlanId}
+          onSelect={(id) => { setSelectedPlanId(id); setHistoryOpen(false); setActiveStep("itens"); }}
         />
         <Card className="border-none shadow-sm">
           <CardContent className="p-12 text-center space-y-4">
@@ -419,43 +437,15 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
     );
   }
 
-  return (
-    <div className="space-y-5">
-      <PlanSelectorBar
-        allPlans={allPlans}
-        selectedPlanId={selectedPlanId}
-        setSelectedPlanId={setSelectedPlanId}
-        openHistory={() => setHistoryOpen(true)}
-        handleCreatePlan={handleCreatePlan}
-        creatingNew={creatingNew}
-      />
-
+  const sharedDialogs = (
+    <>
       <PlanHistoryDialog
         open={historyOpen}
         onOpenChange={setHistoryOpen}
         plans={allPlans}
         selectedPlanId={selectedPlanId}
-        onSelect={(id) => {
-          setSelectedPlanId(id);
-          setHistoryOpen(false);
-          setActiveStep("itens");
-        }}
+        onSelect={(id) => { setSelectedPlanId(id); setHistoryOpen(false); setActiveStep("itens"); }}
       />
-
-      {/* Header do plano: status, métricas, ações de impressão/exclusão */}
-      <PlanHeader
-        selectedPlan={selectedPlan}
-        planItemsCount={planItems.length}
-        headerMetrics={headerMetrics}
-        isAccepted={isAccepted}
-        isStarted={isStarted}
-        handlePrintPlan={handlePrintPlan}
-        handlePrintContract={handlePrintContract}
-        onOpenContractPreview={handleOpenContractPreview}
-        deleteMutation={deleteMutation}
-        selectedPlanId={selectedPlanId}
-      />
-
       <ContractPreviewDialog
         open={contractPreviewOpen}
         onOpenChange={setContractPreviewOpen}
@@ -464,8 +454,71 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         isAccepted={isAccepted}
         isStarted={isStarted}
       />
+    </>
+  );
 
-      {/* Stepper — 4 etapas: itens → cobrança → agenda → contrato */}
+  // ─── POST-ACCEPTANCE: management dashboard ─────────────────────────────
+  if (isStarted) {
+    return (
+      <div className="space-y-4">
+        <PlanSelectorBar
+          allPlans={allPlans}
+          selectedPlanId={selectedPlanId}
+          setSelectedPlanId={setSelectedPlanId}
+          openHistory={() => setHistoryOpen(true)}
+          handleCreatePlan={handleCreatePlan}
+          creatingNew={creatingNew}
+        />
+        {sharedDialogs}
+        <PlanManagementDashboard
+          patientId={patientId}
+          selectedPlanId={selectedPlanId}
+          selectedPlan={selectedPlan}
+          planItems={planItems}
+          planItemsKey={planItemsKey}
+          patient={patient}
+          clinic={clinic}
+          form={form}
+          setForm={setForm}
+          professionals={professionals}
+          headerMetrics={headerMetrics}
+          isAccepted={isAccepted}
+          saving={saving}
+          handleSave={handleSave}
+          handlePrintPlan={handlePrintPlan}
+          handlePrintContract={handlePrintContract}
+          onOpenContractPreview={handleOpenContractPreview}
+          deleteMutation={deleteMutation}
+          onChanged={handleChanged}
+        />
+      </div>
+    );
+  }
+
+  // ─── PRE-ACCEPTANCE: setup wizard ─────────────────────────────────────
+  return (
+    <div className="space-y-4">
+      <PlanSelectorBar
+        allPlans={allPlans}
+        selectedPlanId={selectedPlanId}
+        setSelectedPlanId={setSelectedPlanId}
+        openHistory={() => setHistoryOpen(true)}
+        handleCreatePlan={handleCreatePlan}
+        creatingNew={creatingNew}
+      />
+      {sharedDialogs}
+
+      {/* Wizard status bar */}
+      <WizardStatusBar
+        selectedPlan={selectedPlan}
+        planItemsCount={planItems.length}
+        isAccepted={isAccepted}
+        handlePrintPlan={handlePrintPlan}
+        onOpenContractPreview={handleOpenContractPreview}
+        deleteMutation={deleteMutation}
+        selectedPlanId={selectedPlanId}
+      />
+
       <PlanStepper
         current={activeStep}
         hasItems={hasItems}
@@ -477,9 +530,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         onSelect={setActiveStep}
       />
 
-      {/* Conteúdo da etapa ativa */}
       <Card className="border-none shadow-sm bg-white overflow-hidden">
-        <CardContent className="p-5 sm:p-6 space-y-6">
+        <CardContent className="p-5 sm:p-6">
           {activeStep === "itens" && (
             <StepItens
               patientId={patientId}
@@ -500,7 +552,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             />
           )}
 
-          {/* Etapa 2 — Cobrança (antes do aceite) */}
           {activeStep === "cobranca" && (
             <StepCobranca
               form={form}
@@ -508,15 +559,11 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               isAccepted={isAccepted}
               isStarted={isStarted}
               saving={saving}
-              handleSave={async () => {
-                await handleSave();
-                setBillingConfigured(true);
-              }}
+              handleSave={async () => { await handleSave(); setBillingConfigured(true); }}
               onAdvance={() => setActiveStep("agenda")}
             />
           )}
 
-          {/* Etapa 3 — Agenda (libera o contrato quando todos os mensais têm horário) */}
           {activeStep === "agenda" && (
             <StepAgenda
               patientId={patientId}
@@ -532,7 +579,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
             />
           )}
 
-          {/* Etapa 4 — Contrato: assina e materializa em uma transação */}
           {activeStep === "contrato" && (
             <StepContrato
               patientId={patientId}
@@ -542,27 +588,11 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
               patient={patient}
               clinic={clinic}
               form={form}
-              isStarted={isStarted}
               monthlyMissingCount={monthlyMissingCount}
               holdExpiresAt={holdExpiresAt}
               holdTtlMinutes={holdTtlMinutes}
               onHoldRenewed={setHoldExpiresAt}
-              onChanged={() => {
-                queryClient.invalidateQueries({ queryKey: plansKey });
-                queryClient.invalidateQueries({ queryKey: planItemsKey ?? [] });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/appointments`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/treatment-plans/${selectedPlanId}/installments`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/financial-records`],
-                });
-                queryClient.invalidateQueries({
-                  queryKey: [`/api/patients/${patientId}/credits`],
-                });
-              }}
+              onChanged={handleChanged}
             />
           )}
         </CardContent>
@@ -571,7 +601,658 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
   );
 }
 
-// ─── Selector header ───────────────────────────────────────────────────────
+// ─── Plan Management Dashboard (post-acceptance view) ─────────────────────
+type DashTab = "resumo" | "financeiro" | "contrato";
+
+function PlanManagementDashboard({
+  patientId, selectedPlanId, selectedPlan, planItems, planItemsKey,
+  patient, clinic, form, setForm, professionals, headerMetrics,
+  isAccepted, saving, handleSave, handlePrintPlan, handlePrintContract,
+  onOpenContractPreview, deleteMutation, onChanged,
+}: {
+  patientId: number;
+  selectedPlanId: number;
+  selectedPlan: any;
+  planItems: PlanProcedureItem[];
+  planItemsKey: any;
+  patient?: PatientBasic;
+  clinic?: ClinicInfo | null;
+  form: any;
+  setForm: (fn: any) => void;
+  professionals: { id: number; name: string }[];
+  headerMetrics: { completed: number; totalAll: number; hasGoal: boolean; progress: number; months: number };
+  isAccepted: boolean;
+  saving: boolean;
+  handleSave: () => Promise<void>;
+  handlePrintPlan: () => void;
+  handlePrintContract: () => void;
+  onOpenContractPreview: () => void;
+  deleteMutation: any;
+  onChanged: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<DashTab>("resumo");
+  const [clinicalOpen, setClinicalOpen] = useState(false);
+
+  const statusConfig = form.status === "ativo"
+    ? {
+        gradient: "from-emerald-600 to-teal-700",
+        badge: "bg-white/20 text-white border-white/30",
+        label: "Em andamento",
+        icon: CheckCircle,
+      }
+    : form.status === "concluido"
+    ? {
+        gradient: "from-blue-600 to-indigo-700",
+        badge: "bg-white/20 text-white border-white/30",
+        label: "Concluído",
+        icon: BadgeCheck,
+      }
+    : {
+        gradient: "from-slate-500 to-slate-700",
+        badge: "bg-white/20 text-white border-white/30",
+        label: "Suspenso",
+        icon: Clock,
+      };
+
+  const StatusIcon = statusConfig.icon;
+
+  const tabs: { key: DashTab; label: string; icon: typeof LayoutDashboard }[] = [
+    { key: "resumo", label: "Resumo", icon: LayoutDashboard },
+    { key: "financeiro", label: "Financeiro", icon: Wallet },
+    { key: "contrato", label: "Contrato", icon: FileText },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* ── Hero status card ── */}
+      <div className={`rounded-2xl bg-gradient-to-br ${statusConfig.gradient} p-5 sm:p-6 text-white shadow-lg`}>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="space-y-2">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusConfig.badge}`}>
+              <StatusIcon className="w-3.5 h-3.5" />
+              {statusConfig.label}
+            </span>
+            <h3 className="text-xl font-bold">
+              Plano {formatDate(selectedPlan?.startDate)}
+            </h3>
+            <p className="text-white/70 text-sm">
+              Iniciado em {fmtBR(selectedPlan?.materializedAt)} · {headerMetrics.months} {headerMetrics.months === 1 ? "mês" : "meses"} de duração
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={handlePrintPlan}
+              className="h-8 gap-1.5 text-xs bg-white/15 hover:bg-white/25 text-white border-white/30 border"
+            >
+              <Printer className="w-3.5 h-3.5" /> Plano
+            </Button>
+            {planItems.length > 0 && (
+              <Button
+                size="sm"
+                onClick={onOpenContractPreview}
+                className="h-8 gap-1.5 text-xs bg-white/15 hover:bg-white/25 text-white border-white/30 border"
+              >
+                <ScrollText className="w-3.5 h-3.5" /> Contrato
+              </Button>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="h-8 w-8 p-0 bg-transparent hover:bg-white/20 text-white/70 hover:text-white border-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso remove os objetivos, condutas e os vínculos de procedimentos
+                    deste plano. A ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-rose-600 hover:bg-rose-700"
+                    onClick={() => deleteMutation.mutate(selectedPlanId)}
+                  >
+                    Sim, excluir
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        {headerMetrics.hasGoal && (
+          <div className="mt-5 space-y-1.5">
+            <div className="flex justify-between text-xs text-white/80">
+              <span>Progresso das sessões</span>
+              <span className="font-semibold">
+                {headerMetrics.completed}/{headerMetrics.totalAll} concluídas
+              </span>
+            </div>
+            <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-2 bg-white rounded-full transition-all duration-700"
+                style={{ width: `${headerMetrics.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Key metrics */}
+        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-white/20">
+          <div className="text-center">
+            <p className="text-white/60 text-[10px] uppercase tracking-wider font-semibold">Início</p>
+            <p className="text-white font-bold text-sm mt-0.5">{formatDate(selectedPlan?.startDate) || "—"}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-white/60 text-[10px] uppercase tracking-wider font-semibold">Vigência</p>
+            <p className="text-white font-bold text-sm mt-0.5">
+              {headerMetrics.months} {headerMetrics.months === 1 ? "mês" : "meses"}
+            </p>
+          </div>
+          <div className="text-center">
+            <p className="text-white/60 text-[10px] uppercase tracking-wider font-semibold">Itens</p>
+            <p className="text-white font-bold text-sm mt-0.5">{planItems.length}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tab bar ── */}
+      <div className="flex gap-1 bg-slate-100/80 p-1 rounded-xl">
+        {tabs.map((tab) => {
+          const TabIcon = tab.icon;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={[
+                "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-sm font-medium transition-all",
+                activeTab === tab.key
+                  ? "bg-white text-slate-800 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700",
+              ].join(" ")}
+            >
+              <TabIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden text-xs">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Tab content ── */}
+      {activeTab === "resumo" && (
+        <DashResumoTab
+          selectedPlan={selectedPlan}
+          planItems={planItems}
+          form={form}
+          setForm={setForm}
+          professionals={professionals}
+          clinicalOpen={clinicalOpen}
+          setClinicalOpen={setClinicalOpen}
+          saving={saving}
+          handleSave={handleSave}
+        />
+      )}
+
+      {activeTab === "financeiro" && (
+        <DashFinanceiroTab
+          patientId={patientId}
+          selectedPlanId={selectedPlanId}
+          selectedPlan={selectedPlan}
+          planItems={planItems}
+          form={form}
+          onChanged={onChanged}
+        />
+      )}
+
+      {activeTab === "contrato" && (
+        <DashContratoTab
+          patientId={patientId}
+          selectedPlanId={selectedPlanId}
+          selectedPlan={selectedPlan}
+          planItems={planItems}
+          patient={patient}
+          clinic={clinic}
+          form={form}
+          onChanged={onChanged}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Dashboard: Resumo tab ─────────────────────────────────────────────────
+function DashResumoTab({
+  selectedPlan, planItems, form, setForm, professionals,
+  clinicalOpen, setClinicalOpen, saving, handleSave,
+}: {
+  selectedPlan: any;
+  planItems: PlanProcedureItem[];
+  form: any;
+  setForm: (fn: any) => void;
+  professionals: { id: number; name: string }[];
+  clinicalOpen: boolean;
+  setClinicalOpen: (v: boolean) => void;
+  saving: boolean;
+  handleSave: () => Promise<void>;
+}) {
+  const updateForm = (patch: any) => setForm((p: any) => ({ ...p, ...patch }));
+
+  const endDate = (() => {
+    if (!selectedPlan?.startDate || !selectedPlan?.durationMonths) return null;
+    const d = new Date(selectedPlan.startDate + "T00:00:00");
+    d.setMonth(d.getMonth() + selectedPlan.durationMonths);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const monthlyItems = planItems.filter(i => i.packageType === "mensal");
+  const avulsoItems = planItems.filter(i => i.packageType !== "mensal");
+
+  return (
+    <div className="space-y-4">
+      {/* Plan period */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
+            <CalendarRange className="w-4 h-4 text-primary" />
+          </div>
+          <h4 className="text-sm font-bold text-slate-800">Período do plano</h4>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCell label="Início" value={fmtBR(selectedPlan?.startDate)} />
+          <StatCell label="Término previsto" value={fmtBR(endDate)} />
+          <StatCell label="Duração" value={`${selectedPlan?.durationMonths ?? "—"} meses`} />
+          <StatCell label="Profissional" value={form.responsibleProfessional || "—"} />
+        </div>
+      </div>
+
+      {/* Items summary */}
+      {planItems.length > 0 && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="h-8 w-8 rounded-xl bg-violet-100 flex items-center justify-center">
+              <ClipboardList className="w-4 h-4 text-violet-600" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-800">Itens do plano</h4>
+              <p className="text-[11px] text-slate-400">{planItems.length} item{planItems.length !== 1 ? "s" : ""} contratados</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {monthlyItems.length > 0 && (
+              <>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1">
+                  Recorrentes mensais
+                </p>
+                {monthlyItems.map((item: any) => (
+                  <PlanItemRow key={item.id} item={item} />
+                ))}
+              </>
+            )}
+            {avulsoItems.length > 0 && (
+              <>
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 mb-1 mt-3">
+                  Avulsos / pacotes
+                </p>
+                {avulsoItems.map((item: any) => (
+                  <PlanItemRow key={item.id} item={item} />
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Clinical details — collapsible edit section */}
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setClinicalOpen(!clinicalOpen)}
+          className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-slate-50/60 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Stethoscope className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-slate-700">Detalhes clínicos</span>
+            <span className="text-[11px] text-slate-400 font-normal hidden sm:inline">
+              objetivos, condutas, profissional, status
+            </span>
+          </span>
+          {clinicalOpen
+            ? <ChevronUp className="w-4 h-4 text-slate-400" />
+            : <ChevronDown className="w-4 h-4 text-slate-400" />}
+        </button>
+
+        {clinicalOpen && (
+          <div className="border-t border-slate-100 p-5 space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5 text-primary" /> Objetivos terapêuticos
+                </Label>
+                <Textarea
+                  className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white text-sm"
+                  placeholder="Quais são os objetivos do tratamento?"
+                  value={form.objectives}
+                  onChange={(e) => updateForm({ objectives: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                  <Stethoscope className="w-3.5 h-3.5 text-primary" /> Condutas e técnicas
+                </Label>
+                <Textarea
+                  className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white text-sm"
+                  placeholder="Quais técnicas serão aplicadas?"
+                  value={form.techniques}
+                  onChange={(e) => updateForm({ techniques: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                  <UserCheck className="w-3.5 h-3.5 text-primary" /> Profissional responsável
+                </Label>
+                <Select
+                  value={form.responsibleProfessional || "_none"}
+                  onValueChange={(v) => updateForm({ responsibleProfessional: v === "_none" ? "" : v })}
+                >
+                  <SelectTrigger className="bg-slate-50 border-slate-200 h-10">
+                    <SelectValue placeholder="Selecionar profissional…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Não definido —</SelectItem>
+                    {professionals.map((p) => (
+                      <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-600 font-semibold">Status do plano</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v: "ativo" | "concluido" | "suspenso") => updateForm({ status: v })}
+                >
+                  <SelectTrigger className="bg-slate-50 border-slate-200 h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ativo">Ativo</SelectItem>
+                    <SelectItem value="concluido">Concluído</SelectItem>
+                    <SelectItem value="suspenso">Suspenso</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-slate-400">
+                  Use "concluído" ao dar alta ou "suspenso" para pausar.
+                </p>
+              </div>
+            </div>
+
+            {/* Internal notes */}
+            <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                  <Lock className="w-4 h-4" /> Observações internas
+                </Label>
+                <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                  Não impresso no contrato
+                </span>
+              </div>
+              <Textarea
+                className="min-h-[80px] bg-white border-amber-200 focus:border-amber-400 text-sm"
+                placeholder="Combinados com a recepção, particularidades…"
+                value={form.internalNotes}
+                onChange={(e) => updateForm({ internalNotes: e.target.value })}
+                maxLength={5000}
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="h-10 px-6 rounded-xl gap-1.5 shadow-md shadow-primary/20"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Salvar alterações
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">{label}</p>
+      <p className="text-sm font-semibold text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function PlanItemRow({ item }: { item: any }) {
+  const isMonthly = item.packageType === "mensal";
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-700 truncate">
+          {item.procedureName || item.packageName || "—"}
+        </p>
+        {isMonthly && item.sessionsPerWeek && (
+          <p className="text-[11px] text-slate-400">{item.sessionsPerWeek}x/semana</p>
+        )}
+        {!isMonthly && item.totalSessions && (
+          <p className="text-[11px] text-slate-400">{item.totalSessions} sessões</p>
+        )}
+      </div>
+      <span className={[
+        "text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0",
+        isMonthly
+          ? "bg-blue-50 text-blue-700 border-blue-200"
+          : "bg-violet-50 text-violet-700 border-violet-200",
+      ].join(" ")}>
+        {isMonthly ? "Mensal" : "Avulso"}
+      </span>
+    </div>
+  );
+}
+
+// ─── Dashboard: Financeiro tab ─────────────────────────────────────────────
+function DashFinanceiroTab({
+  patientId, selectedPlanId, selectedPlan, planItems, form, onChanged,
+}: {
+  patientId: number;
+  selectedPlanId: number;
+  selectedPlan: any;
+  planItems: PlanProcedureItem[];
+  form: any;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <PlanInstallmentsPanel
+        patientId={patientId}
+        planId={selectedPlanId}
+        isAccepted={true}
+        isMaterialized={true}
+      />
+
+      {form.avulsoBillingMode !== "mensalConsolidado" && (
+        <AvulsoMonthlyEstimate
+          planItems={planItems as any}
+          durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+          planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+        />
+      )}
+
+      {form.avulsoBillingMode === "mensalConsolidado" && (
+        <CloseMonthBlock
+          patientId={patientId}
+          planId={selectedPlanId}
+          startDate={selectedPlan?.startDate ?? form.startDate ?? null}
+          durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? null}
+          onClosed={onChanged}
+        />
+      )}
+
+      <CreditsStatementBlock patientId={patientId} />
+    </div>
+  );
+}
+
+// ─── Dashboard: Contrato tab ───────────────────────────────────────────────
+function DashContratoTab({
+  patientId, selectedPlanId, selectedPlan, planItems, patient, clinic, form, onChanged,
+}: {
+  patientId: number;
+  selectedPlanId: number;
+  selectedPlan: any;
+  planItems: PlanProcedureItem[];
+  patient?: PatientBasic;
+  clinic?: ClinicInfo | null;
+  form: any;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <ContractAcceptanceBlock
+        patientId={patientId}
+        planId={selectedPlanId}
+        plan={selectedPlan}
+        patientName={patient?.name ?? ""}
+        patientPhone={patient?.phone ?? null}
+        patientEmail={(patient as any)?.email ?? null}
+        clinicName={clinic?.name ?? null}
+        onChanged={onChanged}
+      />
+
+      <MaterializeBlock
+        planId={selectedPlanId}
+        patientId={patientId}
+        materializedAt={selectedPlan?.materializedAt ?? null}
+        planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
+        planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
+        planItems={planItems}
+        onChanged={onChanged}
+      />
+    </div>
+  );
+}
+
+// ─── Wizard status bar (pre-acceptance) ───────────────────────────────────
+function WizardStatusBar({
+  selectedPlan, planItemsCount, isAccepted,
+  handlePrintPlan, onOpenContractPreview, deleteMutation, selectedPlanId,
+}: {
+  selectedPlan: any;
+  planItemsCount: number;
+  isAccepted: boolean;
+  handlePrintPlan: () => void;
+  onOpenContractPreview: () => void;
+  deleteMutation: any;
+  selectedPlanId: number;
+}) {
+  const statusBadge = isAccepted
+    ? { label: "Aceito · aguardando início", cls: "bg-blue-100 text-blue-700 border-blue-200" }
+    : { label: "Rascunho", cls: "bg-amber-100 text-amber-700 border-amber-200" };
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <ClipboardList className="w-4 h-4 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-slate-800 truncate">
+              Plano {formatDate(selectedPlan?.startDate) || "—"}
+            </span>
+            <Badge className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
+              {statusBadge.label}
+            </Badge>
+            {isAccepted && (
+              <Badge className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                <BadgeCheck className="w-3 h-3" /> Assinado
+              </Badge>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {planItemsCount} {planItemsCount === 1 ? "item" : "itens"} · configure e colete a assinatura para iniciar
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 gap-1 text-xs rounded-xl"
+          onClick={handlePrintPlan}
+        >
+          <Printer className="w-3.5 h-3.5" /> Plano
+        </Button>
+        {planItemsCount > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1 text-xs rounded-xl"
+            onClick={onOpenContractPreview}
+          >
+            <ScrollText className="w-3.5 h-3.5" /> Contrato
+          </Button>
+        )}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso remove os objetivos, condutas e os vínculos de procedimentos
+                deste plano. A ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-rose-600 hover:bg-rose-700"
+                onClick={() => deleteMutation.mutate(selectedPlanId)}
+              >
+                Sim, excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </div>
+  );
+}
+
+// ─── Plan Selector Bar ─────────────────────────────────────────────────────
 function PlanSelectorBar({
   allPlans, selectedPlanId, setSelectedPlanId, openHistory, handleCreatePlan, creatingNew,
 }: {
@@ -583,15 +1264,17 @@ function PlanSelectorBar({
   creatingNew: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="p-2.5 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl shrink-0">
-          <ClipboardList className="w-5 h-5 text-primary" />
+        <div className="p-2 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl shrink-0">
+          <ClipboardList className="w-4 h-4 text-primary" />
         </div>
         <div className="min-w-0">
-          <h3 className="font-bold text-slate-800 truncate">Planos de Tratamento</h3>
-          <p className="text-xs text-slate-400 truncate">
-            Itens · Aceite & Agenda · Cobrança
+          <h3 className="font-bold text-slate-800 text-sm">Planos de Tratamento</h3>
+          <p className="text-[11px] text-slate-400 truncate">
+            {allPlans.length === 0
+              ? "Nenhum plano"
+              : `${allPlans.length} plano${allPlans.length !== 1 ? "s" : ""} · selecione ou crie novo`}
           </p>
         </div>
       </div>
@@ -602,7 +1285,7 @@ function PlanSelectorBar({
             value={String(selectedPlanId ?? "")}
             onValueChange={(v) => setSelectedPlanId(Number(v))}
           >
-            <SelectTrigger className="w-full sm:w-[260px] h-10 bg-slate-50 border-slate-200 rounded-xl">
+            <SelectTrigger className="w-full sm:w-[240px] h-9 bg-slate-50 border-slate-200 rounded-xl text-sm">
               <SelectValue placeholder="Selecione um plano..." />
             </SelectTrigger>
             <SelectContent>
@@ -621,12 +1304,12 @@ function PlanSelectorBar({
           <Button
             size="sm"
             variant="outline"
-            className="w-full sm:w-auto h-10 gap-1.5 rounded-xl"
+            className="w-full sm:w-auto h-9 gap-1.5 rounded-xl text-sm"
             onClick={openHistory}
           >
-            <History className="w-4 h-4 shrink-0" />
+            <History className="w-3.5 h-3.5 shrink-0" />
             Histórico
-            <span className="ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
               {allPlans.length}
             </span>
           </Button>
@@ -635,11 +1318,11 @@ function PlanSelectorBar({
         <Button
           size="sm"
           variant="outline"
-          className="w-full sm:w-auto h-10 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5"
+          className="w-full sm:w-auto h-9 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5 text-sm"
           onClick={handleCreatePlan}
           disabled={creatingNew}
         >
-          {creatingNew ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {creatingNew ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Novo plano
         </Button>
       </div>
@@ -647,179 +1330,11 @@ function PlanSelectorBar({
   );
 }
 
-// ─── Header do plano selecionado ───────────────────────────────────────────
-function PlanHeader({
-  selectedPlan, planItemsCount, headerMetrics, isAccepted, isStarted,
-  handlePrintPlan, handlePrintContract, onOpenContractPreview, deleteMutation, selectedPlanId,
-}: {
-  selectedPlan: any;
-  planItemsCount: number;
-  headerMetrics: { completed: number; totalAll: number; hasGoal: boolean; progress: number; months: number };
-  isAccepted: boolean;
-  isStarted: boolean;
-  handlePrintPlan: () => void;
-  handlePrintContract: () => void;
-  onOpenContractPreview: () => void;
-  deleteMutation: any;
-  selectedPlanId: number;
-}) {
-  const statusBadge = isStarted
-    ? { label: "Em andamento", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" }
-    : isAccepted
-    ? { label: "Aceito · aguardando início", cls: "bg-blue-100 text-blue-700 border-blue-200" }
-    : { label: "Rascunho", cls: "bg-amber-100 text-amber-700 border-amber-200" };
-
-  return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-base sm:text-lg font-bold text-slate-800">
-              Plano {formatDate(selectedPlan?.startDate) || "—"}
-            </h4>
-            <Badge className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
-              {statusBadge.label}
-            </Badge>
-            {isAccepted && (
-              <Badge className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-                <BadgeCheck className="w-3 h-3" /> Assinado
-              </Badge>
-            )}
-          </div>
-
-          {/* Métricas (substituem a antiga aba "Sessões") */}
-          <div className="grid grid-cols-3 gap-3 max-w-md">
-            <Metric
-              icon={ClipboardList}
-              label="Itens"
-              value={String(planItemsCount)}
-              tone="primary"
-            />
-            <Metric
-              icon={CalendarRange}
-              label="Duração"
-              value={`${headerMetrics.months} ${headerMetrics.months === 1 ? "mês" : "meses"}`}
-              tone="slate"
-            />
-            <Metric
-              icon={Activity}
-              label="Sessões"
-              value={
-                headerMetrics.hasGoal
-                  ? `${headerMetrics.completed}/${headerMetrics.totalAll}`
-                  : String(headerMetrics.completed)
-              }
-              tone={
-                headerMetrics.hasGoal && headerMetrics.completed >= headerMetrics.totalAll
-                  ? "emerald"
-                  : "primary"
-              }
-            />
-          </div>
-
-          {headerMetrics.hasGoal && (
-            <div className="max-w-md pt-1">
-              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    headerMetrics.completed >= headerMetrics.totalAll
-                      ? "bg-emerald-500"
-                      : "bg-primary"
-                  }`}
-                  style={{ width: `${headerMetrics.progress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 gap-1 text-xs rounded-xl"
-            onClick={handlePrintPlan}
-          >
-            <Printer className="w-3.5 h-3.5 shrink-0" /> Plano
-          </Button>
-          {planItemsCount > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 gap-1 text-xs rounded-xl"
-              onClick={onOpenContractPreview}
-            >
-              <ScrollText className="w-3.5 h-3.5 shrink-0" /> Contrato
-            </Button>
-          )}
-
-          <AlertDialog>
-            <Button
-              asChild
-              size="sm"
-              variant="ghost"
-              className="h-9 w-9 p-0 text-slate-400 hover:text-rose-500 hover:bg-rose-50 shrink-0"
-            >
-              <div className="cursor-pointer">
-                <Trash2 className="w-4 h-4" />
-              </div>
-            </Button>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Isso remove os objetivos, condutas e os vínculos de procedimentos
-                  deste plano. A ação não pode ser desfeita.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-rose-600 hover:bg-rose-700"
-                  onClick={() => deleteMutation.mutate(selectedPlanId)}
-                >
-                  Sim, excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Metric({
-  icon: Icon, label, value, tone,
-}: {
-  icon: typeof ClipboardList;
-  label: string;
-  value: string;
-  tone: "primary" | "slate" | "emerald";
-}) {
-  const toneCls = {
-    primary: "text-primary",
-    slate: "text-slate-600",
-    emerald: "text-emerald-600",
-  }[tone];
-  return (
-    <div className="flex items-center gap-2 min-w-0">
-      <Icon className={`w-3.5 h-3.5 shrink-0 ${toneCls}`} />
-      <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold leading-none">
-          {label}
-        </p>
-        <p className={`text-sm font-bold leading-tight truncate ${toneCls}`}>{value}</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Etapa 1 — Itens ───────────────────────────────────────────────────────
+// ─── Step 1 — Itens ────────────────────────────────────────────────────────
 function StepItens({
   patientId, selectedPlanId, planItems, planItemsKey, form, setForm, professionals,
   clinicalOpen, setClinicalOpen, saving, handleSave, hasItems, isAccepted,
-  advanceLabel = "Avançar para Aceite", onAdvance,
+  advanceLabel = "Avançar", onAdvance,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -837,15 +1352,14 @@ function StepItens({
   advanceLabel?: string;
   onAdvance: () => void;
 }) {
-  const updateForm = (patch: any) =>
-    setForm((p: any) => ({ ...p, ...patch }));
+  const updateForm = (patch: any) => setForm((p: any) => ({ ...p, ...patch }));
 
   return (
     <div className="space-y-6">
-      {/* Bloco 1: dados comerciais essenciais (data + duração) */}
+      {/* Period */}
       <div className="rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50/60 to-transparent p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
             <ClipboardList className="w-4 h-4 text-primary" />
           </div>
           <div>
@@ -866,9 +1380,7 @@ function StepItens({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs text-slate-600">
-              Vigência (meses)
-            </Label>
+            <Label className="text-xs text-slate-600">Vigência (meses)</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -887,13 +1399,13 @@ function StepItens({
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Informe de 1 a {MAX_PLAN_DURATION_MONTHS} meses. Define até quando consultas e parcelas mensais serão geradas.
+              De 1 a {MAX_PLAN_DURATION_MONTHS} meses.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Bloco 2: itens (procedimentos / pacotes) */}
+      {/* Items */}
       <TreatmentPlanItemsSection
         planId={selectedPlanId}
         planItems={planItems}
@@ -903,12 +1415,12 @@ function StepItens({
         isAccepted={isAccepted}
       />
 
-      {/* Bloco 3: detalhes clínicos (collapsible) */}
-      <div className="rounded-2xl border border-slate-100 bg-white">
+      {/* Clinical details (collapsible) */}
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <button
           type="button"
           onClick={() => setClinicalOpen(!clinicalOpen)}
-          className="w-full flex items-center justify-between p-4 text-left"
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50/60 transition-colors"
         >
           <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
             <Stethoscope className="w-4 h-4 text-primary" />
@@ -917,11 +1429,9 @@ function StepItens({
               objetivos, condutas, profissional, observações
             </span>
           </span>
-          {clinicalOpen ? (
-            <ChevronUp className="w-4 h-4 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          )}
+          {clinicalOpen
+            ? <ChevronUp className="w-4 h-4 text-slate-400" />
+            : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </button>
 
         {clinicalOpen && (
@@ -937,8 +1447,8 @@ function StepItens({
                   <Stethoscope className="w-4 h-4 text-primary" /> Condutas e técnicas
                 </Label>
                 <Textarea
-                  className="min-h-[140px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                  placeholder="Quais técnicas serão aplicadas? (ex: liberação miofascial, exercícios cinesioterapêuticos…)"
+                  className="min-h-[140px] bg-slate-50 border-slate-200 focus:bg-white"
+                  placeholder="Quais técnicas serão aplicadas?"
                   value={form.techniques}
                   onChange={(e) => updateForm({ techniques: e.target.value })}
                 />
@@ -949,7 +1459,6 @@ function StepItens({
               <div className="space-y-1.5">
                 <Label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-primary" /> Profissional responsável
-                  <span className="text-[10px] text-slate-400 font-normal">(geral do plano)</span>
                 </Label>
                 <Select
                   value={form.responsibleProfessional || "_none"}
@@ -963,21 +1472,14 @@ function StepItens({
                   <SelectContent>
                     <SelectItem value="_none">— Não definido —</SelectItem>
                     {professionals.map((p) => (
-                      <SelectItem key={p.id} value={p.name}>
-                        {p.name}
-                      </SelectItem>
+                      <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-slate-400">
-                  Cada item pode ter seu profissional próprio na etapa de Aceite.
-                </p>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-700">
-                  Status do plano
-                </Label>
+                <Label className="text-sm font-semibold text-slate-700">Status do plano</Label>
                 <Select
                   value={form.status}
                   onValueChange={(v: "ativo" | "concluido" | "suspenso") =>
@@ -993,13 +1495,10 @@ function StepItens({
                     <SelectItem value="suspenso">Suspenso</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-slate-400">
-                  Use "concluído" ao dar alta ou "suspenso" para pausar.
-                </p>
               </div>
             </div>
 
-            {/* Observações internas */}
+            {/* Internal notes */}
             <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/40 p-4">
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-sm font-semibold text-amber-900 flex items-center gap-2">
@@ -1011,14 +1510,13 @@ function StepItens({
               </div>
               <Textarea
                 className="min-h-[80px] bg-white border-amber-200 focus:border-amber-400 text-sm"
-                placeholder="Combinados com a recepção, particularidades de convênio, lembretes do profissional…"
+                placeholder="Combinados com a recepção, particularidades de convênio…"
                 value={form.internalNotes}
                 onChange={(e) => updateForm({ internalNotes: e.target.value })}
                 maxLength={5000}
               />
               <p className="text-[11px] text-amber-700/80">
-                Visível apenas dentro do sistema. Não aparece em contrato, link público
-                ou mensagens ao paciente.
+                Visível apenas dentro do sistema.
                 {form.internalNotes.length > 0 && (
                   <span className="text-amber-600 ml-1">
                     ({form.internalNotes.length}/5000)
@@ -1030,8 +1528,7 @@ function StepItens({
         )}
       </div>
 
-      {/* Ações finais */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-2">
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-1">
         <Button
           variant="outline"
           onClick={handleSave}
@@ -1055,7 +1552,7 @@ function StepItens({
   );
 }
 
-// ─── Etapa 2 — Cobrança (antes do aceite) ─────────────────────────────────
+// ─── Step 2 — Cobrança ─────────────────────────────────────────────────────
 function StepCobranca({
   form, setForm, isAccepted, isStarted, saving, handleSave, onAdvance,
 }: {
@@ -1084,7 +1581,7 @@ function StepCobranca({
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-2">
+      <div className="flex flex-col sm:flex-row gap-2 sm:justify-end pt-1">
         <Button
           variant="outline"
           onClick={handleSave}
@@ -1107,16 +1604,7 @@ function StepCobranca({
   );
 }
 
-// ─── Etapa 3 — Agenda (antes do aceite) ───────────────────────────────────
-const HOLD_TTL_OPTIONS = [
-  { value: 15, label: "15 min" },
-  { value: 30, label: "30 min" },
-  { value: 45, label: "45 min" },
-  { value: 60, label: "1 hora" },
-  { value: 90, label: "1h 30min" },
-  { value: 120, label: "2 horas" },
-];
-
+// ─── Step 3 — Agenda ───────────────────────────────────────────────────────
 function StepAgenda({
   patientId, selectedPlanId, planItems, planItemsKey, isStarted,
   monthlyMissingCount, holdTtlMinutes, onHoldTtlChange, onHoldCreated, onAdvance,
@@ -1136,35 +1624,23 @@ function StepAgenda({
   const { toast } = useToast();
   const [reserving, setReserving] = useState(false);
 
-  // Ao avançar para Contrato, reservamos os slots pelo TTL configurado via
-  // POST /holds. Em conflito (409), abortamos e mostramos a lista para o
-  // usuário ajustar a agenda.
   async function handleAdvance() {
-    if (isStarted) {
-      onAdvance();
-      return;
-    }
+    if (isStarted) { onAdvance(); return; }
     setReserving(true);
     try {
       const { reservePlanSlots } = await import("./treatment-plan/usePlanSlotHolds");
       const result = await reservePlanSlots(
-        patientId,
-        selectedPlanId,
-        planItems as PlanItemForHold[],
-        holdTtlMinutes,
+        patientId, selectedPlanId, planItems as PlanItemForHold[], holdTtlMinutes,
       );
       if (!result.ok) {
         const conflicts = result.conflicts ?? [];
-        const previewMsg = conflicts.slice(0, 3)
-          .map((c) => `• ${c.message}`)
-          .join("\n");
+        const previewMsg = conflicts.slice(0, 3).map((c) => `• ${c.message}`).join("\n");
         const more = conflicts.length > 3 ? `\n…e mais ${conflicts.length - 3}` : "";
         toast({
           title: "Horários indisponíveis",
           description:
             (previewMsg || "Alguns horários foram reservados por outro paciente.") +
-            more +
-            "\nVolte para Agenda e escolha outros horários.",
+            more + "\nVolte para Agenda e escolha outros horários.",
           variant: "destructive",
         });
         return;
@@ -1216,13 +1692,13 @@ function StepAgenda({
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>
             {monthlyMissingCount === 1
-              ? "1 item recorrente ainda está sem dia ou horário. Defina antes de avançar."
-              : `${monthlyMissingCount} itens recorrentes ainda estão sem dia ou horário. Defina antes de avançar.`}
+              ? "1 item recorrente ainda está sem dia ou horário."
+              : `${monthlyMissingCount} itens recorrentes ainda estão sem dia ou horário.`}{" "}
+            Defina antes de avançar.
           </span>
         </div>
       )}
 
-      {/* Validade da proposta + botão Avançar */}
       {!isStarted && (
         <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 flex flex-col sm:flex-row sm:items-end gap-4 shadow-sm">
           <div className="flex-1 space-y-1">
@@ -1242,9 +1718,7 @@ function StepAgenda({
               </SelectTrigger>
               <SelectContent>
                 {HOLD_TTL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={String(o.value)}>
-                    {o.label}
-                  </SelectItem>
+                  <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1253,24 +1727,14 @@ function StepAgenda({
             onClick={handleAdvance}
             disabled={(!allMonthlyConfigured && !isStarted) || reserving}
             className="h-11 px-6 rounded-xl shadow-md shadow-primary/20 gap-1.5 shrink-0"
-            title={
-              !allMonthlyConfigured && !isStarted
-                ? "Configure todos os itens recorrentes antes de avançar"
-                : reserving
-                ? "Reservando horários…"
-                : undefined
-            }
           >
-            {reserving ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Reservando…</>
-            ) : (
-              <>Avançar para Contrato <ArrowRight className="w-4 h-4" /></>
-            )}
+            {reserving
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Reservando…</>
+              : <>Avançar para Contrato <ArrowRight className="w-4 h-4" /></>}
           </Button>
         </div>
       )}
 
-      {/* Plano já iniciado — apenas navegar para etapa de contrato */}
       {isStarted && (
         <div className="flex justify-end pt-2">
           <Button
@@ -1285,18 +1749,10 @@ function StepAgenda({
   );
 }
 
-// ─── Utilitário de formatação do timer ────────────────────────────────────
-function formatCountdown(secs: number): string {
-  if (secs <= 0) return "Expirada";
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}min ${String(s).padStart(2, "0")}s`;
-}
-
-// ─── Etapa 4 — Contrato (assinar e iniciar em 1 transação) ────────────────
+// ─── Step 4 — Contrato (pre-acceptance only) ───────────────────────────────
 function StepContrato({
   patientId, selectedPlanId, selectedPlan, planItems,
-  patient, clinic, form, isStarted, monthlyMissingCount,
+  patient, clinic, form, monthlyMissingCount,
   holdExpiresAt, holdTtlMinutes, onHoldRenewed, onChanged,
 }: {
   patientId: number;
@@ -1306,7 +1762,6 @@ function StepContrato({
   patient: PatientBasic | undefined;
   clinic: ClinicInfo | null | undefined;
   form: any;
-  isStarted: boolean;
   monthlyMissingCount: number;
   holdExpiresAt: string | null;
   holdTtlMinutes: number;
@@ -1317,26 +1772,22 @@ function StepContrato({
   const [remaining, setRemaining] = useState<number | null>(null);
   const [renewing, setRenewing] = useState(false);
 
-  // Contagem regressiva do hold — atualiza a cada segundo
   useEffect(() => {
-    if (!holdExpiresAt || isStarted) { setRemaining(null); return; }
+    if (!holdExpiresAt) { setRemaining(null); return; }
     function calcRemaining() {
       return Math.max(0, Math.floor((new Date(holdExpiresAt!).getTime() - Date.now()) / 1000));
     }
     setRemaining(calcRemaining());
     const interval = setInterval(() => setRemaining(calcRemaining()), 1000);
     return () => clearInterval(interval);
-  }, [holdExpiresAt, isStarted]);
+  }, [holdExpiresAt]);
 
   async function handleRenew() {
     setRenewing(true);
     try {
       const { reservePlanSlots } = await import("./treatment-plan/usePlanSlotHolds");
       const result = await reservePlanSlots(
-        patientId,
-        selectedPlanId,
-        planItems as PlanItemForHold[],
-        holdTtlMinutes,
+        patientId, selectedPlanId, planItems as PlanItemForHold[], holdTtlMinutes,
       );
       if (result.ok && result.expiresAt) {
         onHoldRenewed(result.expiresAt);
@@ -1367,8 +1818,8 @@ function StepContrato({
 
   return (
     <div className="space-y-5">
-      {/* Painel de contagem regressiva — apenas antes de materializar */}
-      {!isStarted && holdExpiresAt && remaining !== null && (
+      {/* Hold countdown */}
+      {holdExpiresAt && remaining !== null && (
         <div className={`rounded-xl border p-3.5 flex items-center gap-3 ${
           isExpired
             ? "border-red-200 bg-red-50"
@@ -1421,6 +1872,16 @@ function StepContrato({
         </div>
       )}
 
+      {monthlyMissingCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            Existem itens recorrentes sem agenda definida. Volte para a etapa
+            Agenda antes de coletar a assinatura.
+          </span>
+        </div>
+      )}
+
       <ContractAcceptanceBlock
         patientId={patientId}
         planId={selectedPlanId}
@@ -1431,63 +1892,6 @@ function StepContrato({
         clinicName={clinic?.name ?? null}
         onChanged={onChanged}
       />
-
-      {/* Após iniciado: mostra parcelas + estimativa + opções avançadas */}
-      {isStarted && (
-        <>
-          <PlanInstallmentsPanel
-            patientId={patientId}
-            planId={selectedPlanId}
-            isAccepted={true}
-            isMaterialized={true}
-          />
-
-          {/* Em modo mensalConsolidado as faturas reais já constam nas parcelas acima
-              (PlanInstallmentsPanel). Exibir a estimativa junto causaria divergência
-              de valores — o componente usa fronteira de data diferente do backend
-              (startDate + N meses vs planMonthRefOf), gerando totais distintos. */}
-          {form.avulsoBillingMode !== "mensalConsolidado" && (
-            <AvulsoMonthlyEstimate
-              planItems={planItems as any}
-              durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-              planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-            />
-          )}
-
-          {form.avulsoBillingMode === "mensalConsolidado" && (
-            <CloseMonthBlock
-              patientId={patientId}
-              planId={selectedPlanId}
-              startDate={selectedPlan?.startDate ?? form.startDate ?? null}
-              durationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? null}
-              onClosed={onChanged}
-            />
-          )}
-
-          <CreditsStatementBlock patientId={patientId} />
-
-          {/* Opção de reverter (compensatório) — escondida por trás de UI legada */}
-          <MaterializeBlock
-            planId={selectedPlanId}
-            patientId={patientId}
-            materializedAt={selectedPlan?.materializedAt ?? null}
-            planStartDate={selectedPlan?.startDate ?? form.startDate ?? null}
-            planDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths ?? 12}
-            planItems={planItems}
-            onChanged={onChanged}
-          />
-        </>
-      )}
-
-      {!isStarted && monthlyMissingCount > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>
-            Existem itens recorrentes sem agenda definida. Volte para a etapa
-            Agenda antes de coletar a assinatura.
-          </span>
-        </div>
-      )}
     </div>
   );
 }
