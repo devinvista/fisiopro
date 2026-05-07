@@ -5,7 +5,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -427,13 +426,54 @@ function DesempenhoTab({
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+function MonthNavigator({
+  month, year, onMonthChange, onYearChange,
+}: {
+  month: number; year: number;
+  onMonthChange: (m: number) => void;
+  onYearChange: (y: number) => void;
+}) {
+  const goBack = () => {
+    if (month === 1) { onMonthChange(12); onYearChange(year - 1); }
+    else onMonthChange(month - 1);
+  };
+  const goForward = () => {
+    if (month === 12) { onMonthChange(1); onYearChange(year + 1); }
+    else onMonthChange(month + 1);
+  };
+  const isCurrentMonth = month === new Date().getMonth() + 1 && year === new Date().getFullYear();
+
+  return (
+    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl shadow-sm px-1 py-1">
+      <button
+        onClick={goBack}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        <span className="text-sm font-bold">‹</span>
+      </button>
+      <div className="px-2 min-w-[120px] text-center">
+        <span className="text-sm font-semibold text-slate-800">
+          {MONTH_NAMES[month - 1]} {year}
+        </span>
+      </div>
+      <button
+        onClick={goForward}
+        disabled={isCurrentMonth}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <span className="text-sm font-bold">›</span>
+      </button>
+    </div>
+  );
+}
+
 export default function Contabil() {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  const [selectedYear, setSelectedYear] = useState(String(currentYear));
-  const [selectedMonth, setSelectedMonth] = useState(String(currentMonth));
-  const month = parseInt(selectedMonth, 10);
-  const year = parseInt(selectedYear, 10);
+  const [month, setMonth] = useState(currentMonth);
+  const [year, setYear] = useState(currentYear);
+  const selectedMonth = String(month);
+  const selectedYear = String(year);
 
   const { hasFeature } = useAuth();
   const visibleTabs = ALL_TABS.filter((t) => !t.feature || hasFeature(t.feature));
@@ -445,35 +485,17 @@ export default function Contabil() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Relatórios</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <p className="text-sm text-slate-400 mt-0.5">
             Indicadores gerenciais, DRE, orçamento e análises contábeis
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 w-full sm:w-auto">
-          <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_NAMES.map((name, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="h-4 w-px bg-slate-100" />
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="h-8 w-20 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {YEARS_LIST.map(y => (
-                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <MonthNavigator
+          month={month}
+          year={year}
+          onMonthChange={setMonth}
+          onYearChange={setYear}
+        />
       </div>
 
       {/* ── Tabs ──────────────────────────────────────────────────────── */}

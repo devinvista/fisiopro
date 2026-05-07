@@ -1,20 +1,20 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
-  CalendarDays, Receipt, Wallet, RotateCcw, Settings2, ClipboardList, LayoutDashboard,
+  CalendarDays, Receipt, Wallet, Settings2, ClipboardList,
+  LayoutDashboard, TrendingUp, TrendingDown, ChevronLeft, ChevronRight,
+  Plus, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { MONTH_NAMES, YEARS } from "./constants";
 import { VisaoMesTab } from "./components/VisaoMesTab";
 import { LancamentosTab } from "./components/LancamentosTab";
 import { CashFlowTab } from "./components/CashFlowTab";
-import { EstornosTab } from "./components/EstornosTab";
 import { DespesasFixasTab } from "./components/DespesasFixasTab";
 import { ContasReceberTab } from "./components/ContasReceberTab";
 import { useAuth } from "@/hooks/use-auth";
+import { authHeaders, formatCurrency } from "./utils";
 import type { Feature } from "@/utils/plan-features";
 
 interface TabDef {
@@ -25,66 +25,206 @@ interface TabDef {
 }
 
 const ALL_TABS: TabDef[] = [
-  { value: "visao-mes",       icon: <LayoutDashboard className="w-3.5 h-3.5" />, label: "Visão do Mês",     feature: "financial.view.simple" },
-  { value: "lancamentos",     icon: <Receipt className="w-3.5 h-3.5" />,         label: "Lançamentos",      feature: "financial.view.simple" },
-  { value: "contas-receber",  icon: <ClipboardList className="w-3.5 h-3.5" />,   label: "A Receber",        feature: "financial.view.simple" },
-  { value: "fluxo-caixa",    icon: <Wallet className="w-3.5 h-3.5" />,           label: "Fluxo de Caixa",   feature: "financial.view.cash_flow" },
-  { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,       label: "Despesas Fixas",   feature: "module.recurring_expenses" },
-  { value: "estornos",        icon: <RotateCcw className="w-3.5 h-3.5" />,       label: "Estornos",         feature: "financial.view.simple" },
+  { value: "visao-geral",     icon: <LayoutDashboard className="w-3.5 h-3.5" />, label: "Visão Geral",    feature: "financial.view.simple" },
+  { value: "lancamentos",     icon: <Receipt className="w-3.5 h-3.5" />,         label: "Lançamentos",    feature: "financial.view.simple" },
+  { value: "contas-receber",  icon: <ClipboardList className="w-3.5 h-3.5" />,   label: "A Receber",      feature: "financial.view.simple" },
+  { value: "fluxo-caixa",    icon: <Wallet className="w-3.5 h-3.5" />,           label: "Fluxo de Caixa", feature: "financial.view.cash_flow" },
+  { value: "despesas-fixas",  icon: <Settings2 className="w-3.5 h-3.5" />,       label: "Despesas Fixas", feature: "module.recurring_expenses" },
 ];
+
+interface DashboardSummary {
+  monthlyRevenue: number;
+  monthlyExpenses: number;
+  accountsReceivable: number;
+}
+
+function MonthNavigator({
+  month, year, onMonthChange, onYearChange,
+}: {
+  month: number; year: number;
+  onMonthChange: (m: number) => void;
+  onYearChange: (y: number) => void;
+}) {
+  const goBack = () => {
+    if (month === 1) { onMonthChange(12); onYearChange(year - 1); }
+    else onMonthChange(month - 1);
+  };
+  const goForward = () => {
+    if (month === 12) { onMonthChange(1); onYearChange(year + 1); }
+    else onMonthChange(month + 1);
+  };
+  const isCurrentMonth = month === new Date().getMonth() + 1 && year === new Date().getFullYear();
+
+  return (
+    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl shadow-sm px-1 py-1">
+      <button
+        onClick={goBack}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      <div className="px-2 min-w-[120px] text-center">
+        <span className="text-sm font-semibold text-slate-800">
+          {MONTH_NAMES[month - 1]} {year}
+        </span>
+      </div>
+      <button
+        onClick={goForward}
+        disabled={isCurrentMonth}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function SummaryStrip({ month, year }: { month: number; year: number }) {
+  const [data, setData] = useState<DashboardSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/financial/dashboard?month=${month}&year=${year}`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) setData(await res.json());
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [month, year]);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  const revenue  = Number(data?.monthlyRevenue ?? 0);
+  const expenses = Number(data?.monthlyExpenses ?? 0);
+  const result   = revenue - expenses;
+  const ar       = Number(data?.accountsReceivable ?? 0);
+  const isProfitable = result >= 0;
+
+  const Sk = () => <div className="h-5 w-16 bg-slate-200 animate-pulse rounded" />;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
+
+      {/* Receitas */}
+      <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3 group hover:border-emerald-200 transition-colors">
+        <div className="p-2 rounded-xl bg-emerald-50 shrink-0">
+          <TrendingUp className="w-4 h-4 text-emerald-500" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Receitas</p>
+          {loading ? <Sk /> : (
+            <p className="text-base font-bold text-emerald-700 tabular-nums truncate">{formatCurrency(revenue)}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Despesas */}
+      <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3 group hover:border-rose-200 transition-colors">
+        <div className="p-2 rounded-xl bg-rose-50 shrink-0">
+          <TrendingDown className="w-4 h-4 text-rose-500" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Despesas</p>
+          {loading ? <Sk /> : (
+            <p className="text-base font-bold text-rose-700 tabular-nums truncate">{formatCurrency(expenses)}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Resultado */}
+      <div className={`border rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3 transition-colors ${
+        loading ? "bg-white border-slate-100"
+        : isProfitable ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"
+      }`}>
+        <div className={`p-2 rounded-xl shrink-0 ${loading ? "bg-slate-100" : isProfitable ? "bg-emerald-100" : "bg-red-100"}`}>
+          {loading
+            ? <Minus className="w-4 h-4 text-slate-400" />
+            : isProfitable
+              ? <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+              : <ArrowDownRight className="w-4 h-4 text-red-500" />}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resultado</p>
+          {loading ? <Sk /> : (
+            <p className={`text-base font-bold tabular-nums truncate ${isProfitable ? "text-emerald-700" : "text-red-700"}`}>
+              {isProfitable ? "+" : ""}{formatCurrency(result)}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* A Receber */}
+      <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3.5 shadow-sm flex items-center gap-3 group hover:border-amber-200 transition-colors">
+        <div className="p-2 rounded-xl bg-amber-50 shrink-0">
+          <CalendarDays className="w-4 h-4 text-amber-500" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">A Receber</p>
+          {loading ? <Sk /> : (
+            <p className="text-base font-bold text-amber-700 tabular-nums truncate">{formatCurrency(ar)}</p>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}
 
 export default function Financial() {
   const { hasFeature } = useAuth();
   const visibleTabs = ALL_TABS.filter((t) => !t.feature || hasFeature(t.feature));
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
-  const [activeTab, setActiveTab] = useState<string>(() => visibleTabs[0]?.value ?? "visao-mes");
-
-  const needsDateSelector = ["visao-mes", "lancamentos"].includes(activeTab);
+  const [activeTab, setActiveTab] = useState<string>(() => visibleTabs[0]?.value ?? "visao-geral");
+  const [triggerNewRecord, setTriggerNewRecord] = useState(false);
 
   return (
     <AppLayout title="Financeiro">
+
       {/* ── Page Header ──────────────────────────────────────────────────── */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Financeiro</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Gestão operacional de caixa, receitas e despesas</p>
+          <p className="text-sm text-slate-400 mt-0.5">Caixa, receitas, despesas e contas a receber</p>
         </div>
 
-        {/* Month/Year selector — only shown for date-sensitive tabs */}
-        <div
-          className={`flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 w-full sm:w-auto transition-opacity duration-200 ${
-            needsDateSelector ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
-          <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-            <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTH_NAMES.map((name, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="h-4 w-px bg-slate-100" />
-          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-            <SelectTrigger className="h-8 w-20 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <MonthNavigator
+            month={month}
+            year={year}
+            onMonthChange={setMonth}
+            onYearChange={setYear}
+          />
+          {hasFeature("financial.view.simple") && (
+            <Button
+              size="sm"
+              className="h-9 rounded-xl gap-1.5 font-semibold shadow-sm shrink-0"
+              onClick={() => {
+                setActiveTab("lancamentos");
+                setTriggerNewRecord(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Novo Lançamento</span>
+              <span className="sm:hidden">Novo</span>
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* ── Summary Strip (always visible) ───────────────────────────────── */}
+      {hasFeature("financial.view.simple") && (
+        <SummaryStrip month={month} year={year} />
+      )}
+
       {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+
         <div className="relative mb-6">
-          <div className="overflow-x-auto pr-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsList className="inline-flex bg-slate-100/80 rounded-xl p-1 gap-1 h-auto min-w-max">
+          <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList className="inline-flex bg-slate-100/80 rounded-xl p-1 gap-0.5 h-auto min-w-max">
               {visibleTabs.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
@@ -101,13 +241,18 @@ export default function Financial() {
         </div>
 
         {hasFeature("financial.view.simple") && (
-          <TabsContent value="visao-mes">
+          <TabsContent value="visao-geral">
             <VisaoMesTab month={month} year={year} />
           </TabsContent>
         )}
         {hasFeature("financial.view.simple") && (
           <TabsContent value="lancamentos">
-            <LancamentosTab month={month} year={year} />
+            <LancamentosTab
+              month={month}
+              year={year}
+              triggerNew={triggerNewRecord}
+              onTriggerNewConsumed={() => setTriggerNewRecord(false)}
+            />
           </TabsContent>
         )}
         {hasFeature("financial.view.simple") && (
@@ -123,11 +268,6 @@ export default function Financial() {
         {hasFeature("module.recurring_expenses") && (
           <TabsContent value="despesas-fixas">
             <DespesasFixasTab />
-          </TabsContent>
-        )}
-        {hasFeature("financial.view.simple") && (
-          <TabsContent value="estornos">
-            <EstornosTab />
           </TabsContent>
         )}
       </Tabs>

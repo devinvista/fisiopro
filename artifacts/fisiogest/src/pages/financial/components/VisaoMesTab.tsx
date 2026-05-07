@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  TrendingUp, TrendingDown, Clock, Ticket,
-  Stethoscope, Repeat, ArrowUpRight, ArrowDownRight,
-  PiggyBank, CalendarCheck2, LayoutDashboard,
+  Ticket, Stethoscope, Repeat, PiggyBank, CalendarCheck2,
+  ArrowUpRight, ArrowDownRight,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { useGetFinancialDashboard } from "@workspace/api-client-react";
@@ -46,17 +45,16 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
     finally { setPlanBillingRunning(false); }
   };
 
-  const revenue = Number(dashboard?.monthlyRevenue ?? 0);
-  const expenses = Number(dashboard?.monthlyExpenses ?? 0);
-  const netProfit = revenue - expenses;
+  const revenue     = Number(dashboard?.monthlyRevenue ?? 0);
+  const expenses    = Number(dashboard?.monthlyExpenses ?? 0);
+  const netProfit   = revenue - expenses;
   const isProfitable = netProfit >= 0;
-  const marginPct = revenue > 0 ? (netProfit / revenue) * 100 : 0;
-  const expenseRatioPct = revenue > 0 ? Math.min(100, (expenses / revenue) * 100) : 0;
+  const marginPct   = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+  const expenseRatio = revenue > 0 ? Math.min(100, (expenses / revenue) * 100) : 0;
   const cashReceived = Number((dashboard as any)?.cashReceived ?? 0);
-  const accountsReceivable = Number((dashboard as any)?.accountsReceivable ?? 0);
-  const mrr = Number((dashboard as any)?.mrr ?? 0);
+  const mrr          = Number((dashboard as any)?.mrr ?? 0);
   const activeSubscriptions = Number((dashboard as any)?.activeSubscriptions ?? 0);
-  const monthLabel = MONTH_NAMES[month - 1];
+  const monthLabel  = MONTH_NAMES[month - 1];
 
   const pieData = useMemo(() => {
     const cats = (dashboard as any)?.revenueByCategory ?? [];
@@ -85,21 +83,13 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
       }`}>
         <div className="pointer-events-none absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute right-12 -bottom-12 w-32 h-32 rounded-full bg-white/5" />
-        <div className="pointer-events-none absolute left-1/2 -bottom-8 w-64 h-24 rounded-full bg-black/5" />
 
         <div className="relative">
-          {/* Title row */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-1.5 rounded-lg bg-white/15">
-              <LayoutDashboard className="w-4 h-4 text-white" />
-            </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-white/70">
-              Resultado — {monthLabel} {year}
-            </p>
-          </div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-3">
+            Resultado — {monthLabel} {year}
+          </p>
 
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6">
-            {/* Left: main number */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
             <div>
               {dashLoading ? (
                 <div className="space-y-2">
@@ -113,32 +103,27 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
                       {isProfitable ? "+" : ""}{formatCurrency(netProfit)}
                     </p>
                     {isProfitable
-                      ? <ArrowUpRight className="w-7 h-7 text-white/70" />
-                      : <ArrowDownRight className="w-7 h-7 text-white/70" />}
+                      ? <ArrowUpRight className="w-7 h-7 text-white/60" />
+                      : <ArrowDownRight className="w-7 h-7 text-white/60" />}
                   </div>
                   <p className="text-sm text-white/60 mt-1.5 font-medium">
                     {isProfitable
                       ? `Margem líquida de ${marginPct.toFixed(1)}%`
                       : "Resultado negativo no período"}
                   </p>
-                  {/* Expense bar */}
-                  <div className="mt-4 max-w-sm">
+                  <div className="mt-4 max-w-xs">
                     <div className="flex justify-between text-[10px] font-semibold text-white/50 mb-1.5">
                       <span>Despesas / Receitas</span>
-                      <span>{expenseRatioPct.toFixed(0)}%</span>
+                      <span>{expenseRatio.toFixed(0)}%</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-white/70 transition-all duration-700"
-                        style={{ width: `${expenseRatioPct}%` }}
-                      />
+                      <div className="h-full rounded-full bg-white/60 transition-all duration-700" style={{ width: `${expenseRatio}%` }} />
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Right: breakdown stats */}
             <div className="flex sm:flex-col gap-6 sm:gap-3 sm:text-right">
               {dashLoading ? (
                 <>
@@ -173,14 +158,6 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
           loading={dashLoading}
         />
         <KpiCard
-          label="A Receber"
-          value={dashLoading ? "—" : formatCurrency(accountsReceivable)}
-          sub="Títulos em aberto"
-          icon={<Clock className="w-4 h-4" />}
-          accentColor="#f59e0b"
-          loading={dashLoading}
-        />
-        <KpiCard
           label="MRR"
           value={dashLoading ? "—" : formatCurrency(mrr)}
           sub={`${activeSubscriptions} pacote(s) ativo(s)`}
@@ -198,9 +175,19 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
           accentColor="#10b981"
           loading={dashLoading}
         />
+        <KpiCard
+          label="Consultas"
+          value={dashLoading ? "—" : String((dashboard as any)?.completedAppointments ?? 0)}
+          sub={(dashboard as any)?.totalAppointments != null
+            ? `de ${(dashboard as any).totalAppointments} agendadas`
+            : undefined}
+          icon={<CalendarCheck2 className="w-4 h-4" />}
+          accentColor="#06b6d4"
+          loading={dashLoading}
+        />
       </div>
 
-      {/* ── GRÁFICOS + INDICADORES ───────────────────────────────────────── */}
+      {/* ── GRÁFICOS ─────────────────────────────────────────────────────── */}
       {!dashLoading && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
@@ -229,6 +216,7 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
 
           {/* Right column */}
           <div className="lg:col-span-2 flex flex-col gap-3">
+
             {/* Pie: receita por categoria */}
             {pieData.length > 0 ? (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex-1">
@@ -243,7 +231,10 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
                           <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(val: number) => formatCurrency(val)} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", fontSize: 11 }} />
+                      <Tooltip
+                        formatter={(val: number) => formatCurrency(val)}
+                        contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", fontSize: 11 }}
+                      />
                     </PieChart>
                   </div>
                   <div className="flex-1 min-w-0 space-y-1.5">
@@ -265,44 +256,28 @@ export function VisaoMesTab({ month, year }: { month: number; year: number }) {
                   </div>
                 </div>
               </div>
-            ) : null}
-
-            {/* Top procedure + consultas */}
-            <div className="flex gap-3 flex-1">
-              {(dashboard as any)?.topProcedure && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="p-1.5 rounded-lg bg-violet-50">
-                      <Stethoscope className="w-3.5 h-3.5 text-violet-500" />
-                    </div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Top Proc.</p>
-                  </div>
-                  <p className="text-xs font-bold text-slate-800 leading-snug">{(dashboard as any).topProcedure}</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Mais realizado</p>
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <Stethoscope className="w-8 h-8 mx-auto mb-2 text-slate-200" />
+                  <p className="text-xs text-slate-400">Sem receitas no período</p>
                 </div>
-              )}
-
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="p-1.5 rounded-lg bg-sky-50">
-                    <TrendingUp className="w-3.5 h-3.5 text-sky-500" />
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Consultas</p>
-                </div>
-                <div className="flex items-end gap-1.5">
-                  <p className="text-xl font-extrabold text-slate-900 tabular-nums">{(dashboard as any)?.completedAppointments ?? 0}</p>
-                  <p className="text-xs text-slate-400 mb-0.5">/ {(dashboard as any)?.totalAppointments ?? 0}</p>
-                </div>
-                {((dashboard as any)?.totalAppointments ?? 0) > 0 && (
-                  <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-sky-400 transition-all duration-700"
-                      style={{ width: `${Math.min(100, (((dashboard as any)?.completedAppointments ?? 0) / ((dashboard as any)?.totalAppointments ?? 1)) * 100)}%` }}
-                    />
-                  </div>
-                )}
               </div>
-            </div>
+            )}
+
+            {/* Top procedure */}
+            {(dashboard as any)?.topProcedure && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="p-1.5 rounded-lg bg-violet-50">
+                    <Stethoscope className="w-3.5 h-3.5 text-violet-500" />
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Procedimento Top</p>
+                </div>
+                <p className="text-sm font-bold text-slate-800 leading-snug">{(dashboard as any).topProcedure}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Mais realizado no período</p>
+              </div>
+            )}
           </div>
         </div>
       )}
