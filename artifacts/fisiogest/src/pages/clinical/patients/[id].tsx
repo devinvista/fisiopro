@@ -123,19 +123,25 @@ function TabLoader() {
   );
 }
 
-// ─── Avatar helpers ────────────────────────────────────────────────────────────
-const AVATAR_COLORS = [
-  "#0d9488", "#0284c7", "#7c3aed", "#db2777",
-  "#d97706", "#059669", "#4f46e5", "#e11d48",
-];
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+// ─── Gender color helpers ───────────────────────────────────────────────────────
+type SexType = "M" | "F" | "O" | null | undefined;
+
+function genderGradient(sex: SexType): { from: string; to: string; css: string } {
+  if (sex === "F") return { from: "#ec4899", to: "#be185d", css: "linear-gradient(135deg, #f472b6 0%, #be185d 100%)" };
+  if (sex === "M") return { from: "#3b82f6", to: "#4f46e5", css: "linear-gradient(135deg, #60a5fa 0%, #4338ca 100%)" };
+  return { from: "#0d9488", to: "#0891b2", css: "linear-gradient(135deg, #2dd4bf 0%, #0284c7 100%)" };
 }
+
+function genderAvatarColor(sex: SexType): string {
+  if (sex === "F") return "#ec4899";
+  if (sex === "M") return "#3b82f6";
+  return "#0d9488";
+}
+
 function getInitials(name: string) {
   return name.split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
 }
+
 function whatsappLink(phone: string) {
   const digits = phone.replace(/\D/g, "");
   return `https://wa.me/${digits.startsWith("55") ? digits : `55${digits}`}`;
@@ -145,6 +151,7 @@ function whatsappLink(phone: string) {
 interface PatientData {
   id: number; name: string; cpf: string; phone: string;
   email?: string | null; birthDate?: string | null;
+  sex?: string | null;
   address?: string | null; profession?: string | null;
   emergencyContact?: string | null; notes?: string | null;
 }
@@ -166,6 +173,7 @@ function EditPatientDialog({
     phone: maskPhone(patient.phone ?? ""),
     email: patient.email ?? "",
     birthDate: patient.birthDate ?? "",
+    sex: (patient.sex ?? "") as "" | "M" | "F" | "O",
     address: patient.address ?? "",
     profession: patient.profession ?? "",
     emergencyContact: patient.emergencyContact ?? "",
@@ -180,6 +188,7 @@ function EditPatientDialog({
         phone: maskPhone(patient.phone ?? ""),
         email: patient.email ?? "",
         birthDate: patient.birthDate ?? "",
+        sex: (patient.sex ?? "") as "" | "M" | "F" | "O",
         address: patient.address ?? "",
         profession: patient.profession ?? "",
         emergencyContact: patient.emergencyContact ?? "",
@@ -190,7 +199,7 @@ function EditPatientDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = patientFormSchema.safeParse(form);
+    const parsed = patientFormSchema.safeParse({ ...form, sex: form.sex || undefined });
     if (!parsed.success) {
       toast({ variant: "destructive", title: "Dados inválidos", description: parsed.error.issues[0]?.message ?? "Verifique os campos." });
       return;
@@ -264,6 +273,21 @@ function EditPatientDialog({
                 <Label>Data de Nascimento</Label>
                 <DatePickerPTBR value={form.birthDate} onChange={v => setForm({ ...form, birthDate: v })} className="h-10" />
               </div>
+              <div className="space-y-1.5">
+                <Label>Sexo</Label>
+                <Select value={form.sex} onValueChange={v => setForm({ ...form, sex: v as "" | "M" | "F" | "O" })}>
+                  <SelectTrigger className="h-10 rounded-xl">
+                    <SelectValue placeholder="Selecionar…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="F">Feminino</SelectItem>
+                    <SelectItem value="M">Masculino</SelectItem>
+                    <SelectItem value="O">Outro / Não informado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Profissão</Label>
                 <Input value={form.profession} onChange={e => setForm({ ...form, profession: e.target.value })}
@@ -536,7 +560,8 @@ export default function PatientDetail() {
   }
 
   const inits = getInitials(patient.name);
-  const color = avatarColor(patient.name);
+  const sex = (patient as any).sex as SexType;
+  const gradient = genderGradient(sex);
   const age = patient.birthDate ? differenceInYears(new Date(), parseISO(patient.birthDate)) : null;
   const isDiscarged = journeyData?.meta?.hasDischarge;
 
@@ -594,14 +619,18 @@ export default function PatientDetail() {
 
             {/* ── Gradient header ──────────────────────────────────────────── */}
             <div
-              className="relative p-5 pb-4"
-              style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}
+              className="relative p-5 pb-5 overflow-hidden"
+              style={{ background: gradient.css }}
             >
+              {/* Decorative blur circles */}
+              <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-8 -left-4 w-24 h-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+
               {/* Back + Actions row */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 relative">
                 <button
                   onClick={() => setLocation("/pacientes")}
-                  className="flex items-center gap-1 text-white/70 hover:text-white text-xs font-medium transition-colors"
+                  className="flex items-center gap-1 text-white/75 hover:text-white text-xs font-semibold transition-colors"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" /> Pacientes
                 </button>
@@ -609,7 +638,7 @@ export default function PatientDetail() {
                 {(canEdit || canDelete || isSuperAdmin) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors">
+                      <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-white/70 hover:text-white hover:bg-white/20 transition-colors">
                         <MoreVertical className="w-3.5 h-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -634,44 +663,48 @@ export default function PatientDetail() {
               </div>
 
               {/* Avatar + name */}
-              <div className="flex items-center gap-3.5 mb-4">
+              <div className="flex items-center gap-4 mb-5 relative">
                 <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shrink-0 shadow-lg ring-4 ring-white/20"
-                  style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)" }}
+                  className="w-[72px] h-[72px] rounded-2xl flex items-center justify-center text-2xl font-extrabold text-white shrink-0 shadow-xl ring-[3px] ring-white/30 select-none"
+                  style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(10px)" }}
                 >
                   {inits}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-lg text-white leading-tight truncate drop-shadow-sm">{patient.name}</h2>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  <h2 className="font-extrabold text-lg text-white leading-tight drop-shadow-sm truncate">{patient.name}</h2>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
                     {isDiscarged ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/15 text-white px-2 py-0.5 rounded-full border border-white/20 backdrop-blur-sm">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/25 backdrop-blur-sm">
                         <BadgeCheck className="w-2.5 h-2.5" /> Alta emitida
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-500/30 text-white px-2 py-0.5 rounded-full border border-emerald-400/40">
-                        <CheckCircle className="w-2.5 h-2.5" /> Ativo
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded-full border border-white/25 backdrop-blur-sm">
+                        <CheckCircle className="w-2.5 h-2.5 text-emerald-300" /> Ativo
                       </span>
                     )}
                     {age !== null && (
-                      <span className="text-[10px] text-white/80 bg-white/10 px-2 py-0.5 rounded-full">{age} anos</span>
+                      <span className="text-[10px] font-semibold text-white/85 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
+                        {age} anos
+                      </span>
                     )}
-                    {patient.profession && (
-                      <span className="text-[10px] text-white/70 truncate max-w-[120px]">{patient.profession}</span>
+                    {sex && sex !== "O" && (
+                      <span className="text-[10px] font-semibold text-white/85 bg-white/15 px-2.5 py-1 rounded-full border border-white/20">
+                        {sex === "F" ? "Feminino" : "Masculino"}
+                      </span>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 border border-white/10">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-0.5">Consultas</p>
-                  <p className="text-2xl font-extrabold text-white tabular-nums leading-none">{patient.totalAppointments || 0}</p>
+              <div className="grid grid-cols-2 gap-2.5 relative">
+                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1">Consultas</p>
+                  <p className="text-3xl font-black text-white tabular-nums leading-none">{patient.totalAppointments || 0}</p>
                 </div>
-                <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 border border-white/10">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-0.5">Total gasto</p>
-                  <p className="text-sm font-extrabold text-white tabular-nums leading-tight mt-1">{formatCurrency(patient.totalSpent || 0)}</p>
+                <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1">Total gasto</p>
+                  <p className="text-sm font-extrabold text-white tabular-nums leading-tight mt-1.5">{formatCurrency(patient.totalSpent || 0)}</p>
                 </div>
               </div>
             </div>

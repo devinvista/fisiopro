@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search, Plus, UserPlus, ChevronRight,
   ChevronUp, ChevronDown, ChevronsUpDown, Loader2,
@@ -33,20 +34,17 @@ interface Patient {
   phone: string;
   email?: string | null;
   birthDate?: string | null;
+  sex?: string | null;
   address?: string | null;
   profession?: string | null;
   createdAt: string;
 }
 
-// ─── Avatar helpers ────────────────────────────────────────────────────────────
-const AVATAR_COLORS = [
-  "#0d9488", "#0284c7", "#7c3aed", "#db2777",
-  "#d97706", "#059669", "#4f46e5", "#e11d48",
-];
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+// ─── Gender color helpers ───────────────────────────────────────────────────────
+function genderAvatarColor(sex?: string | null): string {
+  if (sex === "F") return "#ec4899";
+  if (sex === "M") return "#3b82f6";
+  return "#0d9488";
 }
 function getInitials(name: string) {
   return name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase();
@@ -262,7 +260,7 @@ function SortBtn({ field, label, sortField, sortDir, onSort, className }: {
 function PatientRow({ patient, isLast }: { patient: Patient; isLast: boolean }) {
   const age = calcAge(patient.birthDate);
   const inits = getInitials(patient.name);
-  const color = avatarColor(patient.name);
+  const color = genderAvatarColor(patient.sex);
   const isNew = isNewPatient(patient.createdAt);
 
   return (
@@ -425,6 +423,7 @@ interface CrossClinicPatient {
 function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: "", cpf: "", phone: "", email: "", birthDate: "",
+    sex: "" as "" | "M" | "F" | "O",
     profession: "", address: "", emergencyContact: "", notes: "",
   });
   const [cpfLookupState, setCpfLookupState] = useState<"idle" | "loading" | "found" | "not_found" | "already_exists">("idle");
@@ -476,7 +475,7 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const parsed = patientFormSchema.safeParse(formData);
+    const parsed = patientFormSchema.safeParse({ ...formData, sex: formData.sex || undefined });
     if (!parsed.success) {
       toast({ variant: "destructive", title: "Dados inválidos", description: parsed.error.issues[0]?.message });
       return;
@@ -573,6 +572,21 @@ function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
               <Label className="text-xs font-medium text-slate-600">Data de Nascimento</Label>
               <DatePickerPTBR value={f.birthDate} onChange={v => set("birthDate")(v)} className="h-10" />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">Sexo</Label>
+              <Select value={f.sex} onValueChange={v => setFormData(prev => ({ ...prev, sex: v as "" | "M" | "F" | "O" }))}>
+                <SelectTrigger className="h-10 rounded-xl">
+                  <SelectValue placeholder="Selecionar…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="F">Feminino</SelectItem>
+                  <SelectItem value="M">Masculino</SelectItem>
+                  <SelectItem value="O">Outro / Não informado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-slate-600">Profissão</Label>
               <Input value={f.profession} onChange={e => set("profession")(e.target.value)} placeholder="Ex: Professora" className="h-10 rounded-xl" />

@@ -44,6 +44,7 @@ const createPatientSchema = z.object({
   cpf: z.string().min(1, "CPF é obrigatório"),
   phone: z.string().min(1, "Telefone é obrigatório").max(30),
   birthDate: birthDateField,
+  sex: z.enum(["M", "F", "O"]).optional().nullable(),
   email: emailField,
   address: z.string().max(500).optional().nullable(),
   profession: z.string().max(200).optional().nullable(),
@@ -88,6 +89,7 @@ const patientWithClinicSelect = {
   name: patientsTable.name,
   cpf: patientsTable.cpf,
   birthDate: patientsTable.birthDate,
+  sex: patientsTable.sex,
   phone: patientsTable.phone,
   email: patientsTable.email,
   address: patientsTable.address,
@@ -227,7 +229,7 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
   try {
     const parsed = validateBody(createPatientSchema, req.body, res);
     if (!parsed) return;
-    const { name, cpf, birthDate, phone, email, address, profession, emergencyContact, notes } = parsed;
+    const { name, cpf, birthDate, sex, phone, email, address, profession, emergencyContact, notes } = parsed;
 
     const normalizedCpf = normalizeCpf(cpf);
     if (!validateCpf(normalizedCpf)) {
@@ -341,6 +343,7 @@ router.post("/", requirePermission("patients.create"), async (req: AuthRequest, 
           name,
           cpf: normalizedCpf,
           birthDate: birthDate || null,
+          sex: sex || null,
           phone,
           email: email || null,
           address: address || null,
@@ -547,7 +550,7 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
     if (id === null) return;
     const parsed = validateBody(updatePatientSchema, req.body, res);
     if (!parsed) return;
-    const { name, birthDate, phone, email, address, profession, emergencyContact, notes } = parsed;
+    const { name, birthDate, sex, phone, email, address, profession, emergencyContact, notes } = parsed;
     let cpf = parsed.cpf;
 
     if (cpf !== undefined) {
@@ -587,6 +590,7 @@ router.put("/:id", requirePermission("patients.update"), async (req: AuthRequest
       if (name !== undefined) demographicSet.name = name;
       if (cpf !== undefined) demographicSet.cpf = cpf;
       if (birthDate !== undefined) demographicSet.birthDate = birthDate || null;
+      if (sex !== undefined) demographicSet.sex = sex || null;
       if (phone !== undefined) demographicSet.phone = phone;
       if (email !== undefined) demographicSet.email = email || null;
       if (address !== undefined) demographicSet.address = address || null;
