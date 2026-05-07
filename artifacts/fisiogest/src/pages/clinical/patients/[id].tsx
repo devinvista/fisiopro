@@ -123,42 +123,33 @@ function TabLoader() {
   );
 }
 
-// ─── Avatar palette ───────────────────────────────────────────────────────────
-const AVATAR_PALETTES = [
-  { bg: "bg-teal-100",    text: "text-teal-700",    ring: "ring-teal-200"    },
-  { bg: "bg-sky-100",     text: "text-sky-700",     ring: "ring-sky-200"     },
-  { bg: "bg-violet-100",  text: "text-violet-700",  ring: "ring-violet-200"  },
-  { bg: "bg-pink-100",    text: "text-pink-700",    ring: "ring-pink-200"    },
-  { bg: "bg-amber-100",   text: "text-amber-700",   ring: "ring-amber-200"   },
-  { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-emerald-200" },
-  { bg: "bg-blue-100",    text: "text-blue-700",    ring: "ring-blue-200"    },
-  { bg: "bg-rose-100",    text: "text-rose-700",    ring: "ring-rose-200"    },
+// ─── Avatar helpers ────────────────────────────────────────────────────────────
+const AVATAR_COLORS = [
+  "#0d9488", "#0284c7", "#7c3aed", "#db2777",
+  "#d97706", "#059669", "#4f46e5", "#e11d48",
 ];
-function avatarPalette(name: string) {
+function avatarColor(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+function getInitials(name: string) {
+  return name.split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
 }
 function whatsappLink(phone: string) {
   const digits = phone.replace(/\D/g, "");
   return `https://wa.me/${digits.startsWith("55") ? digits : `55${digits}`}`;
 }
 
-// ─── Patient data interface ───────────────────────────────────────────────────
+// ─── Patient data interface ────────────────────────────────────────────────────
 interface PatientData {
-  id: number;
-  name: string;
-  cpf: string;
-  phone: string;
-  email?: string | null;
-  birthDate?: string | null;
-  address?: string | null;
-  profession?: string | null;
-  emergencyContact?: string | null;
-  notes?: string | null;
+  id: number; name: string; cpf: string; phone: string;
+  email?: string | null; birthDate?: string | null;
+  address?: string | null; profession?: string | null;
+  emergencyContact?: string | null; notes?: string | null;
 }
 
-// ─── Edit Dialog ──────────────────────────────────────────────────────────────
+// ─── Edit Dialog ───────────────────────────────────────────────────────────────
 function EditPatientDialog({
   patient, open, onClose, onSaved,
 }: {
@@ -201,7 +192,7 @@ function EditPatientDialog({
     e.preventDefault();
     const parsed = patientFormSchema.safeParse(form);
     if (!parsed.success) {
-      toast({ variant: "destructive", title: "Dados inválidos", description: parsed.error.issues[0]?.message ?? "Verifique os campos do paciente." });
+      toast({ variant: "destructive", title: "Dados inválidos", description: parsed.error.issues[0]?.message ?? "Verifique os campos." });
       return;
     }
     const payload = buildPatientPayload(parsed.data);
@@ -209,9 +200,8 @@ function EditPatientDialog({
       { id: patient.id, data: payload },
       {
         onSuccess: () => {
-          toast({ title: "Cadastro atualizado", description: "Os dados do paciente foram salvos." });
-          onSaved();
-          onClose();
+          toast({ title: "Cadastro atualizado", description: "Os dados foram salvos." });
+          onSaved(); onClose();
         },
         onError: (err: any) => {
           toast({ variant: "destructive", title: "Erro ao salvar", description: err?.response?.data?.message ?? "Não foi possível atualizar." });
@@ -221,7 +211,7 @@ function EditPatientDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="sm:max-w-[620px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl flex items-center gap-2">
@@ -234,38 +224,41 @@ function EditPatientDialog({
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
               Identificação
               {!isAdmin && <span className="ml-2 inline-flex items-center gap-1 text-slate-300 normal-case tracking-normal font-normal"><Lock className="w-3 h-3" /> restrito ao administrador</span>}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Nome Completo *</Label>
-                <Input required disabled={!isAdmin} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-10 disabled:bg-slate-50 disabled:text-slate-400" />
+                <Input required disabled={!isAdmin} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-10 rounded-xl disabled:bg-slate-50 disabled:text-slate-400" />
               </div>
               <div className="space-y-1.5">
                 <Label>CPF *</Label>
-                <Input required disabled={!isAdmin} inputMode="numeric" maxLength={14} value={form.cpf} onChange={e => setForm({ ...form, cpf: maskCpf(e.target.value) })} placeholder="000.000.000-00" className="h-10 disabled:bg-slate-50 disabled:text-slate-400" />
+                <Input required disabled={!isAdmin} inputMode="numeric" maxLength={14} value={form.cpf}
+                  onChange={e => setForm({ ...form, cpf: maskCpf(e.target.value) })} placeholder="000.000.000-00"
+                  className="h-10 rounded-xl font-mono disabled:bg-slate-50 disabled:text-slate-400" />
               </div>
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">Contato</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Contato</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Telefone *</Label>
-                <Input required type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: maskPhone(e.target.value) })} placeholder="(11) 99999-0000" className="h-10" />
+                <Input required type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: maskPhone(e.target.value) })}
+                  placeholder="(11) 99999-0000" className="h-10 rounded-xl" />
               </div>
               <div className="space-y-1.5">
                 <Label>E-mail</Label>
-                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="h-10" />
+                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="h-10 rounded-xl" />
               </div>
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">Dados Pessoais</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Dados Pessoais</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Data de Nascimento</Label>
@@ -273,27 +266,31 @@ function EditPatientDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Profissão</Label>
-                <Input value={form.profession} onChange={e => setForm({ ...form, profession: e.target.value })} placeholder="Ex: Professora" className="h-10" />
+                <Input value={form.profession} onChange={e => setForm({ ...form, profession: e.target.value })}
+                  placeholder="Ex: Professora" className="h-10 rounded-xl" />
               </div>
             </div>
             <div className="mt-4 space-y-1.5">
               <Label>Endereço</Label>
-              <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Rua e número" className="h-10" />
+              <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
+                placeholder="Rua e número" className="h-10 rounded-xl" />
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-3">Informações Adicionais</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Informações Adicionais</p>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Contato de Emergência</Label>
-              <Input value={form.emergencyContact} onChange={e => setForm({ ...form, emergencyContact: e.target.value })} placeholder="Nome — Telefone" className="h-10" />
+              <Input value={form.emergencyContact} onChange={e => setForm({ ...form, emergencyContact: e.target.value })}
+                placeholder="Nome — Telefone" className="h-10 rounded-xl" />
             </div>
           </div>
 
           <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-1.5">
             <Label className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5 text-primary" /> Observações desta clínica</Label>
             <p className="text-[11px] text-slate-400">Não compartilhadas com outras clínicas.</p>
-            <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Histórico, alergias, restrições…" className="min-h-[80px] bg-white resize-none" />
+            <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
+              placeholder="Histórico, alergias, restrições…" className="min-h-[80px] bg-white resize-none rounded-xl" />
           </div>
 
           <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
@@ -309,11 +306,10 @@ function EditPatientDialog({
   );
 }
 
-// ─── LGPD Export Button ───────────────────────────────────────────────────────
+// ─── LGPD Export Button ────────────────────────────────────────────────────────
 function ExportLgpdButton({ patientId }: { patientId: number }) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-
   async function handleExport() {
     setLoading(true);
     try {
@@ -321,11 +317,8 @@ function ExportLgpdButton({ patientId }: { patientId: number }) {
       toast({ title: "Exportação iniciada", description: "Arquivo JSON com dados do paciente baixado." });
     } catch (err) {
       toast({ variant: "destructive", title: "Falha na exportação", description: err instanceof Error ? err.message : "Tente novamente." });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
-
   return (
     <DropdownMenuItem onClick={handleExport} disabled={loading} className="gap-2 text-slate-600">
       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -334,25 +327,17 @@ function ExportLgpdButton({ patientId }: { patientId: number }) {
   );
 }
 
-// ─── Access Requests Panels ───────────────────────────────────────────────────
+// ─── Access Requests ───────────────────────────────────────────────────────────
 interface AccessRequest {
-  id: number;
-  cpf: string;
-  requestingClinicId: number;
-  requestingClinicName: string;
-  sourceClinicId?: number;
-  sourceClinicName?: string;
-  scope: string;
-  status: "pending" | "approved" | "denied";
-  message?: string | null;
-  createdAt: string;
-  respondedAt?: string | null;
+  id: number; cpf: string; requestingClinicId: number; requestingClinicName: string;
+  sourceClinicId?: number; sourceClinicName?: string; scope: string;
+  status: "pending" | "approved" | "denied"; message?: string | null;
+  createdAt: string; respondedAt?: string | null;
 }
 
 function AccessRequestsPanel({ cpf }: { cpf: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
   const { data, isLoading, refetch } = useQuery<AccessRequest[]>({
     queryKey: ["/api/patients/access-requests/incoming", cpf],
     queryFn: async () => {
@@ -361,13 +346,12 @@ function AccessRequestsPanel({ cpf }: { cpf: string }) {
       return res.json();
     },
   });
-
   const respondMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: "approved" | "denied" }) => {
-      const csrfCookie = document.cookie.split(";").find(c => c.trim().startsWith("fisiogest_csrf="))?.split("=")[1];
+      const csrf = document.cookie.split(";").find(c => c.trim().startsWith("fisiogest_csrf="))?.split("=")[1];
       const res = await apiFetch(`/api/patients/access-requests/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", ...(csrfCookie ? { "x-csrf-token": decodeURIComponent(csrfCookie) } : {}) },
+        headers: { "Content-Type": "application/json", ...(csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {}) },
         body: JSON.stringify({ status }),
       });
       if (!res.ok) throw new Error("Falha ao responder solicitação");
@@ -407,10 +391,12 @@ function AccessRequestsPanel({ cpf }: { cpf: string }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px] rounded-lg border-red-200 text-red-600 hover:bg-red-50" disabled={respondMutation.isPending} onClick={() => respondMutation.mutate({ id: req.id, status: "denied" })}>
+            <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px] rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+              disabled={respondMutation.isPending} onClick={() => respondMutation.mutate({ id: req.id, status: "denied" })}>
               <XCircle className="w-3 h-3 mr-1" /> Negar
             </Button>
-            <Button size="sm" className="flex-1 h-7 text-[11px] rounded-lg" disabled={respondMutation.isPending} onClick={() => respondMutation.mutate({ id: req.id, status: "approved" })}>
+            <Button size="sm" className="flex-1 h-7 text-[11px] rounded-lg"
+              disabled={respondMutation.isPending} onClick={() => respondMutation.mutate({ id: req.id, status: "approved" })}>
               {respondMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <><CheckCircle className="w-3 h-3 mr-1" /> Aprovar</>}
             </Button>
           </div>
@@ -427,20 +413,17 @@ function OutgoingAccessRequestsPanel({ cpf }: { cpf: string }) {
       const res = await apiFetch(`/api/patients/access-requests/outgoing`);
       if (!res.ok) return [];
       const all: AccessRequest[] = await res.json();
-      const normalizedCpf = cpf.replace(/\D/g, "");
-      return all.filter(r => r.cpf === normalizedCpf || (r as any).cpf?.replace?.(/\D/g, "") === normalizedCpf);
+      const norm = cpf.replace(/\D/g, "");
+      return all.filter(r => r.cpf === norm || (r as any).cpf?.replace?.(/\D/g, "") === norm);
     },
     staleTime: 30_000,
   });
-
   if (isLoading || !data || data.length === 0) return null;
-
   const statusMap = {
-    pending:  { label: "Aguardando", bg: "bg-amber-100",  text: "text-amber-700",  icon: <Clock className="w-3 h-3" /> },
-    approved: { label: "Aprovado",   bg: "bg-green-100",  text: "text-green-700",  icon: <CheckCircle className="w-3 h-3" /> },
-    denied:   { label: "Negado",     bg: "bg-red-100",    text: "text-red-600",    icon: <XCircle className="w-3 h-3" /> },
+    pending:  { label: "Aguardando", bg: "bg-amber-100", text: "text-amber-700",  icon: <Clock className="w-3 h-3" /> },
+    approved: { label: "Aprovado",   bg: "bg-green-100", text: "text-green-700",  icon: <CheckCircle className="w-3 h-3" /> },
+    denied:   { label: "Negado",     bg: "bg-red-100",   text: "text-red-600",    icon: <XCircle className="w-3 h-3" /> },
   };
-
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
       <div className="flex items-center gap-2">
@@ -466,7 +449,7 @@ function OutgoingAccessRequestsPanel({ cpf }: { cpf: string }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function PatientDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -481,7 +464,7 @@ export default function PatientDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = new URLSearchParams(window.location.search).get("tab");
-    const baseTabs = ["jornada","anamnesis","evaluations","treatment","evolutions","history","financial","atestados","discharge"];
+    const baseTabs = ["jornada","anamnesis","evaluations","treatment","evolutions","history","financial","atestados","discharge","photos"];
     const validTabs = isSuperAdmin ? [...baseTabs, "auditoria"] : baseTabs;
     return validTabs.includes(tabParam ?? "") ? (tabParam as string) : "jornada";
   });
@@ -533,7 +516,7 @@ export default function PatientDetail() {
   if (isLoading) {
     return (
       <AppLayout title="Carregando…">
-        <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
+        <div className="flex justify-center py-24"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
       </AppLayout>
     );
   }
@@ -541,9 +524,9 @@ export default function PatientDetail() {
   if (!patient) {
     return (
       <AppLayout title="Paciente não encontrado">
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-          <User className="w-16 h-16 mb-4 opacity-30" />
-          <p className="text-lg font-medium">Paciente não encontrado</p>
+        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+          <User className="w-16 h-16 mb-4 opacity-20" />
+          <p className="text-lg font-semibold text-slate-500">Paciente não encontrado</p>
           <Button variant="ghost" className="mt-4 gap-1.5" onClick={() => setLocation("/pacientes")}>
             <ChevronLeft className="w-4 h-4" /> Voltar à lista
           </Button>
@@ -552,27 +535,27 @@ export default function PatientDetail() {
     );
   }
 
-  const initials = patient.name.split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
-  const palette = avatarPalette(patient.name);
+  const inits = getInitials(patient.name);
+  const color = avatarColor(patient.name);
   const age = patient.birthDate ? differenceInYears(new Date(), parseISO(patient.birthDate)) : null;
   const isDiscarged = journeyData?.meta?.hasDischarge;
 
-  // ── Tab definitions ─────────────────────────────────────────────────────────
+  // ── Tab definitions ──────────────────────────────────────────────────────────
   const primaryTabs = [
-    ...(showJornadaTab ? [{ value: "jornada", icon: <Milestone className="w-3.5 h-3.5 shrink-0" />, label: "Jornada" }] : []),
-    { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: "Anamnese"   },
-    { value: "evaluations", icon: <Activity className="w-3.5 h-3.5 shrink-0" />,      label: "Avaliações" },
-    { value: "treatment",   icon: <Target className="w-3.5 h-3.5 shrink-0" />,        label: "Plano"      },
-    { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5 shrink-0" />,    label: "Evoluções"  },
-    { value: "history",     icon: <History className="w-3.5 h-3.5 shrink-0" />,       label: "Histórico"  },
-    { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5 shrink-0" />,    label: "Financeiro" },
+    ...(showJornadaTab ? [{ value: "jornada",    icon: <Milestone className="w-3.5 h-3.5" />,    label: "Jornada"    }] : []),
+    { value: "anamnesis",   icon: <ClipboardList className="w-3.5 h-3.5" />, label: "Anamnese"   },
+    { value: "evaluations", icon: <Activity className="w-3.5 h-3.5" />,      label: "Avaliações" },
+    { value: "treatment",   icon: <Target className="w-3.5 h-3.5" />,        label: "Plano"      },
+    { value: "evolutions",  icon: <TrendingUp className="w-3.5 h-3.5" />,    label: "Evoluções"  },
+    { value: "history",     icon: <History className="w-3.5 h-3.5" />,       label: "Histórico"  },
+    { value: "financial",   icon: <DollarSign className="w-3.5 h-3.5" />,    label: "Financeiro" },
   ];
 
   const secondaryTabs = [
-    { value: "photos",    icon: <Camera className="w-3.5 h-3.5 shrink-0" />,     label: "Fotos",     extra: "" },
-    { value: "atestados", icon: <ScrollText className="w-3.5 h-3.5 shrink-0" />, label: "Atestados", extra: "" },
-    { value: "discharge", icon: <LogOut className="w-3.5 h-3.5 shrink-0" />,     label: "Alta",      extra: "data-[state=active]:bg-emerald-600" },
-    ...(isSuperAdmin ? [{ value: "auditoria", icon: <ShieldAlert className="w-3.5 h-3.5 shrink-0" />, label: "Auditoria", extra: "data-[state=active]:bg-slate-700" }] : []),
+    { value: "photos",    icon: <Camera className="w-3.5 h-3.5" />,     label: "Fotos",     color: "primary" },
+    { value: "atestados", icon: <ScrollText className="w-3.5 h-3.5" />, label: "Atestados", color: "primary" },
+    { value: "discharge", icon: <LogOut className="w-3.5 h-3.5" />,     label: "Alta",      color: "emerald" },
+    ...(isSuperAdmin ? [{ value: "auditoria", icon: <ShieldAlert className="w-3.5 h-3.5" />, label: "Auditoria", color: "slate" }] : []),
   ];
 
   return (
@@ -580,14 +563,15 @@ export default function PatientDetail() {
 
       {/* Dialogs */}
       {canEdit && (
-        <EditPatientDialog patient={patient as PatientData} open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => { queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}`] }); refetch(); }} />
+        <EditPatientDialog patient={patient as PatientData} open={editOpen} onClose={() => setEditOpen(false)}
+          onSaved={() => { queryClient.invalidateQueries({ queryKey: [`/api/patients/${patientId}`] }); refetch(); }} />
       )}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir paciente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação é permanente e removerá <strong>{patient.name}</strong> e todos os seus dados. Não pode ser desfeita.
+              Esta ação é permanente e removerá <strong>{patient.name}</strong> e todos os seus dados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -600,42 +584,33 @@ export default function PatientDetail() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 min-w-0 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 items-start">
 
-        {/* ── Sidebar ──────────────────────────────────────────────────────── */}
-        <div className="space-y-4 min-w-0">
+        {/* ── Sidebar ───────────────────────────────────────────────────────── */}
+        <div className="space-y-4">
 
           {/* Profile Card */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
-            {/* Header strip */}
-            <div className={cn("h-2 w-full", palette.bg)} />
+            {/* ── Gradient header ──────────────────────────────────────────── */}
+            <div
+              className="relative p-5 pb-4"
+              style={{ background: `linear-gradient(135deg, ${color}ee 0%, ${color}99 100%)` }}
+            >
+              {/* Back + Actions row */}
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => setLocation("/pacientes")}
+                  className="flex items-center gap-1 text-white/70 hover:text-white text-xs font-medium transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" /> Pacientes
+                </button>
 
-            <div className="p-4 pb-5">
-              {/* Avatar + Name + Actions */}
-              <div className="flex items-start gap-3 mb-4">
-                <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl shrink-0 ring-4", palette.bg, palette.text, palette.ring)}>
-                  {initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-bold text-base text-slate-800 leading-tight truncate">{patient.name}</h2>
-                  <div className="flex items-center flex-wrap gap-1.5 mt-1">
-                    {isDiscarged ? (
-                      <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><BadgeCheck className="w-3 h-3" /> Alta emitida</span>
-                    ) : (
-                      <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Ativo</span>
-                    )}
-                    {age !== null && (
-                      <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{age} anos</span>
-                    )}
-                  </div>
-                </div>
-                {/* Actions dropdown */}
                 {(canEdit || canDelete || isSuperAdmin) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0 rounded-xl text-slate-400 hover:text-slate-600">
-                        <MoreVertical className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" className="w-7 h-7 rounded-lg text-white/70 hover:text-white hover:bg-white/15 transition-colors">
+                        <MoreVertical className="w-3.5 h-3.5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-lg border-slate-200">
@@ -658,91 +633,112 @@ export default function PatientDetail() {
                 )}
               </div>
 
+              {/* Avatar + name */}
+              <div className="flex items-center gap-3.5 mb-4">
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold text-white shrink-0 shadow-lg ring-4 ring-white/20"
+                  style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(8px)" }}
+                >
+                  {inits}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-lg text-white leading-tight truncate drop-shadow-sm">{patient.name}</h2>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    {isDiscarged ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/15 text-white px-2 py-0.5 rounded-full border border-white/20 backdrop-blur-sm">
+                        <BadgeCheck className="w-2.5 h-2.5" /> Alta emitida
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-500/30 text-white px-2 py-0.5 rounded-full border border-emerald-400/40">
+                        <CheckCircle className="w-2.5 h-2.5" /> Ativo
+                      </span>
+                    )}
+                    {age !== null && (
+                      <span className="text-[10px] text-white/80 bg-white/10 px-2 py-0.5 rounded-full">{age} anos</span>
+                    )}
+                    {patient.profession && (
+                      <span className="text-[10px] text-white/70 truncate max-w-[120px]">{patient.profession}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 border border-white/10">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-0.5">Consultas</p>
+                  <p className="text-2xl font-extrabold text-white tabular-nums leading-none">{patient.totalAppointments || 0}</p>
+                </div>
+                <div className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 border border-white/10">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-0.5">Total gasto</p>
+                  <p className="text-sm font-extrabold text-white tabular-nums leading-tight mt-1">{formatCurrency(patient.totalSpent || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Card body ─────────────────────────────────────────────────── */}
+            <div className="p-4 space-y-4">
+
               {/* Quick actions */}
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2">
                 <a
                   href={whatsappLink(patient.phone)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors shadow-sm"
                 >
-                  <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                  <MessageCircle className="w-4 h-4" /> WhatsApp
                 </a>
                 <div className="flex-1">
                   <ExportProntuarioButton patientId={patientId} patient={patient} />
                 </div>
               </div>
 
-              {/* Stats strip */}
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">Consultas</p>
-                  <p className="text-2xl font-extrabold text-slate-800 tabular-nums">{patient.totalAppointments || 0}</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-center">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">Total gasto</p>
-                  <p className="text-sm font-bold text-slate-800 tabular-nums">{formatCurrency(patient.totalSpent || 0)}</p>
-                </div>
-              </div>
-
               {/* Contact info */}
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <a href={`tel:${patient.phone}`} className="hover:text-primary transition-colors truncate">{patient.phone}</a>
-                </div>
+              <div className="space-y-1">
+                <ContactRow icon={<Phone className="w-3.5 h-3.5" />}>
+                  <a href={`tel:${patient.phone}`} className="text-sm text-slate-700 hover:text-primary transition-colors">{patient.phone}</a>
+                </ContactRow>
                 {patient.email && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <a href={`mailto:${patient.email}`} className="hover:text-primary transition-colors truncate">{patient.email}</a>
-                  </div>
+                  <ContactRow icon={<Mail className="w-3.5 h-3.5" />}>
+                    <a href={`mailto:${patient.email}`} className="text-sm text-slate-700 hover:text-primary transition-colors truncate">{patient.email}</a>
+                  </ContactRow>
                 )}
                 {patient.birthDate && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{formatDate(patient.birthDate)}</span>
-                  </div>
+                  <ContactRow icon={<Calendar className="w-3.5 h-3.5" />}>
+                    <span className="text-sm text-slate-700">{formatDate(patient.birthDate)}</span>
+                  </ContactRow>
                 )}
                 {patient.address && (
-                  <div className="flex items-start gap-2.5 text-sm text-slate-600">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <span className="truncate">{patient.address}</span>
-                  </div>
-                )}
-                {patient.profession && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                    <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{patient.profession}</span>
-                  </div>
+                  <ContactRow icon={<MapPin className="w-3.5 h-3.5" />}>
+                    <span className="text-sm text-slate-600 truncate">{patient.address}</span>
+                  </ContactRow>
                 )}
                 {patient.cpf && (
-                  <div className="flex items-center gap-2.5 text-sm text-slate-500">
-                    <ShieldCheck className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                    <span className="font-mono text-xs">{displayCpf(patient.cpf)}</span>
-                  </div>
+                  <ContactRow icon={<ShieldCheck className="w-3.5 h-3.5" />}>
+                    <span className="text-xs font-mono text-slate-400 tracking-wide">{displayCpf(patient.cpf)}</span>
+                  </ContactRow>
                 )}
               </div>
 
               {/* Emergency contact */}
               {patient.emergencyContact && (
-                <div className="mt-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-100">
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide mb-0.5">Emergência</p>
-                      <p className="text-xs text-slate-700">{patient.emergencyContact}</p>
-                    </div>
+                <div className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                  <ShieldAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mb-0.5">Emergência</p>
+                    <p className="text-sm text-slate-700">{patient.emergencyContact}</p>
                   </div>
                 </div>
               )}
 
               {/* Clinic notes */}
               {patient.notes && (
-                <div className="mt-3 p-2.5 rounded-xl bg-primary/[0.04] border border-primary/15">
-                  <p className="text-[10px] font-bold text-primary uppercase tracking-wide mb-1 flex items-center gap-1">
+                <div className="px-3 py-2.5 rounded-xl bg-primary/[0.04] border border-primary/15">
+                  <p className="text-[9px] font-bold text-primary uppercase tracking-widest mb-1 flex items-center gap-1">
                     <Building2 className="w-3 h-3" /> Obs. desta clínica
                   </p>
-                  <p className="text-xs text-slate-600 leading-relaxed">{patient.notes}</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">{patient.notes}</p>
                 </div>
               )}
             </div>
@@ -753,51 +749,62 @@ export default function PatientDetail() {
           {patient.cpf && <OutgoingAccessRequestsPanel cpf={patient.cpf} />}
         </div>
 
-        {/* ── Main Content ─────────────────────────────────────────────────── */}
+        {/* ── Main Content ──────────────────────────────────────────────────── */}
         <div className="min-w-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="mb-5 space-y-1.5">
 
-              {/* Primary tabs */}
-              <div className="-mx-1 px-1 overflow-x-auto">
-                <TabsList className="inline-flex w-auto min-w-full bg-white p-1 rounded-xl shadow-sm border border-slate-200 h-auto gap-1">
-                  {primaryTabs.map(tab => (
-                    <TabsTrigger
-                      key={tab.value}
-                      value={tab.value}
-                      className={cn(
-                        "shrink-0 whitespace-nowrap rounded-lg text-xs py-2 px-3 flex items-center gap-1.5 font-medium",
-                        "data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-sm",
-                        "data-[state=inactive]:text-slate-500 data-[state=inactive]:hover:text-slate-700 data-[state=inactive]:hover:bg-slate-50",
-                        tab.value === "jornada" && "data-[state=inactive]:text-primary data-[state=inactive]:font-semibold"
-                      )}
-                    >
-                      {tab.icon} {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
+            {/* ── Tab bar (underline style) ────────────────────────────────── */}
+            <div className="mb-5 overflow-x-auto scrollbar-none">
+              <TabsList className="inline-flex min-w-full bg-transparent rounded-none border-b border-slate-200 h-auto gap-0 p-0">
 
-              {/* Secondary tabs */}
-              <div className="-mx-1 px-1 overflow-x-auto">
-                <TabsList className="inline-flex w-auto bg-white p-1 rounded-xl shadow-sm border border-dashed border-slate-200 h-auto gap-1">
-                  {secondaryTabs.map(tab => (
-                    <TabsTrigger
-                      key={tab.value}
-                      value={tab.value}
-                      className={cn(
-                        "shrink-0 whitespace-nowrap rounded-lg text-xs py-1.5 px-3 flex items-center gap-1.5",
-                        "data-[state=inactive]:text-slate-400 data-[state=inactive]:hover:text-slate-600 data-[state=inactive]:hover:bg-slate-50",
-                        tab.extra || "data-[state=active]:bg-primary data-[state=active]:text-white"
-                      )}
-                    >
-                      {tab.icon} {tab.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </div>
+                {/* Primary tabs */}
+                {primaryTabs.map(tab => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className={cn(
+                      "shrink-0 whitespace-nowrap rounded-none border-b-2 -mb-px h-11 px-3.5 text-xs gap-1.5 font-medium",
+                      "bg-transparent shadow-none transition-colors",
+                      "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50/60",
+                      tab.value === "jornada"
+                        ? "data-[state=active]:border-primary data-[state=active]:text-primary data-[state=inactive]:text-primary/70 data-[state=inactive]:font-semibold"
+                        : "data-[state=active]:border-primary data-[state=active]:text-primary",
+                      "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                    )}
+                  >
+                    {tab.icon} {tab.label}
+                  </TabsTrigger>
+                ))}
+
+                {/* Separator */}
+                <div className="flex items-center self-stretch px-2">
+                  <div className="w-px h-5 bg-slate-200 my-auto" />
+                </div>
+
+                {/* Secondary tabs */}
+                {secondaryTabs.map(tab => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className={cn(
+                      "shrink-0 whitespace-nowrap rounded-none border-b-2 -mb-px h-11 px-3.5 text-xs gap-1.5 font-medium",
+                      "bg-transparent shadow-none transition-colors",
+                      "border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/60",
+                      tab.color === "emerald"
+                        ? "data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-700"
+                        : tab.color === "slate"
+                        ? "data-[state=active]:border-slate-600 data-[state=active]:text-slate-700"
+                        : "data-[state=active]:border-primary data-[state=active]:text-primary",
+                      "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                    )}
+                  >
+                    {tab.icon} {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
             </div>
 
+            {/* ── Tab content ─────────────────────────────────────────────── */}
             <TabsContent value="jornada">
               <Suspense fallback={<TabLoader />}><JornadaTab patientId={patientId} onNavigateToTab={setActiveTab} /></Suspense>
             </TabsContent>
@@ -848,5 +855,17 @@ export default function PatientDetail() {
 
       </div>
     </AppLayout>
+  );
+}
+
+// ─── Contact Row helper ────────────────────────────────────────────────────────
+function ContactRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 text-slate-500">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
   );
 }
