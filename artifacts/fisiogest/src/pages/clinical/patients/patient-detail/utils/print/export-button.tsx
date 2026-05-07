@@ -62,7 +62,7 @@ export function ExportProntuarioButton({ patientId, patient }: { patientId: numb
     >
       {loading
         ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> Gerando…</>
-        : <><FileText className="w-3.5 h-3.5 mr-2" /> Exportar Prontuário PDF</>
+        : <><FileText className="w-3.5 h-3.5 mr-2" /> Prontuário Completo</>
       }
     </Button>
   );
