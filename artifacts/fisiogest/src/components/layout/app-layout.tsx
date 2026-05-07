@@ -169,7 +169,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/procedimentos", label: "Procedimentos", icon: StethoscopeIcon, permission: "procedures.manage" },
   { href: "/pacotes", label: "Pacotes", icon: Package, permission: "procedures.manage", feature: "module.patient_packages" },
   { href: "/financeiro", label: "Financeiro", icon: WalletIcon, permission: "financial.read" },
-  { href: "/relatorios", label: "Relatórios", icon: ReportsIcon, permission: "reports.read" },
+  { href: "/relatorios", label: "Contábil", icon: ReportsIcon, permission: "reports.read" },
   {
     href: "/configuracoes",
     label: "Configurações",
