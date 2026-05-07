@@ -1,16 +1,11 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import {
-  CalendarDays, Receipt, Wallet, RotateCcw, Settings2,
-  TrendingUp, TrendingDown, DollarSign, AlertCircle,
-} from "lucide-react";
+import { CalendarDays, Receipt, Wallet, RotateCcw, Settings2 } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MONTH_NAMES, YEARS } from "./constants";
-import { formatCurrency, authHeaders } from "./utils";
 import { LancamentosTab } from "./components/LancamentosTab";
 import { CashFlowTab } from "./components/CashFlowTab";
 import { EstornosTab } from "./components/EstornosTab";
@@ -32,79 +27,6 @@ const ALL_TABS: TabDef[] = [
   { value: "estornos",       icon: <RotateCcw className="w-3.5 h-3.5" />, label: "Estornos",       feature: "financial.view.simple" },
 ];
 
-function FinancialKpiStrip({ month, year }: { month: number; year: number }) {
-  const { data, isLoading } = useQuery<any>({
-    queryKey: ["financial-dashboard-strip", month, year],
-    queryFn: async () => {
-      const res = await fetch(`/api/financial/dashboard?month=${month}&year=${year}`, {
-        headers: authHeaders(),
-      });
-      if (!res.ok) return null;
-      return res.json();
-    },
-    staleTime: 60_000,
-  });
-
-  const skeleton = "h-7 w-24 bg-slate-100 animate-pulse rounded";
-
-  const receita = Number(data?.totalReceitas ?? 0);
-  const despesa = Number(data?.totalDespesas ?? 0);
-  const saldo = receita - despesa;
-  const pendente = Number(data?.totalPendente ?? 0);
-
-  const kpis = [
-    {
-      label: "Receitas",
-      value: isLoading ? null : formatCurrency(receita),
-      color: "text-emerald-600",
-      icon: <TrendingUp className="w-4 h-4 text-emerald-500" />,
-      accent: "border-l-emerald-400",
-    },
-    {
-      label: "Despesas",
-      value: isLoading ? null : formatCurrency(despesa),
-      color: "text-red-600",
-      icon: <TrendingDown className="w-4 h-4 text-red-400" />,
-      accent: "border-l-red-400",
-    },
-    {
-      label: "Saldo",
-      value: isLoading ? null : formatCurrency(saldo),
-      color: saldo >= 0 ? "text-indigo-600" : "text-red-700",
-      icon: <DollarSign className="w-4 h-4 text-indigo-400" />,
-      accent: saldo >= 0 ? "border-l-indigo-400" : "border-l-red-400",
-    },
-    {
-      label: "A Receber",
-      value: isLoading ? null : formatCurrency(pendente),
-      color: "text-amber-600",
-      icon: <AlertCircle className="w-4 h-4 text-amber-400" />,
-      accent: "border-l-amber-400",
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-      {kpis.map((k) => (
-        <div
-          key={k.label}
-          className={`bg-white rounded-2xl border border-slate-100 shadow-sm pl-4 pr-4 py-4 border-l-4 ${k.accent}`}
-        >
-          <div className="flex items-center gap-2 mb-1.5">
-            {k.icon}
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{k.label}</p>
-          </div>
-          {k.value === null ? (
-            <div className={skeleton} />
-          ) : (
-            <p className={`text-lg font-extrabold tabular-nums ${k.color}`}>{k.value}</p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function Financial() {
   const { hasFeature } = useAuth();
   const visibleTabs = ALL_TABS.filter((t) => !t.feature || hasFeature(t.feature));
@@ -114,41 +36,36 @@ export default function Financial() {
 
   return (
     <AppLayout title="Financeiro">
-      <div className="mb-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Financeiro</h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-              Gestão operacional de receitas, despesas e caixa
-            </p>
-          </div>
+      {/* ── Page Header ── */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Financeiro</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Gestão operacional de caixa, receitas e despesas</p>
+        </div>
 
-          <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200 w-full sm:w-auto">
-            <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
-            <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MONTH_NAMES.map((name, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="h-4 w-px bg-slate-200" />
-            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="h-8 w-20 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-100 w-full sm:w-auto">
+          <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
+          <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+            <SelectTrigger className="h-8 w-32 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTH_NAMES.map((name, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="h-4 w-px bg-slate-100" />
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="h-8 w-20 rounded-lg border-0 bg-transparent text-sm font-semibold text-slate-700 focus:ring-0 shadow-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
-
-      <FinancialKpiStrip month={month} year={year} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="relative mb-6">

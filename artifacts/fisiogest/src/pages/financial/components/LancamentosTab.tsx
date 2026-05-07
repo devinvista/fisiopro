@@ -1,14 +1,13 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
-  BarChart3, Clock, DollarSign, Loader2, PiggyBank, Repeat,
-  Stethoscope, Ticket, TrendingDown, TrendingUp,
+  Loader2, TrendingUp, TrendingDown, Clock, Ticket,
+  Stethoscope, Repeat, ArrowUpRight, ArrowDownRight,
+  BarChart3, PiggyBank,
 } from "lucide-react";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -16,27 +15,69 @@ import { useToast } from "@/lib/toast";
 import { useGetFinancialDashboard, useListFinancialRecords } from "@workspace/api-client-react";
 import { authHeaders, formatCurrency } from "../utils";
 import { MONTH_NAMES, PIE_COLORS } from "../constants";
-import { KpiCard } from "./KpiCard";
 import { NewRecordModal } from "./NewRecordModal";
 import { EditRecordModal } from "./EditRecordModal";
 import { RecurringPackagesPanel, type BillingStatusData } from "./lancamentos/RecurringPackagesPanel";
 import { RecordsTable } from "./lancamentos/RecordsTable";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 1: LANÇAMENTOS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Tipos de receita que NÃO representam receita competência (não entram no total
-// de receita reconhecida). Espelha NON_COMPETENCY_REVENUE_TYPES do backend.
 const NON_REVENUE_TX_TYPES = new Set([
-  "pagamento",        // entrada de caixa / adiantamento para carteira
-  "depositoCarteira", // depósito direto na carteira
-  "vendaPacote",      // passivo (obrigação de sessões)
-  "faturaConsolidada", // agrupador legado (filhos já contados)
-  "faturaMensalAvulso", // agrupador mensal (filhos já contados)
-  "pendenteFatura",   // sessão aguardando fatura — sem receita ainda
+  "pagamento", "depositoCarteira", "vendaPacote",
+  "faturaConsolidada", "faturaMensalAvulso", "pendenteFatura",
 ]);
 
+// ── Skeleton helper ───────────────────────────────────────────────────────────
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`bg-slate-100 animate-pulse rounded-lg ${className ?? ""}`} />;
+}
+
+// ── Mini stat inside hero card ────────────────────────────────────────────────
+function HeroStat({
+  label, value, color = "text-white",
+}: { label: string; value: string; color?: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-0.5">{label}</p>
+      <p className={`text-sm sm:text-base font-bold tabular-nums ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+// ── Small secondary KPI card ──────────────────────────────────────────────────
+function StatCard({
+  label, value, sub, icon, loading,
+  accentColor = "#6366f1",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: React.ReactNode;
+  loading?: boolean;
+  accentColor?: string;
+}) {
+  return (
+    <div className="relative bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-150">
+      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ backgroundColor: accentColor }} />
+      <div className="pl-4 pr-3 py-3.5 sm:py-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+          <div className="p-1.5 rounded-lg shrink-0" style={{ backgroundColor: `${accentColor}18`, color: accentColor }}>
+            {icon}
+          </div>
+        </div>
+        {loading ? (
+          <Skeleton className="h-6 w-20 mt-1" />
+        ) : (
+          <>
+            <p className="text-lg font-extrabold text-slate-900 tabular-nums leading-tight">{value}</p>
+            {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export function LancamentosTab({ month, year }: { month: number; year: number }) {
   const [typeFilter, setTypeFilter] = useState<"all" | "receita" | "despesa">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -73,25 +114,31 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     return sorted.filter((r) => r.type === typeFilter);
   }, [rawRecords, typeFilter]);
 
-  const totalReceitas = useMemo(() => records.filter((r) => r.type === "receita" && (r as any).status !== "cancelado" && (r as any).status !== "estornado" && !NON_REVENUE_TX_TYPES.has((r as any).transactionType)).reduce((s, r) => s + Number(r.amount), 0), [records]);
-  const totalDespesas = useMemo(() => records.filter((r) => r.type === "despesa" && (r as any).status !== "cancelado" && (r as any).status !== "estornado").reduce((s, r) => s + Number(r.amount), 0), [records]);
+  const totalReceitas = useMemo(() =>
+    records.filter((r) =>
+      r.type === "receita" &&
+      (r as any).status !== "cancelado" &&
+      (r as any).status !== "estornado" &&
+      !NON_REVENUE_TX_TYPES.has((r as any).transactionType)
+    ).reduce((s, r) => s + Number(r.amount), 0),
+    [records]);
+
+  const totalDespesas = useMemo(() =>
+    records.filter((r) =>
+      r.type === "despesa" &&
+      (r as any).status !== "cancelado" &&
+      (r as any).status !== "estornado"
+    ).reduce((s, r) => s + Number(r.amount), 0),
+    [records]);
 
   const pieData = useMemo(() => {
     const cats = dashboard?.revenueByCategory ?? [];
-    return cats.filter((c: any) => Number(c.revenue) > 0).map((c: any) => ({
-      name: c.category === "null" || !c.category ? "Outros" : c.category,
-      value: Number(c.revenue),
-    }));
-  }, [dashboard]);
-
-  // Area chart data from category breakdown
-  const areaData = useMemo(() => {
-    if (!dashboard) return [];
-    const cats = dashboard.revenueByCategory ?? [];
-    return cats.filter((c: any) => Number(c.revenue) > 0).map((c: any, i: number) => ({
-      name: c.category === "null" || !c.category ? "Outros" : c.category,
-      receita: Number(c.revenue),
-    }));
+    return cats
+      .filter((c: any) => Number(c.revenue) > 0)
+      .map((c: any) => ({
+        name: c.category === "null" || !c.category ? "Outros" : c.category,
+        value: Number(c.revenue),
+      }));
   }, [dashboard]);
 
   const handleSuccess = () => { setIsModalOpen(false); setEditTarget(null); refetchDash(); refetchRec(); };
@@ -113,8 +160,6 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     finally { setIsDeleting(false); }
   };
 
-  // Disparo manual do `monthlyPlanBilling` (faturas dos planos de tratamento
-  // aceitos, itens recorrenteMensal).
   const handleRunPlanBilling = async () => {
     setPlanBillingRunning(true); setPlanBillingResult(null);
     try {
@@ -128,7 +173,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
           toast({ title: `${data.generated} fatura(s) mensal(is) gerada(s).` });
           refetchDash(); refetchRec();
         } else {
-          toast({ title: data.skipped > 0 ? `Nenhuma fatura nova — ${data.skipped} já existente(s) ou fora da janela.` : "Nenhum plano com vencimento na janela atual." });
+          toast({ title: data.skipped > 0 ? `Nenhuma fatura nova — ${data.skipped} já existente(s).` : "Nenhum plano com vencimento na janela atual." });
         }
         await fetchPlanBillingStatus();
       }
@@ -136,238 +181,239 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
     finally { setPlanBillingRunning(false); }
   };
 
-  const netProfit = (dashboard?.monthlyRevenue ?? 0) - (dashboard?.monthlyExpenses ?? 0);
+  // Derived values
+  const revenue = dashboard?.monthlyRevenue ?? 0;
+  const expenses = dashboard?.monthlyExpenses ?? 0;
+  const netProfit = revenue - expenses;
   const isProfitable = netProfit >= 0;
+  const marginPct = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+  const expenseRatioPct = revenue > 0 ? Math.min(100, (expenses / revenue) * 100) : 0;
   const cashReceived = (dashboard as any)?.cashReceived ?? 0;
   const accountsReceivable = (dashboard as any)?.accountsReceivable ?? 0;
-  const customerAdvances = (dashboard as any)?.customerAdvances ?? 0;
+  const mrr = (dashboard as any)?.mrr ?? 0;
+  const activeSubscriptions = (dashboard as any)?.activeSubscriptions ?? 0;
+  const monthLabel = MONTH_NAMES[month - 1];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
-      {/* ── Hero KPI Strip ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <KpiCard
-          label="Receita Competência"
-          value={formatCurrency(dashboard?.monthlyRevenue ?? 0)}
-          icon={<TrendingUp className="w-4 h-4" />}
-          accentColor="#10b981"
-          loading={dashLoading}
-          sub="Reconhecida no DRE"
-        />
-        <KpiCard
+      {/* ── HERO: Resultado do Mês ───────────────────────────────────────── */}
+      <div className={`relative rounded-2xl overflow-hidden px-5 sm:px-7 py-6 ${isProfitable
+        ? "bg-gradient-to-br from-emerald-500 to-emerald-600"
+        : "bg-gradient-to-br from-red-500 to-red-600"
+        }`}>
+        {/* Decorative circles */}
+        <div className="pointer-events-none absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -right-4 -bottom-10 w-28 h-28 rounded-full bg-white/5" />
+
+        <div className="relative flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+          {/* Left: main number */}
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-white/60 mb-1.5">
+              Resultado — {monthLabel} {year}
+            </p>
+
+            {dashLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-36 bg-white/20" />
+                <Skeleton className="h-4 w-24 bg-white/10" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <p className="text-3xl sm:text-4xl font-black text-white tabular-nums tracking-tight">
+                    {isProfitable ? "+" : ""}{formatCurrency(netProfit)}
+                  </p>
+                  {isProfitable
+                    ? <ArrowUpRight className="w-6 h-6 text-white/70" />
+                    : <ArrowDownRight className="w-6 h-6 text-white/70" />}
+                </div>
+                <p className="text-xs text-white/60 mt-1 font-medium">
+                  {isProfitable ? `Margem de ${marginPct.toFixed(1)}%` : "Resultado negativo no período"}
+                </p>
+              </>
+            )}
+
+            {/* Expense ratio bar */}
+            {!dashLoading && (
+              <div className="mt-4 max-w-xs">
+                <div className="flex justify-between text-[10px] font-semibold text-white/50 mb-1.5">
+                  <span>Despesas / Receitas</span>
+                  <span>{expenseRatioPct.toFixed(0)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-white/70 transition-all duration-700"
+                    style={{ width: `${expenseRatioPct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: breakdown stats */}
+          <div className="flex sm:flex-col gap-5 sm:gap-4 sm:min-w-[160px]">
+            {dashLoading ? (
+              <>
+                <Skeleton className="h-10 w-28 bg-white/20" />
+                <Skeleton className="h-10 w-28 bg-white/20" />
+              </>
+            ) : (
+              <>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/60" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">Receitas</p>
+                  </div>
+                  <p className="text-lg sm:text-xl font-bold text-white tabular-nums">{formatCurrency(revenue)}</p>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/50">Despesas</p>
+                  </div>
+                  <p className="text-lg sm:text-xl font-bold text-white/80 tabular-nums">{formatCurrency(expenses)}</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECONDARY KPIs ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
           label="Caixa Recebido"
-          value={formatCurrency(cashReceived)}
-          icon={<PiggyBank className="w-4 h-4" />}
+          value={dashLoading ? "—" : formatCurrency(cashReceived)}
+          sub="Entradas no período"
+          icon={<PiggyBank className="w-3.5 h-3.5" />}
           accentColor="#0ea5e9"
           loading={dashLoading}
-          sub="Dinheiro que entrou"
         />
-        <KpiCard
-          label="Despesas"
-          value={formatCurrency(dashboard?.monthlyExpenses ?? 0)}
-          icon={<TrendingDown className="w-4 h-4" />}
-          accentColor="#ef4444"
+        <StatCard
+          label="A Receber"
+          value={dashLoading ? "—" : formatCurrency(accountsReceivable)}
+          sub="Títulos em aberto"
+          icon={<Clock className="w-3.5 h-3.5" />}
+          accentColor="#f59e0b"
           loading={dashLoading}
         />
-        <KpiCard
-          label="Lucro Líquido"
-          value={formatCurrency(dashboard?.monthlyProfit ?? 0)}
-          icon={<DollarSign className="w-4 h-4" />}
-          accentColor="#6366f1"
-          loading={dashLoading}
-          size="md"
-        />
-        <KpiCard
-          label="Ticket Médio"
-          value={formatCurrency(dashboard?.averageTicket ?? 0)}
-          icon={<Ticket className="w-4 h-4" />}
+        <StatCard
+          label="MRR"
+          value={dashLoading ? "—" : formatCurrency(mrr)}
+          sub={`${activeSubscriptions} pacote(s) ativo(s)`}
+          icon={<Repeat className="w-3.5 h-3.5" />}
           accentColor="#8b5cf6"
           loading={dashLoading}
         />
-        <KpiCard
-          label="Consultas"
-          value={`${dashboard?.completedAppointments ?? 0} / ${dashboard?.totalAppointments ?? 0}`}
-          icon={<Stethoscope className="w-4 h-4" />}
-          accentColor="#0ea5e9"
+        <StatCard
+          label="Ticket Médio"
+          value={dashLoading ? "—" : formatCurrency(dashboard?.averageTicket ?? 0)}
+          sub={dashboard?.completedAppointments != null
+            ? `${dashboard.completedAppointments}/${dashboard.totalAppointments} consultas`
+            : undefined}
+          icon={<Ticket className="w-3.5 h-3.5" />}
+          accentColor="#10b981"
           loading={dashLoading}
-          sub={dashboard?.topProcedure ? `Top: ${dashboard.topProcedure}` : undefined}
         />
       </div>
 
-      {!dashLoading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <KpiCard
-            label="A Receber Contábil"
-            value={formatCurrency(accountsReceivable)}
-            icon={<Clock className="w-4 h-4" />}
-            accentColor="#f59e0b"
-            sub="Títulos abertos no ledger"
-          />
-          <KpiCard
-            label="Adiantamentos / Carteira"
-            value={formatCurrency(customerAdvances)}
-            icon={<PiggyBank className="w-4 h-4" />}
-            accentColor="#14b8a6"
-            sub="Passivo com pacientes (competência do mês)"
-          />
-        </div>
-      )}
+      {/* ── CHART + TOP PROCEDURE ROW ────────────────────────────────────── */}
+      {!dashLoading && (pieData.length > 0 || (dashboard?.topProcedure)) && (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
-      {/* ── Net Result Banner ── */}
-      {!dashLoading && (
-        <div className={`rounded-2xl px-5 py-4 flex items-center justify-between gap-4 ${isProfitable ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`}>
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${isProfitable ? "bg-emerald-100" : "bg-red-100"}`}>
-              {isProfitable
-                ? <TrendingUp className="w-5 h-5 text-emerald-600" />
-                : <TrendingDown className="w-5 h-5 text-red-600" />}
-            </div>
-            <div>
-              <p className={`text-sm font-bold ${isProfitable ? "text-emerald-800" : "text-red-800"}`}>
-                {isProfitable ? "Clínica no positivo" : "Atenção: resultado negativo"} — {MONTH_NAMES[month - 1]} {year}
+          {/* Donut: receita por categoria */}
+          {pieData.length > 0 && (
+            <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                Receita por Categoria — {monthLabel} {year}
               </p>
-              <p className={`text-xs ${isProfitable ? "text-emerald-600" : "text-red-600"}`}>
-                {isProfitable
-                  ? `Resultado: +${formatCurrency(netProfit)} acima das despesas`
-                  : `Resultado: ${formatCurrency(netProfit)} abaixo das receitas`}
-              </p>
-            </div>
-          </div>
-          <span className={`text-xl font-extrabold tabular-nums ${isProfitable ? "text-emerald-700" : "text-red-700"}`}>
-            {isProfitable ? "+" : ""}{formatCurrency(netProfit)}
-          </span>
-        </div>
-      )}
-
-      {/* ── MRR & Pacotes Recorrentes ── */}
-      <div>
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Repeat className="w-3 h-3" /> Receita Recorrente (Pacotes Mensais)
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <KpiCard
-            label="MRR — Receita Mensal Recorrente"
-            value={formatCurrency((dashboard as any)?.mrr ?? 0)}
-            icon={<Repeat className="w-4 h-4" />}
-            accentColor="#6366f1"
-            loading={dashLoading}
-            sub={`${(dashboard as any)?.activeSubscriptions ?? 0} pacote(s) mensal(is) ativo(s)`}
-          />
-          <KpiCard
-            label="A Receber — Ledger"
-            value={formatCurrency(accountsReceivable)}
-            icon={<Clock className="w-4 h-4" />}
-            accentColor="#f59e0b"
-            loading={dashLoading}
-            sub={`${(dashboard as any)?.pendingSubscriptionCharges?.count ?? 0} cobrança(s) recorrente(s) pendente(s)`}
-          />
-          <div className="relative bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-indigo-400" />
-            <div className="pl-5 pr-4 py-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Cobertura do MRR</p>
-              {dashLoading ? (
-                <div className="h-7 w-24 bg-slate-100 animate-pulse rounded-lg" />
-              ) : (() => {
-                const mrr = (dashboard as any)?.mrr ?? 0;
-                const revenue = dashboard?.monthlyRevenue ?? 0;
-                const pct = revenue > 0 ? Math.min(100, Math.round((mrr / revenue) * 100)) : (mrr > 0 ? 100 : 0);
-                return (
-                  <>
-                    <p className="text-2xl font-bold text-slate-900 tabular-nums">{pct}%</p>
-                    <p className="text-xs text-slate-400 mt-1">do total de receitas é recorrente</p>
-                    <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-indigo-400 transition-all duration-700"
-                        style={{ width: `${pct}%` }}
+              <div className="flex flex-col sm:flex-row items-center gap-5">
+                <div className="shrink-0">
+                  <ResponsiveContainer width={160} height={160}>
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={48}
+                        outerRadius={72}
+                        paddingAngle={3}
+                        dataKey="value"
+                        strokeWidth={0}
+                      >
+                        {pieData.map((_: any, idx: number) => (
+                          <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(val: number) => formatCurrency(val)}
+                        contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", fontSize: "12px" }}
                       />
-                    </div>
-                  </>
-                );
-              })()}
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex-1 min-w-0 w-full space-y-2">
+                  {pieData.map((item: any, idx: number) => {
+                    const total = pieData.reduce((s: number, p: any) => s + p.value, 0);
+                    const pct = total > 0 ? (item.value / total) * 100 : 0;
+                    const color = PIE_COLORS[idx % PIE_COLORS.length];
+                    return (
+                      <div key={item.name} className="flex items-center gap-2.5">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-slate-600 truncate flex-1">{item.name}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">{pct.toFixed(0)}%</span>
+                        <span className="text-xs font-semibold text-slate-700 tabular-nums shrink-0">{formatCurrency(item.value)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Side: top procedure + consultas */}
+          <div className={`flex flex-col gap-3 ${pieData.length > 0 ? "lg:col-span-2" : "lg:col-span-5"}`}>
+            {/* Top procedure */}
+            {dashboard?.topProcedure && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 rounded-xl bg-violet-50">
+                    <Stethoscope className="w-4 h-4 text-violet-500" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Top Procedimento</p>
+                </div>
+                <p className="text-sm font-bold text-slate-800 leading-snug">{dashboard.topProcedure}</p>
+                <p className="text-xs text-slate-400 mt-1">Mais realizado no período</p>
+              </div>
+            )}
+
+            {/* Consultas realizadas */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex-1">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-2 rounded-xl bg-sky-50">
+                  <TrendingUp className="w-4 h-4 text-sky-500" />
+                </div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Consultas</p>
+              </div>
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{dashboard?.completedAppointments ?? 0}</p>
+                <p className="text-sm text-slate-400 mb-0.5">de {dashboard?.totalAppointments ?? 0} agendadas</p>
+              </div>
+              {(dashboard?.totalAppointments ?? 0) > 0 && (
+                <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-sky-400 transition-all duration-700"
+                    style={{ width: `${Math.min(100, ((dashboard?.completedAppointments ?? 0) / (dashboard?.totalAppointments ?? 1)) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Charts Row ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
-        {/* Revenue by Category (Donut) */}
-        {pieData.length > 0 && (
-          <Card className="border border-slate-100 shadow-sm rounded-2xl bg-white xl:col-span-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-slate-700">Receita por Categoria</CardTitle>
-              <p className="text-xs text-slate-400">{MONTH_NAMES[month - 1]} {year}</p>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={210}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                    strokeWidth={0}
-                  >
-                    {pieData.map((_: any, idx: number) => (
-                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(val: number) => formatCurrency(val)}
-                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", fontSize: "12px" }}
-                  />
-                  <Legend
-                    iconType="circle"
-                    iconSize={8}
-                    formatter={(value) => <span className="text-xs text-slate-600">{value}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Revenue Category Bar Chart */}
-        {areaData.length > 0 && (
-          <Card className={`border border-slate-100 shadow-sm rounded-2xl bg-white ${pieData.length > 0 ? "xl:col-span-3" : "xl:col-span-5"}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold text-slate-700">Distribuição por Categoria</CardTitle>
-              <p className="text-xs text-slate-400">Receita gerada por tipo de serviço</p>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={210}>
-                <BarChart data={areaData} layout="vertical" margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} width={90} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    formatter={(val: number) => formatCurrency(val)}
-                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 32px rgba(0,0,0,0.12)", fontSize: "12px" }}
-                  />
-                  <Bar dataKey="receita" name="Receita" fill="#6366f1" radius={[0, 6, 6, 0]} maxBarSize={28} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* If no pie data, show a placeholder or nothing */}
-        {pieData.length === 0 && areaData.length === 0 && (
-          <div className="xl:col-span-5 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center py-8 px-6 sm:p-10 text-center bg-slate-50">
-            <div>
-              <BarChart3 className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm text-slate-400 font-medium">Nenhum dado para exibir nos gráficos</p>
-              <p className="text-xs text-slate-300 mt-1">Adicione lançamentos de receita para visualizar a distribuição</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Painel Faturas dos Planos de Tratamento ── */}
+      {/* ── FATURAS DOS PLANOS DE TRATAMENTO ────────────────────────────── */}
       <RecurringPackagesPanel
         planBillingStatus={planBillingStatus}
         planBillingStatusLoading={planBillingStatusLoading}
@@ -380,7 +426,7 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         setPanelOpen={setBillingPanelOpen}
       />
 
-      {/* ── Transaction List ── */}
+      {/* ── TABELA DE LANÇAMENTOS ────────────────────────────────────────── */}
       <RecordsTable
         records={records}
         recLoading={recLoading}
@@ -394,32 +440,28 @@ export function LancamentosTab({ month, year }: { month: number; year: number })
         onEdit={(record) => setEditTarget(record)}
         onDelete={(info) => setDeleteTarget(info)}
       />
+
       {/* Modals */}
       <NewRecordModal open={isModalOpen} onClose={() => setIsModalOpen(false)} onSuccess={handleSuccess} />
       <EditRecordModal open={!!editTarget} record={editTarget} onClose={() => setEditTarget(null)} onSuccess={handleSuccess} />
 
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <DialogContent className="rounded-2xl">
+        <DialogContent className="rounded-2xl w-[calc(100vw-2rem)] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Excluir Registro</DialogTitle>
             <DialogDescription>
               Confirmar exclusão de <strong>{deleteTarget?.description}</strong> ({formatCurrency(deleteTarget?.amount ?? 0)})?
+              Esta ação não pode ser desfeita.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting}>
+          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="w-full sm:w-auto rounded-xl">Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteRecord} disabled={isDeleting} className="w-full sm:w-auto rounded-xl">
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Excluir"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB 2: CUSTO POR PROCEDIMENTO
-// ═══════════════════════════════════════════════════════════════════════════════
-
