@@ -718,9 +718,10 @@ export default function PatientDetail() {
                   href={whatsappLink(patient.phone)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors shadow-sm"
+                  title="Abrir no WhatsApp"
+                  className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white transition-colors shadow-sm"
                 >
-                  <MessageCircle className="w-4 h-4" /> WhatsApp
+                  <MessageCircle className="w-4 h-4" />
                 </a>
                 <div className="flex-1">
                   <ExportProntuarioButton patientId={patientId} patient={patient} />
