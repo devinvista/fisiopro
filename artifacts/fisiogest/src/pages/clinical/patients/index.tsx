@@ -3,40 +3,28 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListPatients } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch, isPlanLimitPayload } from "@/lib/api";
 import { usePlanLimit } from "@/contexts/plan-limit-context";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Search,
-  Plus,
-  UserPlus,
-  Phone,
-  Mail,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
-  Loader2,
-  LayoutGrid,
-  LayoutList,
-  Users,
-  Calendar,
-  MapPin,
+  Search, Plus, UserPlus, Phone, Mail, ChevronRight,
+  ChevronUp, ChevronDown, ChevronsUpDown, Loader2,
+  LayoutGrid, LayoutList, Users, CalendarDays, Sparkles,
+  MapPin, MessageCircle, Calendar,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
-import { maskCpf, maskPhone, displayCpf, maskName } from "@/utils/masks";
+import { maskCpf, maskPhone, displayCpf } from "@/utils/masks";
 import { patientFormSchema, buildPatientPayload } from "@/schemas/patient.schema";
 import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 
-type ViewMode = "cards" | "list";
+type ViewMode = "list" | "cards";
 type SortField = "name" | "birthDate" | "phone" | "email" | "profession";
 type SortDir = "asc" | "desc";
 
@@ -52,6 +40,23 @@ interface Patient {
   createdAt: string;
 }
 
+const AVATAR_PALETTES = [
+  { bg: "bg-teal-100",   text: "text-teal-700"   },
+  { bg: "bg-sky-100",    text: "text-sky-700"     },
+  { bg: "bg-violet-100", text: "text-violet-700"  },
+  { bg: "bg-pink-100",   text: "text-pink-700"    },
+  { bg: "bg-amber-100",  text: "text-amber-700"   },
+  { bg: "bg-emerald-100",text: "text-emerald-700" },
+  { bg: "bg-blue-100",   text: "text-blue-700"    },
+  { bg: "bg-rose-100",   text: "text-rose-700"    },
+];
+
+function avatarPalette(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
+}
+
 function calcAge(birthDate?: string | null): string | null {
   if (!birthDate) return null;
   const birth = new Date(birthDate + "T12:00:00");
@@ -62,63 +67,76 @@ function calcAge(birthDate?: string | null): string | null {
   return `${age} anos`;
 }
 
-function formatDate(date?: string | null): string | null {
-  if (!date) return null;
-  return new Date(date + "T12:00:00").toLocaleDateString("pt-BR");
+function isNewPatient(createdAt: string) {
+  const now = new Date();
+  const created = new Date(createdAt);
+  return (now.getTime() - created.getTime()) < 30 * 24 * 60 * 60 * 1000;
+}
+
+function whatsappLink(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const number = digits.startsWith("55") ? digits : `55${digits}`;
+  return `https://wa.me/${number}`;
 }
 
 export default function PatientsList() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    return (localStorage.getItem("patients_view_mode") as ViewMode) ?? "list";
-  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    (localStorage.getItem("patients_view_mode") as ViewMode) ?? "list"
+  );
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-
-  function handleSort(field: SortField) {
-    if (sortField === field) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDir("asc");
-    }
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  const { data, isLoading, refetch } = useListPatients({ search: debouncedSearch, limit: 50 });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { hasPermission } = useAuth();
   const canCreate = hasPermission("patients.create");
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data, isLoading, refetch } = useListPatients({ search: debouncedSearch, limit: 50 });
+  const patients = (data?.data ?? []) as Patient[];
+  const total = (data as any)?.page?.total ?? (data as any)?.total ?? 0;
+
+  const newThisMonth = useMemo(() => {
+    const now = new Date();
+    return patients.filter(p => {
+      const d = new Date(p.createdAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+  }, [patients]);
 
   function changeView(mode: ViewMode) {
     setViewMode(mode);
     localStorage.setItem("patients_view_mode", mode);
   }
 
-  const patients = (data?.data ?? []) as Patient[];
-  const total = (data as any)?.page?.total ?? (data as any)?.total ?? 0;
+  function handleSort(field: SortField) {
+    setSortField(f => {
+      if (f === field) { setSortDir(d => d === "asc" ? "desc" : "asc"); return f; }
+      setSortDir("asc");
+      return field;
+    });
+  }
 
   return (
     <AppLayout title="Pacientes">
       <div className="space-y-5">
 
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">Pacientes</h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Gerencie o cadastro e prontuários dos pacientes</p>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800">Pacientes</h1>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Gerencie cadastros e prontuários</p>
           </div>
           {canCreate && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="w-full sm:w-auto h-10 px-4 rounded-xl shadow-md shadow-primary/20 text-sm font-semibold gap-1.5">
-                  <Plus className="w-4 h-4 shrink-0" />
-                  Novo Paciente
+                <Button className="w-full sm:w-auto h-10 px-5 rounded-xl shadow-sm gap-1.5 text-sm font-semibold">
+                  <Plus className="w-4 h-4" /> Novo Paciente
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto">
@@ -128,114 +146,99 @@ export default function PatientsList() {
           )}
         </div>
 
-        {/* ── Stats strip ─────────────────────────────────────────────────── */}
+        {/* Stats strip */}
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {[
-            { label: "Total de Pacientes", shortLabel: "Total", value: total, icon: <Users className="w-4 h-4" />, accent: "#6366f1" },
-            { label: "Exibidos Agora", shortLabel: "Exibidos", value: patients.length, icon: <Search className="w-4 h-4" />, accent: "#0ea5e9" },
-            { label: "Com E-mail", shortLabel: "Com e-mail", value: patients.filter(p => p.email).length, icon: <Mail className="w-4 h-4" />, accent: "#10b981" },
+            {
+              label: "Total de Pacientes",
+              shortLabel: "Total",
+              value: isLoading ? null : total,
+              icon: <Users className="w-4 h-4" />,
+              color: "text-violet-600",
+              bg: "bg-violet-50",
+              border: "border-violet-100",
+            },
+            {
+              label: "Novos este mês",
+              shortLabel: "Novos",
+              value: isLoading ? null : newThisMonth,
+              icon: <Sparkles className="w-4 h-4" />,
+              color: "text-emerald-600",
+              bg: "bg-emerald-50",
+              border: "border-emerald-100",
+            },
+            {
+              label: "Exibidos agora",
+              shortLabel: "Filtro",
+              value: isLoading ? null : patients.length,
+              icon: <Search className="w-4 h-4" />,
+              color: "text-sky-600",
+              bg: "bg-sky-50",
+              border: "border-sky-100",
+            },
           ].map((s, i) => (
-            <div key={i} className="relative bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden min-w-0">
-              <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl" style={{ backgroundColor: s.accent }} />
-              <div className="pl-3 pr-3 sm:pl-4 sm:pr-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-3">
-                <div className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl shrink-0" style={{ backgroundColor: `${s.accent}18`, color: s.accent }}>
-                  {s.icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide sm:tracking-widest leading-tight">
-                    <span className="sm:hidden">{s.shortLabel}</span>
-                    <span className="hidden sm:inline">{s.label}</span>
-                  </p>
-                  {isLoading
-                    ? <div className="h-6 w-10 bg-slate-100 animate-pulse rounded mt-1" />
-                    : <p className="text-xl font-extrabold text-slate-900 tabular-nums">{s.value}</p>
-                  }
-                </div>
+            <div key={i} className={cn("rounded-2xl border p-3 sm:p-4 flex items-center gap-3", s.border, "bg-white")}>
+              <div className={cn("p-2 rounded-xl shrink-0", s.bg, s.color)}>
+                {s.icon}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 leading-tight hidden sm:block">{s.label}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 leading-tight sm:hidden">{s.shortLabel}</p>
+                {s.value === null
+                  ? <div className="h-6 w-10 bg-slate-100 animate-pulse rounded mt-1" />
+                  : <p className="text-xl font-extrabold text-slate-900 tabular-nums">{s.value}</p>
+                }
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── Filters + View toggle ────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+        {/* Toolbar */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <Input
               placeholder="Buscar por nome, CPF ou telefone..."
-              className="pl-8 h-9 text-sm rounded-lg bg-white"
+              className="pl-9 h-9 text-sm rounded-xl bg-white border-slate-200"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          {/* View toggle */}
-          <div className="ml-auto flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          {search && (
             <button
-              onClick={() => changeView("cards")}
-              className={cn(
-                "p-1.5 transition-colors",
-                viewMode === "cards" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
-              )}
-              title="Cards"
+              onClick={() => setSearch("")}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors shrink-0 px-2"
             >
-              <LayoutGrid className="w-4 h-4" />
+              Limpar
             </button>
-            <button
-              onClick={() => changeView("list")}
-              className={cn(
-                "p-1.5 transition-colors border-l border-slate-200",
-                viewMode === "list" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
-              )}
-              title="Lista"
-            >
-              <LayoutList className="w-4 h-4" />
-            </button>
+          )}
+          <div className="ml-auto flex items-center border border-slate-200 rounded-xl overflow-hidden bg-white">
+            {([["list", <LayoutList className="w-4 h-4" />], ["cards", <LayoutGrid className="w-4 h-4" />]] as const).map(([mode, icon]) => (
+              <button
+                key={mode}
+                onClick={() => changeView(mode)}
+                className={cn(
+                  "p-2 transition-colors",
+                  mode !== "list" && "border-l border-slate-200",
+                  viewMode === mode ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-400"
+                )}
+                title={mode === "list" ? "Lista" : "Cards"}
+              >
+                {icon}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* ── Content ─────────────────────────────────────────────────────── */}
+        {/* Content */}
         {isLoading ? (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="px-4 py-3.5 flex items-center gap-4 animate-pulse">
-                <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3.5 w-40 bg-slate-100 rounded" />
-                  <div className="h-2.5 w-24 bg-slate-100 rounded" />
-                </div>
-                <div className="h-3 w-28 bg-slate-100 rounded hidden md:block" />
-                <div className="h-3 w-20 bg-slate-100 rounded hidden lg:block" />
-                <div className="w-4 h-4 bg-slate-100 rounded shrink-0" />
-              </div>
-            ))}
-          </div>
+          <LoadingSkeleton />
         ) : patients.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-300 py-12 px-6 sm:p-16 text-center shadow-sm">
-            <div className="bg-primary/5 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <UserPlus className="w-10 h-10 text-primary" />
-            </div>
-            <h3 className="text-2xl font-display font-bold text-slate-800 mb-2">Nenhum paciente encontrado</h3>
-            <p className="text-slate-500 max-w-md mx-auto mb-8">
-              {search
-                ? "Tente ajustar os termos da sua busca."
-                : "Comece cadastrando seu primeiro paciente para gerenciar prontuários e agendamentos."}
-            </p>
-            {!search && (
-              <Button onClick={() => setIsDialogOpen(true)} className="h-12 px-8 rounded-xl">
-                Cadastrar Primeiro Paciente
-              </Button>
-            )}
-          </div>
+          <EmptyState search={search} onNew={() => setIsDialogOpen(true)} canCreate={canCreate} />
         ) : viewMode === "cards" ? (
           <CardView patients={patients} />
         ) : (
-          <ListView
-            patients={patients}
-            sortField={sortField}
-            sortDir={sortDir}
-            onSort={handleSort}
-          />
+          <ListView patients={patients} sortField={sortField} sortDir={sortDir} onSort={handleSort} />
         )}
 
       </div>
@@ -243,76 +246,124 @@ export default function PatientsList() {
   );
 }
 
+// ─── Loading Skeleton ─────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+      {[...Array(7)].map((_, i) => (
+        <div key={i} className="px-4 py-3.5 flex items-center gap-3 animate-pulse">
+          <div className="w-9 h-9 rounded-full bg-slate-100 shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3.5 w-36 bg-slate-100 rounded" />
+            <div className="h-2.5 w-24 bg-slate-100 rounded" />
+          </div>
+          <div className="h-3 w-28 bg-slate-100 rounded hidden md:block" />
+          <div className="h-3 w-20 bg-slate-100 rounded hidden lg:block" />
+          <div className="w-4 h-4 bg-slate-100 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Empty State ──────────────────────────────────────────────────────────────
+
+function EmptyState({ search, onNew, canCreate }: { search: string; onNew: () => void; canCreate: boolean }) {
+  return (
+    <div className="bg-white rounded-2xl border border-dashed border-slate-200 py-16 px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-primary/5 flex items-center justify-center mx-auto mb-4">
+        <UserPlus className="w-8 h-8 text-primary/60" />
+      </div>
+      <h3 className="text-lg font-bold text-slate-800 mb-1">
+        {search ? "Nenhum resultado encontrado" : "Nenhum paciente cadastrado"}
+      </h3>
+      <p className="text-sm text-slate-400 max-w-xs mx-auto mb-6">
+        {search
+          ? `Não encontramos resultados para "${search}". Tente outros termos.`
+          : "Cadastre seu primeiro paciente para começar a gerenciar prontuários e agendamentos."}
+      </p>
+      {!search && canCreate && (
+        <Button onClick={onNew} className="h-10 px-6 rounded-xl">
+          Cadastrar Primeiro Paciente
+        </Button>
+      )}
+    </div>
+  );
+}
+
 // ─── Card View ────────────────────────────────────────────────────────────────
 
 function CardView({ patients }: { patients: Patient[] }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 min-w-0">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       {patients.map((patient) => {
         const age = calcAge(patient.birthDate);
-        const initials = patient.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+        const initials = patient.name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase();
+        const palette = avatarPalette(patient.name);
+        const isNew = isNewPatient(patient.createdAt);
 
         return (
           <Link key={patient.id} href={`/pacientes/${patient.id}`}>
-            <div className="bg-white rounded-2xl border border-slate-200 cursor-pointer group hover:shadow-lg hover:border-primary/30 transition-all duration-200 overflow-hidden h-full">
-              {/* top accent */}
-              <div className="h-1 bg-gradient-to-r from-primary/60 to-primary" />
-
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4">
+            <div className="bg-white rounded-2xl border border-slate-200 hover:border-primary/30 hover:shadow-md transition-all duration-200 cursor-pointer group overflow-hidden">
+              <div className="p-4 pb-3">
+                <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-base group-hover:scale-110 transition-transform shrink-0">
+                    <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 group-hover:scale-105 transition-transform", palette.bg, palette.text)}>
                       {initials}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-bold text-base text-slate-800 leading-tight truncate">
-                        {patient.name}
-                      </h3>
-                      <p className="text-xs text-slate-400 mt-0.5">CPF: {displayCpf(patient.cpf)}</p>
+                      <h3 className="font-semibold text-sm text-slate-800 truncate leading-tight">{patient.name}</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{displayCpf(patient.cpf)}</p>
                     </div>
                   </div>
-                  {age && (
-                    <span className="shrink-0 ml-2 text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-                      {age}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {isNew && (
+                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">
+                        Novo
+                      </span>
+                    )}
+                    {age && (
+                      <span className="text-[11px] text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
+                        {age}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-slate-600 gap-2.5">
-                    <div className="p-1 bg-slate-100 rounded-md shrink-0">
-                      <Phone className="w-3.5 h-3.5 text-slate-500" />
-                    </div>
-                    <span className="truncate">{patient.phone}</span>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate text-xs">{patient.phone}</span>
                   </div>
                   {patient.email && (
-                    <div className="flex items-center text-sm text-slate-600 gap-2.5">
-                      <div className="p-1 bg-slate-100 rounded-md shrink-0">
-                        <Mail className="w-3.5 h-3.5 text-slate-500" />
-                      </div>
-                      <span className="truncate">{patient.email}</span>
+                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                      <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate text-xs">{patient.email}</span>
                     </div>
                   )}
-                  {patient.address && (
-                    <div className="flex items-center text-sm text-slate-600 gap-2.5">
-                      <div className="p-1 bg-slate-100 rounded-md shrink-0">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                      </div>
-                      <span className="truncate">{patient.address}</span>
+                  {patient.profession && (
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <div className="w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs">{patient.profession}</span>
                     </div>
                   )}
                 </div>
+              </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  {patient.profession ? (
-                    <span className="text-xs text-slate-400 truncate">{patient.profession}</span>
-                  ) : (
-                    <span />
-                  )}
-                  <span className="text-primary text-xs font-semibold flex items-center gap-1 group-hover:translate-x-1 transition-transform shrink-0 ml-2">
-                    Ver prontuário <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
+              <div className="px-4 py-2.5 border-t border-slate-50 flex items-center justify-between">
+                <a
+                  href={whatsappLink(patient.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-1.5 text-[11px] text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                </a>
+                <span className="text-primary text-[11px] font-semibold flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  Ver prontuário <ChevronRight className="w-3.5 h-3.5" />
+                </span>
               </div>
             </div>
           </Link>
@@ -332,79 +383,88 @@ interface ListViewProps {
 }
 
 function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-40" />;
+  if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-30" />;
   return sortDir === "asc"
     ? <ChevronUp className="w-3 h-3 ml-1 text-primary" />
     : <ChevronDown className="w-3 h-3 ml-1 text-primary" />;
 }
 
-const ROW_HEIGHT = 64;
+const ROW_HEIGHT = 60;
 const VIRTUALIZE_THRESHOLD = 30;
 
 function PatientRow({ patient, isLast }: { patient: Patient; isLast: boolean }) {
   const age = calcAge(patient.birthDate);
-  const dob = formatDate(patient.birthDate);
-  const initials = patient.name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+  const dob = patient.birthDate
+    ? new Date(patient.birthDate + "T12:00:00").toLocaleDateString("pt-BR")
+    : null;
+  const initials = patient.name.split(" ").filter(Boolean).map(n => n[0]).slice(0, 2).join("").toUpperCase();
+  const palette = avatarPalette(patient.name);
+  const isNew = isNewPatient(patient.createdAt);
 
   return (
     <Link href={`/pacientes/${patient.id}`}>
-      <div
-        className={cn(
-          "grid items-center px-4 py-3 hover:bg-primary/[0.03] transition-colors cursor-pointer group",
-          "grid-cols-[1fr_36px] md:grid-cols-[1fr_140px_36px] lg:grid-cols-[2fr_110px_140px_160px_120px_36px]",
-          !isLast && "border-b border-slate-100"
-        )}
-      >
-        <div className="flex items-center gap-3 min-w-0 pr-2">
-          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-110 transition-transform">
+      <div className={cn(
+        "grid items-center px-4 py-3 hover:bg-primary/[0.02] transition-colors cursor-pointer group",
+        "grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto] lg:grid-cols-[2fr_120px_150px_130px_auto]",
+        !isLast && "border-b border-slate-50"
+      )}>
+        {/* Name col */}
+        <div className="flex items-center gap-3 min-w-0 pr-3">
+          <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform", palette.bg, palette.text)}>
             {initials}
           </div>
           <div className="min-w-0">
-            <p className="font-semibold text-sm text-slate-800 truncate">{patient.name}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              CPF: {displayCpf(patient.cpf)}
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-sm text-slate-800 truncate">{patient.name}</p>
+              {isNew && (
+                <span className="hidden sm:inline text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full shrink-0">
+                  Novo
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5 truncate">
+              {displayCpf(patient.cpf)}
               <span className="sm:hidden ml-2 text-slate-500">{patient.phone}</span>
             </p>
           </div>
         </div>
 
-        <div className="hidden lg:block">
+        {/* Birth date (lg) */}
+        <div className="hidden lg:block pr-3">
           {dob ? (
             <div>
-              <p className="text-xs text-slate-700">{dob}</p>
+              <p className="text-xs text-slate-600">{dob}</p>
               {age && <p className="text-[11px] text-slate-400 mt-0.5">{age}</p>}
             </div>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
+          ) : <span className="text-xs text-slate-300">—</span>}
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5">
-          <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-          <span className="text-xs text-slate-600 truncate">{patient.phone}</span>
+        {/* Phone (sm+) */}
+        <div className="hidden sm:flex items-center gap-2 pr-3">
+          <button
+            type="button"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(whatsappLink(patient.phone), "_blank", "noopener,noreferrer"); }}
+            className="flex items-center gap-1.5 group/wa cursor-pointer"
+            title="Abrir WhatsApp"
+          >
+            <MessageCircle className="w-3.5 h-3.5 text-slate-300 group-hover/wa:text-emerald-500 transition-colors shrink-0" />
+            <span className="text-xs text-slate-600 truncate">{patient.phone}</span>
+          </button>
         </div>
 
-        <div className="hidden lg:block min-w-0 pr-2">
+        {/* Email (lg) */}
+        <div className="hidden lg:flex items-center gap-1.5 pr-3 min-w-0">
           {patient.email ? (
-            <div className="flex items-center gap-1.5">
-              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-              <span className="text-xs text-slate-600 truncate">{patient.email}</span>
-            </div>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
+            <>
+              <Mail className="w-3 h-3 text-slate-300 shrink-0" />
+              <span className="text-xs text-slate-500 truncate">{patient.email}</span>
+            </>
+          ) : <span className="text-xs text-slate-300">—</span>}
         </div>
 
-        <div className="hidden lg:block">
-          {patient.profession ? (
-            <span className="text-xs text-slate-500 truncate block">{patient.profession}</span>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </div>
-
+        {/* Arrow */}
         <div className="flex items-center justify-end">
-          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+          <ChevronRight className="w-4 h-4 text-slate-200 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
         </div>
       </div>
     </Link>
@@ -414,13 +474,14 @@ function PatientRow({ patient, isLast }: { patient: Patient; isLast: boolean }) 
 function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
   const sorted = useMemo(() => {
     return [...patients].sort((a, b) => {
-      let va: string = "";
-      let vb: string = "";
-      if (sortField === "name") { va = a.name ?? ""; vb = b.name ?? ""; }
-      else if (sortField === "birthDate") { va = a.birthDate ?? ""; vb = b.birthDate ?? ""; }
-      else if (sortField === "phone") { va = a.phone ?? ""; vb = b.phone ?? ""; }
-      else if (sortField === "email") { va = a.email ?? ""; vb = b.email ?? ""; }
-      else if (sortField === "profession") { va = a.profession ?? ""; vb = b.profession ?? ""; }
+      const vals: Record<SortField, [string, string]> = {
+        name:      [a.name ?? "", b.name ?? ""],
+        birthDate: [a.birthDate ?? "", b.birthDate ?? ""],
+        phone:     [a.phone ?? "", b.phone ?? ""],
+        email:     [a.email ?? "", b.email ?? ""],
+        profession:[a.profession ?? "", b.profession ?? ""],
+      };
+      const [va, vb] = vals[sortField];
       const cmp = va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -436,15 +497,7 @@ function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
     enabled: shouldVirtualize,
   });
 
-  function HeaderCell({
-    field,
-    label,
-    className,
-  }: {
-    field: SortField;
-    label: string;
-    className?: string;
-  }) {
+  function HeaderCell({ field, label, className }: { field: SortField; label: string; className?: string }) {
     const active = sortField === field;
     return (
       <button
@@ -462,51 +515,31 @@ function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      {/* Header — responsive columns */}
-      <div className="grid items-center border-b border-slate-100 bg-slate-50/80 px-4 py-2.5
-        grid-cols-[1fr_36px]
-        sm:grid-cols-[1fr_140px_36px]
-        lg:grid-cols-[2fr_110px_140px_160px_120px_36px]">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="grid items-center border-b border-slate-100 bg-slate-50/60 px-4 py-2.5
+        grid-cols-[1fr_auto]
+        sm:grid-cols-[1fr_auto_auto]
+        lg:grid-cols-[2fr_120px_150px_130px_auto]">
         <HeaderCell field="name" label="Paciente" />
-        <HeaderCell field="birthDate" label="Nasc." className="hidden lg:flex" />
+        <HeaderCell field="birthDate" label="Nascimento" className="hidden lg:flex" />
         <HeaderCell field="phone" label="Telefone" className="hidden sm:flex" />
         <HeaderCell field="email" label="E-mail" className="hidden lg:flex" />
-        <HeaderCell field="profession" label="Profissão" className="hidden lg:flex" />
         <span />
       </div>
 
-      {/* Rows — virtualizadas quando > VIRTUALIZE_THRESHOLD */}
       {shouldVirtualize ? (
-        <div
-          ref={scrollRef}
-          className="overflow-auto"
-          style={{ maxHeight: "min(70vh, calc(100vh - 320px))" }}
-        >
-          <div
-            style={{
-              height: virtualizer.getTotalSize(),
-              position: "relative",
-              width: "100%",
-            }}
-          >
+        <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: "min(70vh, calc(100vh - 320px))" }}>
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
             {virtualizer.getVirtualItems().map((vRow) => {
               const patient = sorted[vRow.index];
-              const isLast = vRow.index === sorted.length - 1;
               return (
                 <div
                   key={patient.id}
                   data-index={vRow.index}
                   ref={virtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${vRow.start}px)`,
-                  }}
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vRow.start}px)` }}
                 >
-                  <PatientRow patient={patient} isLast={isLast} />
+                  <PatientRow patient={patient} isLast={vRow.index === sorted.length - 1} />
                 </div>
               );
             })}
@@ -514,11 +547,7 @@ function ListView({ patients, sortField, sortDir, onSort }: ListViewProps) {
         </div>
       ) : (
         sorted.map((patient, idx) => (
-          <PatientRow
-            key={patient.id}
-            patient={patient}
-            isLast={idx === sorted.length - 1}
-          />
+          <PatientRow key={patient.id} patient={patient} isLast={idx === sorted.length - 1} />
         ))
       )}
     </div>
@@ -541,327 +570,210 @@ interface CrossClinicPatient {
 
 function CreatePatientForm({ onSuccess }: { onSuccess: () => void }) {
   const [formData, setFormData] = useState({
-    name: "",
-    cpf: "",
-    phone: "",
-    email: "",
-    birthDate: "",
-    profession: "",
-    address: "",
-    emergencyContact: "",
-    notes: "",
+    name: "", cpf: "", phone: "", email: "", birthDate: "",
+    profession: "", address: "", emergencyContact: "", notes: "",
   });
 
-  // Estado do fluxo de importação cross-clínica
+  const [cpfLookupState, setCpfLookupState] = useState<
+    "idle" | "loading" | "found" | "not_found" | "already_exists"
+  >("idle");
   const [crossClinicPatient, setCrossClinicPatient] = useState<CrossClinicPatient | null>(null);
-  const [crossClinicName, setCrossClinicName] = useState<string>("");
   const [isImporting, setIsImporting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { show: showPlanLimit } = usePlanLimit();
+  const { show: planLimitModal } = usePlanLimit();
+  const qc = useQueryClient();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (crossClinicPatient || isSaving) return;
-
-    const parsed = patientFormSchema.safeParse(formData);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      toast({
-        variant: "destructive",
-        title: "Dados inválidos",
-        description: first?.message ?? "Verifique os campos do paciente.",
-      });
-      return;
-    }
-
-    setIsSaving(true);
+  async function handleCpfBlur() {
+    const raw = formData.cpf.replace(/\D/g, "");
+    if (raw.length !== 11) return;
+    setCpfLookupState("loading");
     try {
-      const res = await apiFetch("/api/patients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildPatientPayload(parsed.data)),
-      });
-
-      const body = await res.json().catch(() => ({}));
-
-      if (res.status === 409 && body?.code === "CPF_EXISTS_OTHER_CLINIC") {
+      const res = await apiFetch(`/api/patients/lookup?cpf=${raw}`);
+      if (res.status === 404) { setCpfLookupState("not_found"); return; }
+      if (!res.ok) { setCpfLookupState("idle"); return; }
+      const body = await res.json();
+      if (body.existsInThisClinic) { setCpfLookupState("already_exists"); return; }
+      if (body.existsInOtherClinic) {
         setCrossClinicPatient(body.patient);
-        setCrossClinicName(body.sourceClinic ?? "outra clínica");
-        return;
+        setCpfLookupState("found");
+      } else {
+        setCpfLookupState("not_found");
       }
-
-      if (res.status === 402 && isPlanLimitPayload(body)) {
-        showPlanLimit(body);
-        return;
-      }
-
-      if (!res.ok) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: body?.message ?? "Falha ao cadastrar paciente.",
-        });
-        return;
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["/api/patients"] });
-      toast({ title: "Sucesso", description: "Paciente cadastrado com sucesso!" });
-      onSuccess();
     } catch {
-      toast({ variant: "destructive", title: "Erro de conexão", description: "Não foi possível cadastrar o paciente." });
-    } finally {
-      setIsSaving(false);
+      setCpfLookupState("idle");
     }
-  };
+  }
 
-  const handleImport = async () => {
+  async function handleImport() {
     if (!crossClinicPatient) return;
     setIsImporting(true);
     try {
-      const csrfCookie = document.cookie
-        .split(";")
-        .find((c) => c.trim().startsWith("fisiogest_csrf="))
-        ?.split("=")[1];
-
-      const res = await fetch("/api/patients/import-by-cpf", {
+      const csrfCookie = document.cookie.split(";").find(c => c.trim().startsWith("fisiogest_csrf="))?.split("=")[1];
+      const res = await apiFetch("/api/patients/import", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...(csrfCookie ? { "x-csrf-token": decodeURIComponent(csrfCookie) } : {}),
         },
-        body: JSON.stringify({ cpf: crossClinicPatient.cpf, notes: formData.notes || undefined }),
+        body: JSON.stringify({ cpf: crossClinicPatient.cpf }),
       });
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast({ variant: "destructive", title: "Erro ao importar", description: err?.message ?? "Tente novamente." });
-        return;
+        if (isPlanLimitPayload(err)) { planLimitModal(err); return; }
+        throw new Error(err?.message ?? "Erro ao importar");
       }
-
-      toast({ title: "Paciente importado!", description: `${crossClinicPatient.name} foi adicionado à sua clínica com os dados básicos já preenchidos.` });
+      qc.invalidateQueries({ queryKey: ["/api/patients"] });
+      toast({ title: "Paciente importado", description: `${crossClinicPatient.name} foi adicionado à sua clínica.` });
       onSuccess();
-    } catch {
-      toast({ variant: "destructive", title: "Erro de conexão", description: "Não foi possível importar o paciente." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao importar", description: err?.message ?? "Tente novamente." });
     } finally {
       setIsImporting(false);
     }
-  };
+  }
 
-  const handleDismissImport = () => {
-    setCrossClinicPatient(null);
-    setCrossClinicName("");
-  };
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const parsed = patientFormSchema.safeParse(formData);
+    if (!parsed.success) {
+      toast({ variant: "destructive", title: "Dados inválidos", description: parsed.error.issues[0]?.message });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const payload = buildPatientPayload(parsed.data);
+      const csrfCookie = document.cookie.split(";").find(c => c.trim().startsWith("fisiogest_csrf="))?.split("=")[1];
+      const res = await apiFetch("/api/patients", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrfCookie ? { "x-csrf-token": decodeURIComponent(csrfCookie) } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (isPlanLimitPayload(err)) { planLimitModal(err); return; }
+        throw new Error(err?.message ?? "Erro ao cadastrar");
+      }
+      qc.invalidateQueries({ queryKey: ["/api/patients"] });
+      toast({ title: "Paciente cadastrado!", description: `${formData.name} foi adicionado com sucesso.` });
+      onSuccess();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro ao cadastrar", description: err?.message ?? "Tente novamente." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const f = formData;
+  const set = (k: keyof typeof formData) => (v: string) => setFormData(prev => ({ ...prev, [k]: v }));
 
   return (
-    <>
-      <DialogHeader>
-        <DialogTitle className="font-display text-2xl">Novo Paciente</DialogTitle>
-      </DialogHeader>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold font-display text-slate-800 flex items-center gap-2">
+          <UserPlus className="w-5 h-5 text-primary" /> Novo Paciente
+        </h2>
+        <p className="text-sm text-slate-500 mt-0.5">Preencha os dados para cadastrar um novo paciente.</p>
+      </div>
 
-      {/* ── Banner de importação cross-clínica ── */}
-      {crossClinicPatient && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 p-1.5 rounded-lg bg-amber-100 shrink-0">
-              <UserPlus className="w-4 h-4 text-amber-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-800">CPF já cadastrado em outra clínica</p>
-              <p className="text-xs text-amber-700 mt-0.5">
-                Este CPF pertence a <span className="font-medium">{crossClinicPatient.name}</span>, cadastrado em <span className="font-medium">{crossClinicName}</span>.
-                Você pode importar os dados básicos para esta clínica.
-              </p>
-            </div>
-          </div>
-
-          {/* Dados resumidos do paciente existente */}
-          <div className="rounded-lg bg-white border border-amber-100 p-3 space-y-1.5 text-xs text-slate-600">
-            <div className="flex items-center gap-2">
-              <span className="font-medium w-20 text-slate-400">Nome</span>
-              <span>{crossClinicPatient.name}</span>
-            </div>
-            {crossClinicPatient.phone && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium w-20 text-slate-400">Telefone</span>
-                <span>{crossClinicPatient.phone}</span>
-              </div>
-            )}
-            {crossClinicPatient.email && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium w-20 text-slate-400">E-mail</span>
-                <span>{crossClinicPatient.email}</span>
-              </div>
-            )}
-            {crossClinicPatient.birthDate && (
-              <div className="flex items-center gap-2">
-                <span className="font-medium w-20 text-slate-400">Nasc.</span>
-                <span>{new Date(crossClinicPatient.birthDate + "T12:00:00").toLocaleDateString("pt-BR")}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <div>
-              <p className="text-xs font-medium text-amber-800">Observações desta clínica <span className="font-normal text-amber-600">(opcional)</span></p>
-              <p className="text-[11px] text-amber-600 mt-0.5">Salvas apenas no vínculo com esta clínica — não visíveis em outros estabelecimentos.</p>
-            </div>
-            <Textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Histórico, alergias, restrições…"
-              className="resize-none min-h-[60px] text-sm"
-            />
-          </div>
-
-          <div className="flex flex-col-reverse sm:flex-row gap-2">
-            <button
-              type="button"
-              onClick={handleDismissImport}
-              className="flex-1 sm:flex-none h-9 px-4 rounded-lg text-xs font-medium text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors"
-            >
-              Cancelar
-            </button>
-            <Button
-              type="button"
-              onClick={handleImport}
-              disabled={isImporting}
-              className="flex-1 h-9 px-5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
-            >
-              {isImporting
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Importando…</>
-                : <><UserPlus className="w-3.5 h-3.5" /> Importar dados básicos</>
-              }
-            </Button>
-          </div>
+      {/* CPF lookup banner */}
+      {cpfLookupState === "already_exists" && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+          Este CPF já está cadastrado nesta clínica.
+        </div>
+      )}
+      {cpfLookupState === "found" && crossClinicPatient && (
+        <div className="rounded-xl bg-primary/5 border border-primary/20 p-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-800">Paciente encontrado em outra clínica</p>
+          <p className="text-xs text-slate-600">{crossClinicPatient.name} — {crossClinicPatient.phone}</p>
+          <Button type="button" size="sm" className="h-8 gap-1.5" onClick={handleImport} disabled={isImporting}>
+            {isImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+            Importar este paciente
+          </Button>
         </div>
       )}
 
-      {/* ── Formulário normal (oculto quando há conflito cross-clínica) ── */}
-      {!crossClinicPatient && (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Nome Completo *</Label>
+      {/* Identificação */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Identificação</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Nome Completo *</Label>
+            <Input required value={f.name} onChange={e => set("name")(e.target.value)} className="h-10" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">CPF *</Label>
             <Input
-              required
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: maskName(e.target.value) })
-              }
-              onBlur={(e) =>
-                setFormData({ ...formData, name: maskName(e.target.value).trimEnd() })
-              }
-              placeholder="Ex.: Maria da Silva"
-              autoComplete="name"
-              className="h-11"
+              required type="text" inputMode="numeric" maxLength={14}
+              value={f.cpf}
+              onChange={e => set("cpf")(maskCpf(e.target.value))}
+              onBlur={handleCpfBlur}
+              placeholder="000.000.000-00"
+              className="h-10"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div className="space-y-2">
-              <Label>CPF *</Label>
-              <Input
-                required
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                maxLength={14}
-                value={formData.cpf}
-                onChange={(e) => setFormData({ ...formData, cpf: maskCpf(e.target.value) })}
-                placeholder="000.000.000-00"
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Telefone *</Label>
-              <Input
-                required
-                type="tel"
-                inputMode="tel"
-                autoComplete="off"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: maskPhone(e.target.value) })}
-                placeholder="(11) 99999-0000"
-                className="h-11"
-              />
-            </div>
+        </div>
+      </section>
+
+      {/* Contato */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Contato</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Telefone / WhatsApp *</Label>
+            <Input required type="tel" value={f.phone} onChange={e => set("phone")(maskPhone(e.target.value))} placeholder="(11) 99999-0000" className="h-10" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div className="space-y-2">
-              <Label>E-mail</Label>
-              <Input
-                type="email"
-                inputMode="email"
-                autoComplete="off"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="nome@exemplo.com"
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Data de Nascimento</Label>
-              <DatePickerPTBR
-                value={formData.birthDate}
-                onChange={(v) => setFormData({ ...formData, birthDate: v })}
-                className="h-11"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">E-mail</Label>
+            <Input type="email" value={f.email} onChange={e => set("email")(e.target.value)} className="h-10" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div className="space-y-2">
-              <Label>Profissão</Label>
-              <Input
-                value={formData.profession}
-                onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
-                placeholder="Ex: Professora"
-                className="h-11"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Endereço</Label>
-              <Input
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Rua e número"
-                className="h-11"
-              />
-            </div>
+        </div>
+      </section>
+
+      {/* Dados Pessoais */}
+      <section className="space-y-3">
+        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Dados Pessoais</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Data de Nascimento</Label>
+            <DatePickerPTBR value={f.birthDate} onChange={v => set("birthDate")(v)} className="h-10" />
           </div>
-          <div className="space-y-2">
-            <Label>Contato de Emergência</Label>
-            <Input
-              value={formData.emergencyContact}
-              onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-              placeholder="Nome — Telefone"
-              className="h-11"
-            />
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Profissão</Label>
+            <Input value={f.profession} onChange={e => set("profession")(e.target.value)} placeholder="Ex: Professora" className="h-10" />
           </div>
-          <div className="space-y-2">
-            <div>
-              <Label>Observações desta clínica</Label>
-              <p className="text-[11px] text-slate-400 mt-0.5">Visível apenas nesta clínica — não compartilhado com outros estabelecimentos.</p>
-            </div>
-            <Textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Histórico, alergias, restrições…"
-              className="resize-none min-h-[80px]"
-            />
-          </div>
-          <div className="pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-            <Button
-              type="submit"
-              className="w-full sm:w-auto h-11 px-8 rounded-xl text-sm font-semibold"
-              disabled={isSaving}
-            >
-              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : "Salvar Cadastro"}
-            </Button>
-          </div>
-        </form>
-      )}
-    </>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Endereço</Label>
+          <Input value={f.address} onChange={e => set("address")(e.target.value)} placeholder="Rua, número, bairro" className="h-10" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Contato de Emergência</Label>
+          <Input value={f.emergencyContact} onChange={e => set("emergencyContact")(e.target.value)} placeholder="Nome — Telefone" className="h-10" />
+        </div>
+      </section>
+
+      {/* Observações */}
+      <section className="space-y-1.5">
+        <Label className="text-sm font-medium">Observações internas</Label>
+        <Textarea
+          value={f.notes}
+          onChange={e => set("notes")(e.target.value)}
+          placeholder="Alergias, restrições, histórico relevante…"
+          className="min-h-[80px] resize-none text-sm"
+        />
+      </section>
+
+      <div className="flex justify-end gap-2 pt-1 border-t border-slate-100">
+        <Button type="submit" className="h-10 px-6 rounded-xl" disabled={isSubmitting || cpfLookupState === "already_exists"}>
+          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+          Cadastrar Paciente
+        </Button>
+      </div>
+    </form>
   );
 }
