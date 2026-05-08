@@ -1,13 +1,11 @@
-import { CATEGORIES, CATEGORY_CONFIG, formatCurrency, getMargin } from "./constants";
-import { ProcedureCost, OverheadSchedule, OverheadAnalysis, Procedure, ViewMode } from "./types";
+import { CATEGORIES, formatCurrency, getMargin } from "./constants";
+import { OverheadAnalysis, Procedure, ViewMode } from "./types";
 import {
   CardView,
-  CategoryBadge,
-  ListView,
-  MarginBadge,
   CatalogModal,
   CostAnalysisModal,
   DeleteConfirmationModal,
+  ListView,
   ProcedureFormModal,
 } from "./components";
 import { useState, useEffect, useCallback } from "react";
@@ -24,6 +22,8 @@ import {
   Stethoscope,
   BookOpen,
   TrendingUp,
+  DollarSign,
+  CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,6 @@ import {
   procedureCostFormSchema,
   buildProcedureCostPayload,
 } from "@/schemas/procedure.schema";
-
 import { getCatalogHtml } from "./utils";
 
 export default function Procedimentos() {
@@ -53,7 +52,7 @@ export default function Procedimentos() {
   const [costingProcedure, setCostingProcedure] = useState<Procedure | null>(null);
   const [costForm, setCostForm] = useState({ priceOverride: "", variableCost: "", notes: "" });
   const [analysisMonth, setAnalysisMonth] = useState(new Date().getMonth() + 1);
-  const [analysisYear, setAnalysisYear]   = useState(new Date().getFullYear());
+  const [analysisYear, setAnalysisYear] = useState(new Date().getFullYear());
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogOptions, setCatalogOptions] = useState({
     clinicName: "FisioGest Pro",
@@ -64,13 +63,15 @@ export default function Procedimentos() {
     introText: "",
   });
 
-  const buildIntroText = useCallback((type: string, name: string, responsible?: string | null): string => {
-    const isAutonomo = type === "autonomo" || type === "profissional";
-    if (isAutonomo) {
-      return `Conheça nossos serviços e tratamentos especializados. Com dedicação e técnicas modernas, ofereço atendimento personalizado para cada paciente.`;
-    }
-    return `Conheça nossos serviços e tratamentos especializados. Nossa equipe está pronta para oferecer o melhor cuidado, com técnicas modernas e atendimento personalizado para cada paciente.`;
-  }, []);
+  const buildIntroText = useCallback(
+    (type: string, _name: string, _responsible?: string | null): string => {
+      const isAutonomo = type === "autonomo" || type === "profissional";
+      return isAutonomo
+        ? "Conheça nossos serviços e tratamentos especializados. Com dedicação e técnicas modernas, ofereço atendimento personalizado para cada paciente."
+        : "Conheça nossos serviços e tratamentos especializados. Nossa equipe está pronta para oferecer o melhor cuidado, com técnicas modernas e atendimento personalizado para cada paciente.";
+    },
+    []
+  );
 
   useEffect(() => {
     fetch("/api/public/clinic-info")
@@ -96,10 +97,13 @@ export default function Procedimentos() {
 
   const [form, setForm] = useState({ ...procedureFormDefaults });
 
-  const baseUrl = isAdmin
-    ? (selectedCategory === "all" ? "/api/procedures?includeInactive=true" : `/api/procedures?category=${selectedCategory}&includeInactive=true`)
-    : (selectedCategory === "all" ? "/api/procedures" : `/api/procedures?category=${selectedCategory}`);
-  const url = baseUrl;
+  const queryUrl = isAdmin
+    ? selectedCategory === "all"
+      ? "/api/procedures?includeInactive=true"
+      : `/api/procedures?category=${selectedCategory}&includeInactive=true`
+    : selectedCategory === "all"
+    ? "/api/procedures"
+    : `/api/procedures?category=${selectedCategory}`;
 
   async function apiFetch<T = unknown>(url: string, options?: RequestInit): Promise<T> {
     const r = await fetch(url, options);
@@ -113,12 +117,12 @@ export default function Procedimentos() {
 
   const { data: allProcedures = [], isLoading } = useQuery<Procedure[]>({
     queryKey: ["procedures", selectedCategory],
-    queryFn: () => apiFetch<Procedure[]>(url),
+    queryFn: () => apiFetch<Procedure[]>(queryUrl),
   });
 
-  // Sub-contas contábeis disponíveis para vincular ao procedimento.
-  // Só busca se a clínica tem o feature `financial.view.accounting`.
-  const { data: accountingData } = useQuery<{ accounts: Array<{ id: number; code: string; name: string; type: string }> }>({
+  const { data: accountingData } = useQuery<{
+    accounts: Array<{ id: number; code: string; name: string; type: string }>;
+  }>({
     queryKey: ["accounting-accounts"],
     queryFn: () => apiFetch("/api/financial/accounting/accounts"),
     enabled: showAccountingField,
@@ -126,9 +130,11 @@ export default function Procedimentos() {
   });
   const accountingAccounts = accountingData?.accounts ?? [];
 
-  const procedures = allProcedures.filter(p =>
-    search.trim() === "" || p.name.toLowerCase().includes(search.toLowerCase())
+  const procedures = allProcedures.filter(
+    (p) => search.trim() === "" || p.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) =>
@@ -192,7 +198,8 @@ export default function Procedimentos() {
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: (id: number) => apiFetch<Procedure>(`/api/procedures/${id}/toggle-active`, { method: "PATCH" }),
+    mutationFn: (id: number) =>
+      apiFetch<Procedure>(`/api/procedures/${id}/toggle-active`, { method: "PATCH" }),
     onSuccess: (updated: Procedure) => {
       queryClient.invalidateQueries({ queryKey: ["procedures"] });
       toast({ title: updated.isActive ? "Procedimento ativado" : "Procedimento desativado" });
@@ -202,35 +209,43 @@ export default function Procedimentos() {
     },
   });
 
-  // ── Overhead analysis query (fires when cost dialog is open) ──────────────
   const { data: overheadData, isLoading: overheadLoading } = useQuery<OverheadAnalysis>({
     queryKey: ["overhead-analysis", analysisMonth, analysisYear, costingProcedure?.id],
-    queryFn: () => apiFetch(
-      `/api/procedures/overhead-analysis?month=${analysisMonth}&year=${analysisYear}` +
-      (costingProcedure ? `&procedureId=${costingProcedure.id}` : "")
-    ),
+    queryFn: () =>
+      apiFetch(
+        `/api/procedures/overhead-analysis?month=${analysisMonth}&year=${analysisYear}` +
+          (costingProcedure ? `&procedureId=${costingProcedure.id}` : "")
+      ),
     enabled: !!costingProcedure,
     staleTime: 30_000,
   });
 
-  // Use the backend-computed value when available (already adjusted for group capacity).
-  // Fall back to local calculation only when procedureStats is not yet loaded.
-  const computedFixedCostPerSession = overheadData && costingProcedure
-    ? (overheadData.procedureStats?.fixedCostPerSession ??
-        overheadData.costPerHour * (costingProcedure.durationMinutes / 60) /
-        Math.max((costingProcedure.modalidade !== "individual" ? (costingProcedure.maxCapacity ?? 1) : 1), 1))
-    : null;
+  const computedFixedCostPerSession =
+    overheadData && costingProcedure
+      ? (overheadData.procedureStats?.fixedCostPerSession ??
+          (overheadData.costPerHour *
+            (costingProcedure.durationMinutes / 60)) /
+            Math.max(
+              costingProcedure.modalidade !== "individual"
+                ? (costingProcedure.maxCapacity ?? 1)
+                : 1,
+              1
+            ))
+      : null;
 
   const updateCostsMutation = useMutation({
-    mutationFn: async (data: { id: number; priceOverride: string; variableCost: string; notes: string }) => {
+    mutationFn: async (data: {
+      id: number;
+      priceOverride: string;
+      variableCost: string;
+      notes: string;
+    }) => {
       const parsed = procedureCostFormSchema.safeParse({
         priceOverride: data.priceOverride,
         variableCost: data.variableCost,
         notes: data.notes,
       });
       if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos");
-      // fixedCost is intentionally 0 — overhead is always computed dynamically
-      // from clinic expenses / available hours and never stored as a snapshot.
       return apiFetch(`/api/procedures/${data.id}/costs`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -240,18 +255,25 @@ export default function Procedimentos() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["procedures"] });
       setCostingProcedure(null);
-      toast({ title: "Custos da clínica atualizados com sucesso" });
+      toast({ title: "Custos da clínica atualizados" });
     },
     onError: (err: Error) => {
       toast({ variant: "destructive", title: "Erro ao salvar custos", description: err.message });
     },
   });
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   function openConfigCosts(proc: Procedure) {
     setCostingProcedure(proc);
     setCostForm({
-      priceOverride: proc.clinicCost?.priceOverride ? String(proc.clinicCost.priceOverride) : "",
-      variableCost: proc.clinicCost?.variableCost && proc.clinicCost.variableCost !== "0" ? String(proc.clinicCost.variableCost) : "",
+      priceOverride: proc.clinicCost?.priceOverride
+        ? String(proc.clinicCost.priceOverride)
+        : "",
+      variableCost:
+        proc.clinicCost?.variableCost && proc.clinicCost.variableCost !== "0"
+          ? String(proc.clinicCost.variableCost)
+          : "",
       notes: proc.clinicCost?.notes ?? "",
     });
   }
@@ -285,7 +307,10 @@ export default function Procedimentos() {
   function handleSubmit() {
     const parsed = procedureFormSchema.safeParse(form);
     if (!parsed.success) {
-      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+      toast({
+        variant: "destructive",
+        title: parsed.error.issues[0]?.message ?? "Dados inválidos",
+      });
       return;
     }
     const payload = buildProcedurePayload(parsed.data);
@@ -296,30 +321,34 @@ export default function Procedimentos() {
     }
   }
 
-  const formMargin = getMargin(form.price, form.cost);
-  const avgPrice = allProcedures.length ? allProcedures.reduce((s, p) => s + Number(p.price), 0) / allProcedures.length : 0;
-  const avgMargin = allProcedures.length ? allProcedures.reduce((s, p) => s + getMargin(p.price, p.cost ?? 0), 0) / allProcedures.length : 0;
-
   function generateCatalog() {
     const { clinicName, tagline, showPrices, selectedCategories, introText } = catalogOptions;
-
     const categoryOrder = ["Reabilitação", "Estética", "Pilates"];
-    const catColors: Record<string, string> = { "Reabilitação": "#2563eb", "Estética": "#db2777", "Pilates": "#7c3aed" };
-
+    const catColors: Record<string, string> = {
+      Reabilitação: "#2563eb",
+      Estética: "#db2777",
+      Pilates: "#7c3aed",
+    };
     const grouped = categoryOrder
-      .filter(cat => selectedCategories.includes(cat))
-      .map(cat => ({
+      .filter((cat) => selectedCategories.includes(cat))
+      .map((cat) => ({
         cat,
         label: cat,
         color: catColors[cat] ?? "#334155",
-        items: allProcedures.filter(p => p.category === cat && p.isActive),
+        items: allProcedures.filter((p) => p.category === cat && p.isActive),
       }))
-      .filter(g => g.items.length > 0);
+      .filter((g) => g.items.length > 0);
 
-    const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    const today = new Date().toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
 
     const itemsHtml = (items: Procedure[], color: string) =>
-      items.map(p => `
+      items
+        .map(
+          (p) => `
         <div class="proc-card">
           <div class="proc-header">
             <div class="proc-name">${p.name}</div>
@@ -330,23 +359,34 @@ export default function Procedimentos() {
           </div>
           ${p.description ? `<div class="proc-desc">${p.description}</div>` : ""}
         </div>
-      `).join("");
+      `
+        )
+        .join("");
 
-    const sectionsHtml = grouped.map(g => `
+    const sectionsHtml = grouped
+      .map(
+        (g) => `
       <div class="category-section">
         <div class="category-header" style="border-left: 4px solid ${g.color}">
           <span class="category-title" style="color:${g.color}">${g.label}</span>
           <span class="category-count">${g.items.length} serviço${g.items.length !== 1 ? "s" : ""}</span>
         </div>
-        <div class="proc-grid">
-          ${itemsHtml(g.items, g.color)}
-        </div>
+        <div class="proc-grid">${itemsHtml(g.items, g.color)}</div>
       </div>
-    `).join("");
+    `
+      )
+      .join("");
 
-    const activeCount = allProcedures.filter(p => p.isActive).length;
-    const html = getCatalogHtml(clinicName, tagline, introText, showPrices, sectionsHtml, activeCount, today);
-
+    const activeCount = allProcedures.filter((p) => p.isActive).length;
+    const html = getCatalogHtml(
+      clinicName,
+      tagline,
+      introText,
+      showPrices,
+      sectionsHtml,
+      activeCount,
+      today
+    );
     const win = window.open("", "_blank");
     if (win) {
       win.document.write(html);
@@ -355,65 +395,113 @@ export default function Procedimentos() {
     setIsCatalogModalOpen(false);
   }
 
+  // ── Computed stats ─────────────────────────────────────────────────────────
+
+  const activeProcs = allProcedures.filter((p) => p.isActive);
+  const inactiveCount = allProcedures.length - activeProcs.length;
+  const withClinicCosts = allProcedures.filter((p) => !!p.clinicCost).length;
+  const avgPrice =
+    activeProcs.length
+      ? activeProcs.reduce((s, p) => s + Number(p.price), 0) / activeProcs.length
+      : 0;
+  const avgMargin =
+    activeProcs.length
+      ? activeProcs.reduce((s, p) => s + getMargin(p.price, p.cost ?? 0), 0) /
+        activeProcs.length
+      : 0;
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <AppLayout title="Procedimentos">
       <div className="space-y-5">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* ── Header ───────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">Procedimentos</h1>
-            <p className="text-xs sm:text-sm text-slate-500">Gerencie os serviços e procedimentos da clínica</p>
+            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">
+              Procedimentos
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Gerencie os serviços e procedimentos da clínica
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 shrink-0">
             <Button
               variant="outline"
-              className="w-full sm:w-auto h-10 px-3 sm:px-4 rounded-lg gap-1.5"
+              className="w-full sm:w-auto h-9 px-3 sm:px-4 rounded-lg gap-1.5 text-sm"
               onClick={() => setIsCatalogModalOpen(true)}
             >
               <BookOpen className="h-4 w-4 shrink-0" />
               <span className="sm:hidden">Catálogo</span>
               <span className="hidden sm:inline">Gerar Catálogo</span>
             </Button>
-            <Button
-              className="w-full sm:w-auto h-10 px-3 sm:px-4 rounded-lg shadow-md shadow-primary/20 gap-1.5"
-              onClick={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              <span className="sm:hidden">Novo</span>
-              <span className="hidden sm:inline">Novo Procedimento</span>
-            </Button>
+            {isAdmin && (
+              <Button
+                className="w-full sm:w-auto h-9 px-3 sm:px-4 rounded-lg shadow-md shadow-primary/20 gap-1.5 text-sm"
+                onClick={() => {
+                  resetForm();
+                  setEditingProcedure(null);
+                  setIsModalOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                <span className="sm:hidden">Novo</span>
+                <span className="hidden sm:inline">Novo Procedimento</span>
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* ── Stats strip ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-          {[
-            { label: "Total de procedimentos", value: allProcedures.length, icon: <Stethoscope className="w-4 h-4" />, color: "text-primary" },
-            { label: "Preço médio", value: formatCurrency(avgPrice), icon: <span className="text-xs font-bold">R$</span>, color: "text-emerald-600" },
-            { label: "Margem média", value: `${avgMargin.toFixed(0)}%`, icon: <TrendingUp className="w-4 h-4" />, color: avgMargin >= 50 ? "text-emerald-600" : "text-amber-600" },
-          ].map((s, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-              <div className={cn("shrink-0", s.color)}>{s.icon}</div>
-              <div>
-                <p className="text-xs text-slate-500">{s.label}</p>
-                <p className={cn("text-lg font-bold", s.color)}>{s.value}</p>
-              </div>
-            </div>
-          ))}
+        {/* ── Stats strip ──────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <StatCard
+            icon={<Stethoscope className="w-4 h-4" />}
+            label="Ativos"
+            value={activeProcs.length}
+            sub={inactiveCount > 0 ? `${inactiveCount} inativo${inactiveCount !== 1 ? "s" : ""}` : "todos ativos"}
+            color="text-primary"
+            bg="bg-primary/8"
+          />
+          <StatCard
+            icon={<span className="text-xs font-bold">R$</span>}
+            label="Preço médio"
+            value={formatCurrency(avgPrice)}
+            sub="procedimentos ativos"
+            color="text-emerald-700"
+            bg="bg-emerald-50"
+          />
+          <StatCard
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="Margem média"
+            value={`${avgMargin.toFixed(0)}%`}
+            sub={avgMargin >= 50 ? "saudável" : avgMargin >= 35 ? "atenção" : "baixa"}
+            color={avgMargin >= 50 ? "text-emerald-700" : avgMargin >= 35 ? "text-amber-600" : "text-rose-600"}
+            bg={avgMargin >= 50 ? "bg-emerald-50" : avgMargin >= 35 ? "bg-amber-50" : "bg-rose-50"}
+          />
+          <StatCard
+            icon={<DollarSign className="w-4 h-4" />}
+            label="Custos config."
+            value={withClinicCosts}
+            sub={withClinicCosts === allProcedures.length ? "todos configurados" : `de ${allProcedures.length} procedimentos`}
+            color="text-violet-700"
+            bg="bg-violet-50"
+          />
         </div>
 
-        {/* ── Filters + View toggle ───────────────────────────────────────── */}
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* ── Filters + View toggle ─────────────────────────────────────── */}
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Category tabs */}
           <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs font-medium bg-white">
-            {CATEGORIES.map(c => (
+            {CATEGORIES.map((c) => (
               <button
                 key={c.value}
                 onClick={() => setSelectedCategory(c.value)}
                 className={cn(
-                  "px-3 h-8 transition-colors border-r border-slate-200 last:border-r-0",
-                  selectedCategory === c.value ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-600"
+                  "px-3 h-8 transition-colors border-r border-slate-200 last:border-r-0 whitespace-nowrap",
+                  selectedCategory === c.value
+                    ? "bg-primary text-white"
+                    : "hover:bg-slate-50 text-slate-600"
                 )}
               >
                 {c.label}
@@ -422,28 +510,34 @@ export default function Procedimentos() {
           </div>
 
           {/* Search */}
-          <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <div className="relative flex-1 min-w-[160px] max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <Input
               placeholder="Buscar procedimento…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-8 text-sm rounded-lg"
             />
           </div>
 
           {/* View toggle */}
-          <div className="ml-auto flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          <div className="ml-auto flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
             <button
               onClick={() => setViewMode("cards")}
-              className={cn("p-1.5 transition-colors", viewMode === "cards" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500")}
+              className={cn(
+                "p-1.5 transition-colors",
+                viewMode === "cards" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
+              )}
               title="Cards"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={cn("p-1.5 transition-colors border-l border-slate-200", viewMode === "list" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500")}
+              className={cn(
+                "p-1.5 transition-colors border-l border-slate-200",
+                viewMode === "list" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
+              )}
               title="Lista"
             >
               <LayoutList className="w-4 h-4" />
@@ -451,24 +545,52 @@ export default function Procedimentos() {
           </div>
         </div>
 
-        {/* ── Content ────────────────────────────────────────────────────── */}
+        {/* ── Content ───────────────────────────────────────────────────── */}
         {isLoading ? (
-          <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Carregando…</div>
+          <div className="flex items-center justify-center h-48 text-slate-400 text-sm gap-2">
+            <div className="w-4 h-4 border-2 border-slate-200 border-t-primary rounded-full animate-spin" />
+            Carregando procedimentos…
+          </div>
         ) : procedures.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3">
+          <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3 bg-white rounded-2xl border border-slate-200 border-dashed">
             <Stethoscope className="w-10 h-10 text-slate-200" />
             <p className="text-sm">Nenhum procedimento encontrado.</p>
-            <Button variant="outline" size="sm" onClick={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}>
-              <Plus className="mr-1.5 h-3.5 w-3.5" /> Adicionar procedimento
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  resetForm();
+                  setEditingProcedure(null);
+                  setIsModalOpen(true);
+                }}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Adicionar procedimento
+              </Button>
+            )}
           </div>
         ) : viewMode === "cards" ? (
-          <CardView procedures={procedures} onEdit={openEdit} onDelete={setDeletingProcedure} isAdmin={isAdmin} onToggleActive={(p) => toggleActiveMutation.mutate(p.id)} onConfigCosts={openConfigCosts} />
+          <CardView
+            procedures={procedures}
+            onEdit={openEdit}
+            onDelete={setDeletingProcedure}
+            isAdmin={isAdmin}
+            onToggleActive={(p) => toggleActiveMutation.mutate(p.id)}
+            onConfigCosts={isAdmin ? openConfigCosts : undefined}
+          />
         ) : (
-          <ListView procedures={procedures} onEdit={openEdit} onDelete={setDeletingProcedure} isAdmin={isAdmin} onToggleActive={(p) => toggleActiveMutation.mutate(p.id)} onConfigCosts={openConfigCosts} />
+          <ListView
+            procedures={procedures}
+            onEdit={openEdit}
+            onDelete={setDeletingProcedure}
+            isAdmin={isAdmin}
+            onToggleActive={(p) => toggleActiveMutation.mutate(p.id)}
+            onConfigCosts={isAdmin ? openConfigCosts : undefined}
+          />
         )}
       </div>
 
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
       <ProcedureFormModal
         isOpen={isModalOpen}
         onOpenChange={(open) => {
@@ -499,7 +621,9 @@ export default function Procedimentos() {
 
       <CostAnalysisModal
         procedure={costingProcedure}
-        onOpenChange={open => { if (!open) setCostingProcedure(null); }}
+        onOpenChange={(open) => {
+          if (!open) setCostingProcedure(null);
+        }}
         analysisMonth={analysisMonth}
         setAnalysisMonth={setAnalysisMonth}
         analysisYear={analysisYear}
@@ -509,19 +633,51 @@ export default function Procedimentos() {
         costForm={costForm}
         setCostForm={setCostForm}
         computedFixedCostPerSession={computedFixedCostPerSession}
-        onSave={() => costingProcedure && updateCostsMutation.mutate({
-          ...costForm,
-          id: costingProcedure.id,
-        })}
+        onSave={() =>
+          costingProcedure &&
+          updateCostsMutation.mutate({ ...costForm, id: costingProcedure.id })
+        }
         isSaving={updateCostsMutation.isPending}
       />
 
       <DeleteConfirmationModal
         procedure={deletingProcedure}
-        onOpenChange={open => { if (!open) setDeletingProcedure(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeletingProcedure(null);
+        }}
         onConfirm={() => deletingProcedure && deleteMutation.mutate(deletingProcedure.id)}
       />
     </AppLayout>
   );
 }
 
+// ── StatCard ───────────────────────────────────────────────────────────────
+
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+  color,
+  bg,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  sub: string;
+  color: string;
+  bg: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-3.5 flex items-center gap-3">
+      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bg, color)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-slate-400 font-medium leading-none mb-0.5">{label}</p>
+        <p className={cn("text-lg font-bold leading-none tabular-nums", color)}>{value}</p>
+        <p className="text-[10px] text-slate-400 mt-0.5 truncate">{sub}</p>
+      </div>
+    </div>
+  );
+}
