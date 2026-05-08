@@ -386,21 +386,54 @@ router.post(
   }),
 );
 
-// Renegociação de plano aceito: cria nova versão (parent_plan_id), clona
-// procedimentos, encerra o anterior.
-// Body opcional: campos top-level a sobrescrever (frequency, estimatedSessions, startDate, etc).
+// Renegociação de plano aceito: cancela o plano atual formalmente,
+// cria nova versão (parent_plan_id) com novos termos e preços,
+// e clona os procedimentos com overrides opcionais.
+//
+// Body: {
+//   reason: string;                    // obrigatório — motivo da renegociação
+//   renegotiationNotes?: string;       // observações internas (não expostas ao paciente)
+//   durationMonths?: number;           // nova duração em meses
+//   startDate?: string;                // nova data de início (YYYY-MM-DD)
+//   monthlyDueDay?: number;            // dia de vencimento (1-28)
+//   paymentMode?: string;              // "prepago" | "postpago"
+//   itemOverrides?: Array<{            // overrides de preço por item
+//     planProcedureId: number;
+//     unitPrice?: number;
+//     unitMonthlyPrice?: number;
+//     discount?: number;
+//   }>;
+// }
 router.post(
   "/treatment-plans/:planId/renegotiate",
   requirePermission("medical.write"),
   asyncHandler(async (req: Request<{ patientId: string; planId: string }>, res: Response) => {
     const patientId = patientIdParam(req as Request<P>);
     const planId = parseInt(req.params.planId);
-    const body = validateBody(updateTreatmentPlanSchema, req.body ?? {}, res);
-    if (!body) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    const { reason, renegotiationNotes, itemOverrides, ...planOverrides } = body as {
+      reason?: string;
+      renegotiationNotes?: string;
+      itemOverrides?: Array<{
+        planProcedureId: number;
+        unitPrice?: number;
+        unitMonthlyPrice?: number;
+        discount?: number;
+      }>;
+      [key: string]: unknown;
+    };
+
+    if (!reason || typeof reason !== "string" || reason.trim().length < 3) {
+      res.status(400).json({ error: "Motivo da renegociação é obrigatório (mínimo 3 caracteres)." });
+      return;
+    }
+
     const result = await svc.renegotiatePatientTreatmentPlan(
       patientId,
       planId,
-      body,
+      planOverrides,
+      { reason: reason.trim(), renegotiationNotes: renegotiationNotes as string | undefined, itemOverrides },
       getCtx(req as AuthRequest),
     );
     res.status(201).json(result);

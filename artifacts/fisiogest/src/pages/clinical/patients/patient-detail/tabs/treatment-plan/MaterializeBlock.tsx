@@ -1,12 +1,8 @@
 import { useState } from "react";
 import {
-  AlertCircle, CheckCircle, Loader2, RotateCcw, Zap,
+  AlertCircle, CheckCircle, Loader2, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useToast } from "@/lib/toast";
 import { apiSendJson } from "@/lib/api";
 import { countRecurringSessions } from "../../utils/sessionCount";
@@ -35,15 +31,16 @@ interface Props {
  * "Iniciar plano" — gera as consultas no calendário e as parcelas mensais.
  * Usa como única fonte de verdade `planStartDate` e `planDurationMonths` do plano
  * (definidos na Etapa 1). Não duplica os campos.
+ *
+ * A funcionalidade de reverter (desmaterializar) foi removida — use a Renegociação
+ * para alterar os termos comerciais de um plano já iniciado.
  */
 export function MaterializeBlock({
-  planId, patientId, materializedAt, planStartDate, planDurationMonths, planItems, onChanged,
+  planId, materializedAt, planStartDate, planDurationMonths, planItems, onChanged,
 }: Props) {
   const { toast } = useToast();
-  const [busy, setBusy] = useState<"materialize" | "dematerialize" | null>(null);
-  const [confirmDematerialize, setConfirmDematerialize] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  // Resolve start date — usa o do plano; se vazio, usa hoje só na chamada.
   const startDate = planStartDate ?? todayISO();
   const durationMonths = planDurationMonths || 12;
 
@@ -51,9 +48,6 @@ export function MaterializeBlock({
   const hasMonthly = monthlyItems.length > 0;
   const isMaterialized = !!materializedAt;
 
-  // Detecta itens recorrentes sem dias/horários configurados. Considera o
-  // mapa `startTimesByDay` (horário por dia) — cada dia escolhido precisa
-  // ter um horário; o `defaultStartTime` serve apenas como fallback legacy.
   const itemsMissingSchedule = monthlyItems.filter((i: any) => {
     let weekDaysArr: string[] = [];
     try {
@@ -83,7 +77,7 @@ export function MaterializeBlock({
   );
 
   async function doMaterialize() {
-    setBusy("materialize");
+    setBusy(true);
     try {
       const res = await apiSendJson<any>(
         `/api/treatment-plans/${planId}/materialize`,
@@ -98,30 +92,13 @@ export function MaterializeBlock({
     } catch (err: any) {
       toast({ title: "Erro ao iniciar plano", description: err.message, variant: "destructive" });
     } finally {
-      setBusy(null);
-    }
-  }
-
-  async function doDematerialize() {
-    setBusy("dematerialize");
-    try {
-      const res = await apiSendJson<any>(`/api/treatment-plans/${planId}/materialize`, "DELETE", {});
-      toast({
-        title: "Plano revertido",
-        description: `Removidos ${res.appointmentsDeleted ?? "?"} consultas e ${res.invoicesDeleted ?? "?"} parcelas.`,
-      });
-      onChanged();
-      setConfirmDematerialize(false);
-    } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
-    } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
   if (isMaterialized) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-50/40 p-5 space-y-3">
+      <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-50/40 p-5 space-y-2">
         <div className="flex items-center gap-2">
           <CheckCircle className="w-5 h-5 text-emerald-600" />
           <h4 className="text-sm font-semibold text-emerald-800">Plano em andamento</h4>
@@ -129,41 +106,8 @@ export function MaterializeBlock({
         <p className="text-xs text-emerald-700/90 leading-relaxed">
           Iniciado em {new Date(materializedAt!).toLocaleDateString("pt-BR")}.
           Consultas e parcelas mensais já estão na agenda e no financeiro.
-          A duração de cada consulta segue a duração cadastrada no procedimento vinculado.
+          Para alterar os termos comerciais use a renegociação disponível nesta aba.
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm" variant="outline"
-            className="h-9 gap-1.5 rounded-xl border-rose-300 text-rose-600 hover:bg-rose-50"
-            onClick={() => setConfirmDematerialize(true)}
-            disabled={busy !== null}
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> Reverter início do plano
-          </Button>
-        </div>
-
-        <AlertDialog open={confirmDematerialize} onOpenChange={setConfirmDematerialize}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reverter início do plano?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Isso apaga todas as consultas futuras (status agendado) e parcelas
-                pendentes não pagas vinculadas a este plano. Parcelas já pagas
-                permanecem. Esta ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={busy !== null}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-rose-600 hover:bg-rose-700"
-                onClick={(e) => { e.preventDefault(); doDematerialize(); }}
-                disabled={busy !== null}
-              >
-                {busy === "dematerialize" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sim, reverter"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     );
   }
@@ -237,9 +181,9 @@ export function MaterializeBlock({
       <Button
         className="w-full h-11 gap-2 rounded-xl shadow-md shadow-primary/20 text-sm font-semibold"
         onClick={doMaterialize}
-        disabled={busy !== null || hasMissingSchedule}
+        disabled={busy || hasMissingSchedule}
       >
-        {busy === "materialize" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
         Iniciar plano agora
       </Button>
     </div>

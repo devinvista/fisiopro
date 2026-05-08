@@ -181,31 +181,48 @@ export async function listTreatmentPlanProceduresWithCatalog(planId: number) {
     .where(eq(treatmentPlanProceduresTable.treatmentPlanId, planId));
 }
 
+export interface ItemPriceOverride {
+  planProcedureId: number;
+  unitPrice?: number;
+  unitMonthlyPrice?: number;
+  discount?: number;
+}
+
 /**
  * Clona todas as linhas de `treatment_plan_procedures` de um plano para outro.
- * Usado em renegociação para manter o "carrinho" do plano antigo no novo.
+ * Usado em renegociação para manter o "carrinho" do plano antigo no novo,
+ * aplicando overrides de preço por item quando informados.
  */
 export async function cloneTreatmentPlanProcedures(
   sourcePlanId: number,
   targetPlanId: number,
+  itemOverrides?: ItemPriceOverride[],
 ) {
   const rows = await db
     .select()
     .from(treatmentPlanProceduresTable)
     .where(eq(treatmentPlanProceduresTable.treatmentPlanId, sourcePlanId));
   if (rows.length === 0) return [];
-  const inserts = rows.map((r) => ({
-    treatmentPlanId: targetPlanId,
-    procedureId: r.procedureId,
-    packageId: r.packageId,
-    sessionsPerWeek: r.sessionsPerWeek,
-    totalSessions: r.totalSessions,
-    unitPrice: r.unitPrice,
-    unitMonthlyPrice: r.unitMonthlyPrice,
-    discount: r.discount,
-    priority: r.priority,
-    notes: r.notes,
-  }));
+
+  const overridesMap = new Map<number, ItemPriceOverride>(
+    (itemOverrides ?? []).map(o => [o.planProcedureId, o]),
+  );
+
+  const inserts = rows.map((r) => {
+    const ov = overridesMap.get(r.id);
+    return {
+      treatmentPlanId: targetPlanId,
+      procedureId: r.procedureId,
+      packageId: r.packageId,
+      sessionsPerWeek: r.sessionsPerWeek,
+      totalSessions: r.totalSessions,
+      unitPrice: ov?.unitPrice !== undefined ? String(ov.unitPrice) : r.unitPrice,
+      unitMonthlyPrice: ov?.unitMonthlyPrice !== undefined ? String(ov.unitMonthlyPrice) : r.unitMonthlyPrice,
+      discount: ov?.discount !== undefined ? String(ov.discount) : r.discount,
+      priority: r.priority,
+      notes: r.notes,
+    };
+  });
   return db.insert(treatmentPlanProceduresTable).values(inserts).returning();
 }
 

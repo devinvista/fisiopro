@@ -659,13 +659,28 @@ export async function acceptPatientTreatmentPlan(
  * O NOVO plano nasce **sem aceite** — precisa ser revisado e aceito separadamente para
  * congelar o novo snapshot de preços.
  */
+export interface RenegotiateOpts {
+  /** Motivo da renegociação — obrigatório (mín. 3 chars). Usado como razão do cancelamento formal. */
+  reason: string;
+  /** Observações internas gravadas como `internalNotes` no novo plano. */
+  renegotiationNotes?: string;
+  /** Overrides de preço por item do plano (planProcedureId → novos valores). */
+  itemOverrides?: repo.ItemPriceOverride[];
+}
+
 export async function renegotiatePatientTreatmentPlan(
   patientId: number,
   planId: number,
   overrides: Record<string, unknown>,
+  renegOpts: RenegotiateOpts,
   ctx: AuthCtx,
 ) {
   if (!ctx.userId) throw HttpError.unauthorized("Usuário não autenticado");
+
+  const { reason, renegotiationNotes, itemOverrides } = renegOpts;
+  if (!reason || reason.trim().length < 3) {
+    throw HttpError.badRequest("Motivo da renegociação é obrigatório (mínimo 3 caracteres).");
+  }
 
   const previous = await repo.getTreatmentPlan(planId, patientId);
   if (!previous) throw HttpError.notFound("Plano de tratamento não encontrado");
@@ -680,6 +695,16 @@ export async function renegotiatePatientTreatmentPlan(
     );
   }
 
+  // Resolve startDate: prefer override, fall back to previous plan's date.
+  const resolvedStartDate =
+    overrides.startDate !== undefined
+      ? (overrides.startDate as string | null)
+      : previous.startDate
+        ? typeof previous.startDate === "string"
+          ? previous.startDate
+          : new Date(previous.startDate as unknown as string).toISOString().slice(0, 10)
+        : null;
+
   // Campos clonados do plano anterior + overrides do payload.
   const overrideFields = normalizeTreatmentPlan({
     objectives: overrides.objectives !== undefined ? overrides.objectives : previous.objectives,
@@ -689,33 +714,52 @@ export async function renegotiatePatientTreatmentPlan(
       overrides.estimatedSessions !== undefined
         ? overrides.estimatedSessions
         : previous.estimatedSessions,
-    startDate:
-      overrides.startDate !== undefined
-        ? overrides.startDate
-        : previous.startDate
-          ? typeof previous.startDate === "string"
-            ? previous.startDate
-            : new Date(previous.startDate as unknown as string).toISOString().slice(0, 10)
-          : null,
+    startDate: resolvedStartDate,
     responsibleProfessional:
       overrides.responsibleProfessional !== undefined
         ? overrides.responsibleProfessional
         : previous.responsibleProfessional,
-    status: "ativo", // novo plano sempre nasce ativo
+    status: "rascunho", // novo plano nasce como rascunho — precisa de novo aceite
   });
 
+  // Campos financeiros opcionais com fallback para o plano anterior.
+  const durationMonths =
+    overrides.durationMonths !== undefined
+      ? Number(overrides.durationMonths)
+      : (previous.durationMonths ?? 12);
+  const monthlyDueDay =
+    overrides.monthlyDueDay !== undefined
+      ? Number(overrides.monthlyDueDay) || null
+      : previous.monthlyDueDay ?? null;
+  const paymentMode =
+    overrides.paymentMode !== undefined
+      ? String(overrides.paymentMode)
+      : previous.paymentMode ?? "postpago";
+
+  // Cria o novo plano referenciando o anterior.
   const newPlan = await repo.createTreatmentPlan(patientId, previous.clinicId, {
     ...overrideFields,
+    durationMonths,
+    monthlyDueDay,
+    paymentMode,
     parentPlanId: previous.id,
-  });
+    internalNotes: renegotiationNotes
+      ? `[Renegociação do plano #${previous.id}] ${renegotiationNotes}`
+      : `[Renegociação do plano #${previous.id}]`,
+  } as any);
   if (!newPlan) throw HttpError.notFound("Falha ao criar novo plano");
 
-  // Clona o "carrinho" de procedimentos para o novo plano (preços vigentes serão
-  // recalculados/snapshotados quando o paciente aceitar o novo plano).
-  await repo.cloneTreatmentPlanProcedures(previous.id, newPlan.id);
+  // Clona procedimentos com overrides de preço aplicados.
+  await repo.cloneTreatmentPlanProcedures(previous.id, newPlan.id, itemOverrides);
 
-  // Encerra o plano anterior (continua acessível para histórico/relatórios fiscais).
-  await repo.updateTreatmentPlan(previous.id, patientId, { status: "concluido" });
+  // Cancela o plano anterior formalmente: estorna faturas futuras, cancela
+  // agendamentos vinculados e registra o motivo na trilha de auditoria.
+  const { cancelTreatmentPlan } = await import("./treatment-plans.cancel.js");
+  await cancelTreatmentPlan({
+    planId: previous.id,
+    reason: `Renegociação: novo plano #${newPlan.id} criado em substituição. Motivo: ${reason.trim()}`,
+    cancelledBy: ctx.userId,
+  });
 
   await logAudit({
     userId: ctx.userId,
@@ -723,10 +767,10 @@ export async function renegotiatePatientTreatmentPlan(
     action: "renegotiate",
     entityType: "treatment_plan",
     entityId: newPlan.id,
-    summary: `Plano renegociado (versionado a partir do plano #${previous.id})`,
+    summary: `Plano #${previous.id} renegociado → novo plano #${newPlan.id}. Motivo: ${reason.trim()}`,
   });
 
-  return { previous: { ...previous, status: "concluido" as const }, next: newPlan };
+  return { previous: { ...previous, status: "cancelado" as const }, next: newPlan };
 }
 
 export async function deletePatientTreatmentPlan(

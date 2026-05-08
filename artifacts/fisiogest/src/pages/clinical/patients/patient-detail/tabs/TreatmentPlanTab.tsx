@@ -49,6 +49,7 @@ import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
 import { ContractPreviewDialog } from "./treatment-plan/ContractPreviewDialog";
 import { CancelPlanDialog } from "./treatment-plan/CancelPlanDialog";
+import { RenegotiateDialog } from "./treatment-plan/RenegotiateDialog";
 
 const HOLD_TTL_OPTIONS = [
   { value: 15, label: "15 min" },
@@ -505,6 +506,10 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           handlePrintContract={handlePrintContract}
           onOpenContractPreview={handleOpenContractPreview}
           onChanged={handleChanged}
+          onRenegotiated={(newPlanId) => {
+            setSelectedPlanId(newPlanId);
+            handleChanged();
+          }}
         />
       </div>
     );
@@ -625,7 +630,7 @@ function PlanManagementDashboard({
   patientId, selectedPlanId, selectedPlan, planItems, planItemsKey,
   patient, clinic, form, setForm, professionals, headerMetrics,
   isAccepted, saving, handleSave, handlePrintPlan, handlePrintContract,
-  onOpenContractPreview, onChanged,
+  onOpenContractPreview, onChanged, onRenegotiated,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -645,6 +650,7 @@ function PlanManagementDashboard({
   handlePrintContract: () => void;
   onOpenContractPreview: () => void;
   onChanged: () => void;
+  onRenegotiated: (newPlanId: number) => void;
 }) {
   const [activeTab, setActiveTab] = useState<DashTab>("resumo");
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -831,6 +837,7 @@ function PlanManagementDashboard({
           clinic={clinic}
           form={form}
           onChanged={onChanged}
+          onRenegotiated={onRenegotiated}
         />
       )}
     </div>
@@ -1125,7 +1132,8 @@ function DashFinanceiroTab({
 
 // ─── Dashboard: Contrato tab ───────────────────────────────────────────────
 function DashContratoTab({
-  patientId, selectedPlanId, selectedPlan, planItems, patient, clinic, form, onChanged,
+  patientId, selectedPlanId, selectedPlan, planItems, patient, clinic, form,
+  onChanged, onRenegotiated,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -1135,7 +1143,13 @@ function DashContratoTab({
   clinic?: ClinicInfo | null;
   form: any;
   onChanged: () => void;
+  onRenegotiated: (newPlanId: number) => void;
 }) {
+  const [renegotiateOpen, setRenegotiateOpen] = useState(false);
+  const isCancelled = selectedPlan?.status === "cancelado";
+  const isConcluido = selectedPlan?.status === "concluido";
+  const canRenegotiate = selectedPlan?.status === "ativo" && !!selectedPlan?.acceptedAt;
+
   return (
     <div className="space-y-4">
       <ContractAcceptanceBlock
@@ -1158,6 +1172,54 @@ function DashContratoTab({
         planItems={planItems}
         onChanged={onChanged}
       />
+
+      {/* Renegotiation block — only for active accepted plans */}
+      {canRenegotiate && !isCancelled && !isConcluido && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-slate-500" />
+                Renegociar contrato
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed max-w-md">
+                Cancela o contrato vigente formalmente e cria um novo rascunho com novos
+                termos comerciais — duração, preços por item, vencimento e forma de pagamento.
+                O paciente precisará aceitar o novo contrato.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5 rounded-xl border-slate-300 hover:border-primary hover:text-primary"
+              onClick={() => setRenegotiateOpen(true)}
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Renegociar
+            </Button>
+          </div>
+          <RenegotiateDialog
+            open={renegotiateOpen}
+            onOpenChange={setRenegotiateOpen}
+            planId={selectedPlanId}
+            patientId={patientId}
+            planTitle={
+              selectedPlan?.startDate
+                ? `Plano ${formatDate(selectedPlan.startDate)}`
+                : undefined
+            }
+            currentDurationMonths={selectedPlan?.durationMonths ?? form.durationMonths}
+            currentStartDate={selectedPlan?.startDate ?? form.startDate}
+            currentMonthlyDueDay={selectedPlan?.monthlyDueDay ?? null}
+            currentPaymentMode={selectedPlan?.paymentMode ?? "postpago"}
+            planItems={planItems}
+            onSuccess={(newPlanId) => {
+              setRenegotiateOpen(false);
+              onRenegotiated(newPlanId);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
