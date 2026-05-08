@@ -2,9 +2,11 @@ import { Router } from "express";
 import { db, notesTable, usersTable, patientsTable } from "@workspace/db";
 import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
+import { requireFeature } from "../../middleware/plan-features.js";
 
 const router = Router();
 router.use(authMiddleware);
+router.use(requireFeature("module.notes"));
 
 function clinicFilter(req: AuthRequest) {
   if (!req.clinicId) return undefined;

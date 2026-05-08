@@ -123,7 +123,7 @@ function Router() {
           {() => <ProtectedRoute component={Configuracoes} />}
         </Route>
         <Route path="/recados">
-          {() => <ProtectedRoute component={Notes} />}
+          {() => <FeatureRoute component={Notes} feature="module.notes" />}
         </Route>
         <Route path="/agendas">
           {() => <HashRedirect hash="agendas" />}

@@ -22,6 +22,7 @@ export const FEATURES = [
   "module.reports.basic",
 
   // Profissional+
+  "module.notes",
   "module.reports.advanced",
   "module.patient_packages",
   "module.recurring_expenses",
@@ -78,6 +79,7 @@ export const FEATURE_CATALOG: readonly FeatureMeta[] = [
   { key: "module.reports.basic",   category: "core",      label: "Relatórios básicos",       description: "Resumos diários, mensais e por profissional." },
 
   // ─── Módulos avançados (profissional+) ─────────────────────────────────────
+  { key: "module.notes",                 category: "modules", label: "Recados & Tarefas",           description: "Recados internos, tarefas e lembretes entre a equipe." },
   { key: "module.reports.advanced",      category: "modules", label: "Relatórios avançados",        description: "Análises customizáveis, exportação CSV/Excel." },
   { key: "module.patient_packages",      category: "modules", label: "Pacotes de sessões",          description: "Venda antecipada de sessões e créditos." },
   { key: "module.recurring_expenses",    category: "modules", label: "Despesas recorrentes",        description: "Lançamentos automáticos de aluguel, contas etc." },
@@ -111,6 +113,7 @@ const ESSENCIAL: Feature[] = [
 
 const PROFISSIONAL: Feature[] = [
   ...ESSENCIAL,
+  "module.notes",
   "module.reports.advanced",
   "module.patient_packages",
   "module.recurring_expenses",
