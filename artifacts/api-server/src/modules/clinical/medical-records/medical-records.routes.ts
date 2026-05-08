@@ -120,7 +120,7 @@ router.post("/body-measurements", requirePermission("medical.write"), asyncHandl
   const patientId = patientIdParam(req);
   const data = validateBody(bodyMeasurementSchema, req.body, res);
   if (!data) return;
-  const created = await svc.createPatientBodyMeasurement(patientId, data);
+  const created = await svc.createPatientBodyMeasurement(patientId, data, getCtx(req as AuthRequest));
   res.status(201).json(created);
 }));
 

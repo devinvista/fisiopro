@@ -60,10 +60,11 @@ export async function listBodyMeasurements(patientId: number) {
   return db.select().from(bodyMeasurementsTable).where(eq(bodyMeasurementsTable.patientId, patientId)).orderBy(desc(bodyMeasurementsTable.measuredAt));
 }
 
-export async function createBodyMeasurement(patientId: number, data: Record<string, unknown>) {
+export async function createBodyMeasurement(patientId: number, data: Record<string, unknown>, clinicId?: number | null) {
   const measuredAt = data.measuredAt ? new Date(data.measuredAt as string) : new Date();
   const [created] = await db.insert(bodyMeasurementsTable).values({
     patientId,
+    clinicId: clinicId ?? null,
     measuredAt,
     weight: (data.weight as number | null)?.toString() ?? null,
     height: (data.height as number | null)?.toString() ?? null,

@@ -199,8 +199,8 @@ export function listPatientBodyMeasurements(patientId: number) {
   return repo.listBodyMeasurements(patientId);
 }
 
-export function createPatientBodyMeasurement(patientId: number, data: Record<string, unknown>) {
-  return repo.createBodyMeasurement(patientId, data);
+export function createPatientBodyMeasurement(patientId: number, data: Record<string, unknown>, ctx?: AuthCtx) {
+  return repo.createBodyMeasurement(patientId, data, ctx?.clinicId ?? null);
 }
 
 export async function deletePatientBodyMeasurement(measurementId: number, patientId: number) {
