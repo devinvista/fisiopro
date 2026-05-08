@@ -141,12 +141,18 @@ export async function updateTreatmentPlan(planId: number, patientId: number, dat
   return updated;
 }
 
-export async function deleteTreatmentPlan(planId: number, patientId: number) {
-  const [existing] = await db.select({ id: treatmentPlansTable.id }).from(treatmentPlansTable)
+export async function deleteTreatmentPlan(
+  planId: number,
+  patientId: number,
+): Promise<"deleted" | "not_found" | "accepted"> {
+  const [existing] = await db
+    .select({ id: treatmentPlansTable.id, acceptedAt: treatmentPlansTable.acceptedAt })
+    .from(treatmentPlansTable)
     .where(and(eq(treatmentPlansTable.id, planId), eq(treatmentPlansTable.patientId, patientId)));
-  if (!existing) return false;
+  if (!existing) return "not_found";
+  if (existing.acceptedAt) return "accepted";
   await db.delete(treatmentPlansTable).where(eq(treatmentPlansTable.id, planId));
-  return true;
+  return "deleted";
 }
 
 // ─── Treatment Plan: aceitação ────────────────────────────────────────────────

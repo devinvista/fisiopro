@@ -734,8 +734,14 @@ export async function deletePatientTreatmentPlan(
   planId: number,
   ctx: AuthCtx,
 ) {
-  const ok = await repo.deleteTreatmentPlan(planId, patientId);
-  if (!ok) throw HttpError.notFound("Plano de tratamento não encontrado");
+  const result = await repo.deleteTreatmentPlan(planId, patientId);
+  if (result === "not_found") throw HttpError.notFound("Plano de tratamento não encontrado");
+  if (result === "accepted") {
+    throw new HttpError(
+      409,
+      "Plano já aceito não pode ser excluído. Use o cancelamento formal (com motivo e trilha de auditoria).",
+    );
+  }
   await logAudit({
     userId: ctx.userId,
     patientId,

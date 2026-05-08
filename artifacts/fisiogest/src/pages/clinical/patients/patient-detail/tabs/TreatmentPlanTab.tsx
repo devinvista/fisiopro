@@ -11,7 +11,7 @@ import {
   Loader2, ClipboardList, History, Plus, Trash2, ScrollText, Printer,
   BadgeCheck, Lock, ArrowRight, ChevronDown, ChevronUp, Stethoscope, UserCheck,
   Activity, Sparkles, CalendarRange, AlertTriangle, Clock, RefreshCw,
-  CheckCircle, LayoutDashboard, Wallet, FileText, RotateCcw, CalendarDays,
+  CheckCircle, LayoutDashboard, Wallet, FileText, RotateCcw, CalendarDays, XCircle, Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,7 @@ import { CreditsStatementBlock } from "./treatment-plan/CreditsStatementBlock";
 import { PlanHistoryDialog } from "./treatment-plan/PlanHistoryDialog";
 import { PlanStepper, type PlanStepKey } from "./treatment-plan/PlanStepper";
 import { ContractPreviewDialog } from "./treatment-plan/ContractPreviewDialog";
+import { CancelPlanDialog } from "./treatment-plan/CancelPlanDialog";
 
 const HOLD_TTL_OPTIONS = [
   { value: 15, label: "15 min" },
@@ -503,7 +504,6 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
           handlePrintPlan={handlePrintPlan}
           handlePrintContract={handlePrintContract}
           onOpenContractPreview={handleOpenContractPreview}
-          deleteMutation={deleteMutation}
           onChanged={handleChanged}
         />
       </div>
@@ -532,6 +532,8 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         onOpenContractPreview={handleOpenContractPreview}
         deleteMutation={deleteMutation}
         selectedPlanId={selectedPlanId}
+        patientId={patientId}
+        onCancelSuccess={handleChanged}
       />
 
       <PlanStepper
@@ -623,7 +625,7 @@ function PlanManagementDashboard({
   patientId, selectedPlanId, selectedPlan, planItems, planItemsKey,
   patient, clinic, form, setForm, professionals, headerMetrics,
   isAccepted, saving, handleSave, handlePrintPlan, handlePrintContract,
-  onOpenContractPreview, deleteMutation, onChanged,
+  onOpenContractPreview, onChanged,
 }: {
   patientId: number;
   selectedPlanId: number;
@@ -642,10 +644,10 @@ function PlanManagementDashboard({
   handlePrintPlan: () => void;
   handlePrintContract: () => void;
   onOpenContractPreview: () => void;
-  deleteMutation: any;
   onChanged: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DashTab>("resumo");
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [clinicalOpen, setClinicalOpen] = useState(false);
 
   const statusConfig = form.status === "ativo"
@@ -712,34 +714,23 @@ function PlanManagementDashboard({
                 <ScrollText className="w-3.5 h-3.5" /> Contrato
               </Button>
             )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="sm"
-                  className="h-8 w-8 p-0 bg-transparent hover:bg-white/20 text-white/70 hover:text-white border-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Isso remove os objetivos, condutas e os vínculos de procedimentos
-                    deste plano. A ação não pode ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-rose-600 hover:bg-rose-700"
-                    onClick={() => deleteMutation.mutate(selectedPlanId)}
-                  >
-                    Sim, excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              size="sm"
+              className="h-8 gap-1 px-2.5 text-xs bg-transparent hover:bg-white/20 text-white/70 hover:text-white border-0 rounded-xl"
+              onClick={() => setCancelOpen(true)}
+              title="Cancelar plano com motivo e trilha de auditoria"
+            >
+              <Ban className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Cancelar</span>
+            </Button>
+            <CancelPlanDialog
+              open={cancelOpen}
+              onOpenChange={setCancelOpen}
+              planId={selectedPlanId}
+              patientId={patientId}
+              planTitle={selectedPlan?.startDate ? `Plano ${formatDate(selectedPlan.startDate)}` : undefined}
+              onSuccess={() => { setCancelOpen(false); onChanged(); }}
+            />
           </div>
         </div>
 
@@ -1175,6 +1166,7 @@ function DashContratoTab({
 function WizardStatusBar({
   selectedPlan, planItemsCount, isAccepted,
   handlePrintPlan, onOpenContractPreview, deleteMutation, selectedPlanId,
+  patientId, onCancelSuccess,
 }: {
   selectedPlan: any;
   planItemsCount: number;
@@ -1183,8 +1175,11 @@ function WizardStatusBar({
   onOpenContractPreview: () => void;
   deleteMutation: any;
   selectedPlanId: number;
+  patientId: number;
+  onCancelSuccess: () => void;
 }) {
   const isAcceptedStatus = isAccepted;
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   return (
     <div className={[
@@ -1257,35 +1252,60 @@ function WizardStatusBar({
 
           <div className="w-px h-5 bg-slate-200 mx-0.5" />
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
+          {isAccepted ? (
+            /* Accepted plans → formal cancellation only */
+            <>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 w-8 p-0 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                className="h-8 gap-1 text-xs px-2.5 text-rose-400 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors"
+                onClick={() => setCancelOpen(true)}
+                title="Cancelar plano com motivo e trilha de auditoria"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Ban className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cancelar</span>
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Isso remove os objetivos, condutas e os vínculos de procedimentos
-                  deste plano. A ação não pode ser desfeita.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-rose-600 hover:bg-rose-700"
-                  onClick={() => deleteMutation.mutate(selectedPlanId)}
+              <CancelPlanDialog
+                open={cancelOpen}
+                onOpenChange={setCancelOpen}
+                planId={selectedPlanId}
+                patientId={patientId}
+                planTitle={selectedPlan?.startDate ? `Plano ${formatDate(selectedPlan.startDate)}` : undefined}
+                onSuccess={() => { setCancelOpen(false); onCancelSuccess(); }}
+              />
+            </>
+          ) : (
+            /* Draft plans → hard delete */
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
                 >
-                  Sim, excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir rascunho?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Isso remove o rascunho de plano, seus objetivos, condutas e vínculos de
+                    procedimentos. A ação não pode ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-rose-600 hover:bg-rose-700"
+                    onClick={() => deleteMutation.mutate(selectedPlanId)}
+                  >
+                    Sim, excluir rascunho
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
     </div>
