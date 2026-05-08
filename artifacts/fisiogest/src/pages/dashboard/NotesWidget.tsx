@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson, API_BASE } from "@/lib/api";
 import { Link } from "wouter";
-import { CheckCircle2, Circle, Clock, MessageSquare, Bell, ClipboardList, ArrowRight, Plus } from "lucide-react";
+import { CheckCircle2, Circle, Clock, MessageSquare, Bell, ClipboardList, ArrowRight, Plus, CalendarClock, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, isPast, isToday, parseISO } from "date-fns";
+import { format, isPast, isToday, parseISO, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const api = (path: string) => `${API_BASE}/api${path}`;
@@ -28,7 +28,18 @@ interface NoteItem {
   assigneeName: string | null;
   creatorName: string | null;
   patientName: string | null;
+  patientId: number | null;
 }
+
+interface AppointmentItem {
+  id: number;
+  patientId: number;
+  date: string;
+  startTime: string;
+  status: string;
+}
+
+type AppointmentProximity = "hoje" | "amanha";
 
 const TYPE_CFG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
   tarefa: { icon: ClipboardList, color: "text-blue-500", label: "Tarefa" },
@@ -59,8 +70,74 @@ function DueLabel({ dueAt }: { dueAt: string | null }) {
   );
 }
 
+function AppointmentBadge({ proximity }: { proximity: AppointmentProximity }) {
+  if (proximity === "hoje") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+        <CalendarClock className="w-2.5 h-2.5" />
+        Consulta hoje
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-sky-50 text-sky-600 border border-sky-200 px-1.5 py-0.5 rounded-full">
+      <Calendar className="w-2.5 h-2.5" />
+      Consulta amanhã
+    </span>
+  );
+}
+
+function useUpcomingAppointmentPatients() {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
+
+  const { data: todayAppts = [] } = useQuery<AppointmentItem[]>({
+    queryKey: ["appointments-widget-today", today],
+    queryFn: () => apiFetchJson(api(`/appointments?date=${today}`)),
+    staleTime: 5 * 60_000,
+    select: (rows: any[]) => rows.map((a) => ({
+      id: a.id,
+      patientId: a.patientId,
+      date: a.date,
+      startTime: a.startTime,
+      status: a.status,
+    })),
+  });
+
+  const { data: tomorrowAppts = [] } = useQuery<AppointmentItem[]>({
+    queryKey: ["appointments-widget-tomorrow", tomorrow],
+    queryFn: () => apiFetchJson(api(`/appointments?date=${tomorrow}`)),
+    staleTime: 5 * 60_000,
+    select: (rows: any[]) => rows.map((a) => ({
+      id: a.id,
+      patientId: a.patientId,
+      date: a.date,
+      startTime: a.startTime,
+      status: a.status,
+    })),
+  });
+
+  const proximityMap = new Map<number, AppointmentProximity>();
+
+  const activeStatuses = new Set(["agendado", "confirmado", "compareceu"]);
+
+  for (const appt of tomorrowAppts) {
+    if (activeStatuses.has(appt.status)) {
+      proximityMap.set(appt.patientId, "amanha");
+    }
+  }
+  for (const appt of todayAppts) {
+    if (activeStatuses.has(appt.status)) {
+      proximityMap.set(appt.patientId, "hoje");
+    }
+  }
+
+  return proximityMap;
+}
+
 export function NotesWidget() {
   const qc = useQueryClient();
+  const appointmentProximity = useUpcomingAppointmentPatients();
 
   const { data: summary } = useQuery<NoteSummary>({
     queryKey: ["notes-summary"],
@@ -131,8 +208,23 @@ export function NotesWidget() {
               const prio = PRIORITY_CFG[note.priority] ?? PRIORITY_CFG.normal;
               const Icon = cfg.icon;
               const isDone = note.status === "concluido";
+              const proximity = note.patientId != null
+                ? appointmentProximity.get(note.patientId)
+                : undefined;
+              const isHighlighted = proximity != null;
+
               return (
-                <div key={note.id} className="px-5 py-3 flex items-start gap-3 hover:bg-slate-50/60 transition-colors group">
+                <div
+                  key={note.id}
+                  className={cn(
+                    "px-5 py-3 flex items-start gap-3 transition-colors group relative",
+                    isHighlighted && proximity === "hoje"
+                      ? "bg-emerald-50/60 hover:bg-emerald-50 border-l-2 border-l-emerald-400"
+                      : isHighlighted && proximity === "amanha"
+                      ? "bg-sky-50/50 hover:bg-sky-50/80 border-l-2 border-l-sky-400"
+                      : "hover:bg-slate-50/60",
+                  )}
+                >
                   <button
                     onClick={() => completeMutation.mutate(note.id)}
                     disabled={completeMutation.isPending}
@@ -153,10 +245,16 @@ export function NotesWidget() {
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       {note.patientName && (
-                        <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-full">
+                        <span className={cn(
+                          "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
+                          isHighlighted
+                            ? "text-teal-700 bg-teal-100"
+                            : "text-teal-600 bg-teal-50"
+                        )}>
                           {note.patientName}
                         </span>
                       )}
+                      {proximity && <AppointmentBadge proximity={proximity} />}
                       <DueLabel dueAt={note.dueAt} />
                     </div>
                   </div>
