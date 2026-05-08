@@ -224,9 +224,9 @@ export function EvoForm({ onSave, onCancel, saving, title, form, setForm, appoin
           <Textarea className="min-h-[65px] bg-slate-50 border-slate-200 resize-none text-sm"
             value={form.techniquesUsed} onChange={e => setForm({ ...form, techniquesUsed: e.target.value })}
             placeholder="Ex: TENS (80Hz, 10min), Ultrassom terapêutico (1MHz, modo pulsado), Cinesioterapia ativa..." />
-          {chips && chips.description.length > 0 && (
+          {chips && chips.clinicalNotes.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {chips.description.map(c => (
+              {chips.clinicalNotes.map(c => (
                 <QuickChip key={c} label={c} onAdd={() => appendChip("techniquesUsed", c)} />
               ))}
             </div>

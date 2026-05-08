@@ -23,6 +23,10 @@ import { PainTrendChart } from "./evolutions/PainTrendChart";
 import { emptyEvoForm } from "./evolutions/constants";
 import { EvoFormState } from "./evolutions/types";
 
+function pluralEvo(n: number) {
+  return n === 1 ? "1 evolução registrada" : `${n} evoluções registradas`;
+}
+
 export function EvolutionsTab({ patientId, patient }: { patientId: number; patient?: PatientBasic }) {
   const { data: evolutions = [], isLoading } = useListEvolutions(patientId);
   const createMutation = useCreateEvolution();
@@ -134,25 +138,37 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
     });
   };
 
-  if (isLoading) return <div className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" /></div>;
+  if (isLoading) return (
+    <div className="p-10 text-center">
+      <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
+    </div>
+  );
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h3 className="text-base sm:text-lg font-semibold text-slate-800 truncate">Evoluções de Sessão</h3>
-          <p className="text-xs sm:text-sm text-slate-500">{evolutions.length} evolução(ões) registrada(s)</p>
+          <h3 className="text-base sm:text-lg font-semibold text-slate-800">Evoluções de Sessão</h3>
+          <p className="text-xs sm:text-sm text-slate-500">{pluralEvo(evolutions.length)}</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           {patient && evolutions.length > 0 && (
-            <Button variant="outline" size="sm" className="w-full sm:w-auto h-10 sm:h-9 px-3 rounded-xl text-xs gap-1.5"
-              onClick={() => printDocument(generateEvolutionsHTML(patient, evolutions, appointments, clinic), `Evoluções — ${patient.name}`)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto h-10 sm:h-9 px-3 rounded-xl text-xs gap-1.5"
+              onClick={() => printDocument(generateEvolutionsHTML(patient, evolutions, appointments, clinic), `Evoluções — ${patient.name}`)}
+            >
               <Printer className="w-3.5 h-3.5 shrink-0" />
               <span className="sm:hidden">PDF</span>
               <span className="hidden sm:inline">Imprimir / PDF</span>
             </Button>
           )}
-          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvoForm); }} className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5">
+          <Button
+            onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvoForm); }}
+            className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5"
+          >
             <Plus className="w-4 h-4 shrink-0" />
             <span className="sm:hidden">Nova</span>
             <span className="hidden sm:inline">Nova Evolução</span>
@@ -160,6 +176,7 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
         </div>
       </div>
 
+      {/* New evolution form */}
       {showForm && !editingId && (
         <EvoForm
           title="Registrar Evolução de Sessão"
@@ -172,29 +189,46 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
         />
       )}
 
-      {/* Pain Trend Mini-Chart */}
+      {/* Pain trend chart */}
       {evolutions.length >= 2 && <PainTrendChart evolutions={evolutions} />}
 
+      {/* Empty state */}
       {evolutions.length === 0 && !showForm ? (
         <Card className="border-dashed border-2 border-slate-200">
-          <CardContent className="p-12 text-center text-slate-400">
-            <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">Nenhuma evolução registrada</p>
-            <p className="text-sm mt-1">Registre evoluções após cada sessão.</p>
+          <CardContent className="py-14 flex flex-col items-center text-center text-slate-400 gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <TrendingUp className="w-7 h-7 opacity-40" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-500">Nenhuma evolução registrada</p>
+              <p className="text-sm mt-0.5">Registre a evolução após cada sessão para acompanhar o progresso do paciente.</p>
+            </div>
+            <Button
+              size="sm"
+              className="mt-1 rounded-xl gap-1.5"
+              onClick={() => setShowForm(true)}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Registrar primeira evolução
+            </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : evolutions.length > 0 ? (
         <div className="relative">
-          <div className="absolute left-4 top-4 bottom-4 w-0.5 bg-slate-200" />
+          {/* Timeline line */}
+          <div className="absolute left-[17px] top-5 bottom-5 w-px bg-gradient-to-b from-primary/30 via-slate-200 to-transparent" />
+
           <div className="space-y-4">
             {evolutions.map((ev, idx) => {
               const linkedAppt = appointments.find((a: any) => a.id === ev.appointmentId);
               const sessionNum = getSessionNumber(ev, idx);
               return (
                 <div key={ev.id} className="relative flex gap-4 pl-10">
-                  <div className="absolute left-0 w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shadow-md z-10">
+                  {/* Session bubble */}
+                  <div className="absolute left-0 w-[34px] h-[34px] rounded-full bg-primary ring-4 ring-primary/10 flex items-center justify-center text-white text-xs font-bold shadow-md z-10">
                     {sessionNum}
                   </div>
+
                   {editingId === ev.id ? (
                     <div className="flex-1">
                       <EvoForm
@@ -222,7 +256,7 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
             })}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
