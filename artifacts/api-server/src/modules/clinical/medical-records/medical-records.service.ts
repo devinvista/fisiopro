@@ -1010,6 +1010,7 @@ export async function createPatientFinancial(
       amount: String(body.amount),
       description: body.description,
       category: body.category ?? null,
+      clinicId: ctx.clinicId ?? null,
     });
     await logAudit({
       userId: ctx.userId,
