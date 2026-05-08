@@ -461,6 +461,11 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
         onOpenChange={setContractPreviewOpen}
         html={contractPreviewHtml}
         patientName={patient?.name ?? "Paciente"}
+        patientId={patientId}
+        planId={selectedPlanId}
+        patientPhone={patient?.phone ?? null}
+        patientEmail={(patient as any)?.email ?? null}
+        clinicName={clinic?.name ?? null}
         isAccepted={isAccepted}
         isStarted={isStarted}
       />
