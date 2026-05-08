@@ -1169,84 +1169,109 @@ function WizardStatusBar({
   deleteMutation: any;
   selectedPlanId: number;
 }) {
-  const statusBadge = isAccepted
-    ? { label: "Aceito · aguardando início", cls: "bg-blue-100 text-blue-700 border-blue-200" }
-    : { label: "Rascunho", cls: "bg-amber-100 text-amber-700 border-amber-200" };
+  const isAcceptedStatus = isAccepted;
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <ClipboardList className="w-4 h-4 text-primary" />
-        </div>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-bold text-slate-800 truncate">
-              Plano {formatDate(selectedPlan?.startDate) || "—"}
-            </span>
-            <Badge className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.cls}`}>
-              {statusBadge.label}
-            </Badge>
-            {isAccepted && (
-              <Badge className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-                <BadgeCheck className="w-3 h-3" /> Assinado
-              </Badge>
-            )}
+    <div className={[
+      "rounded-2xl border px-4 py-3 shadow-sm",
+      isAcceptedStatus
+        ? "bg-blue-50/60 border-blue-100"
+        : "bg-amber-50/50 border-amber-100",
+    ].join(" ")}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        {/* Left: identity + status */}
+        <div className="flex items-start gap-3 min-w-0">
+          <div className={[
+            "mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center shrink-0",
+            isAcceptedStatus ? "bg-blue-100" : "bg-amber-100",
+          ].join(" ")}>
+            <ClipboardList className={[
+              "w-4 h-4",
+              isAcceptedStatus ? "text-blue-600" : "text-amber-600",
+            ].join(" ")} />
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {planItemsCount} {planItemsCount === 1 ? "item" : "itens"} · configure e colete a assinatura para iniciar
-          </p>
-        </div>
-      </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-8 gap-1 text-xs rounded-xl"
-          onClick={handlePrintPlan}
-        >
-          <Printer className="w-3.5 h-3.5" /> Plano
-        </Button>
-        {planItemsCount > 0 && (
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-slate-800">
+                Plano {formatDate(selectedPlan?.startDate) || "—"}
+              </span>
+              {isAcceptedStatus ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                  <BadgeCheck className="w-3 h-3" /> Aceito · aguardando início
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                  <Clock className="w-3 h-3" /> Rascunho
+                </span>
+              )}
+            </div>
+            <p className={[
+              "text-[11px] leading-none",
+              planItemsCount === 0 ? "text-rose-400 font-medium" : "text-slate-500",
+            ].join(" ")}>
+              {planItemsCount === 0
+                ? "Nenhum item adicionado ainda"
+                : `${planItemsCount} ${planItemsCount === 1 ? "item" : "itens"} · configure e colete a assinatura para iniciar`}
+            </p>
+          </div>
+        </div>
+
+        {/* Right: actions */}
+        <div className="flex items-center gap-1.5 shrink-0 pl-11 sm:pl-0">
           <Button
             size="sm"
             variant="outline"
-            className="h-8 gap-1 text-xs rounded-xl"
-            onClick={onOpenContractPreview}
+            className="h-8 gap-1.5 text-xs rounded-xl bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
+            onClick={handlePrintPlan}
           >
-            <ScrollText className="w-3.5 h-3.5" /> Contrato
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span className="text-slate-700">Plano</span>
           </Button>
-        )}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+          {planItemsCount > 0 && (
             <Button
               size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs rounded-xl bg-white border-slate-200 hover:bg-slate-50 shadow-sm"
+              onClick={onOpenContractPreview}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <ScrollText className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-slate-700">Contrato</span>
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Isso remove os objetivos, condutas e os vínculos de procedimentos
-                deste plano. A ação não pode ser desfeita.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-rose-600 hover:bg-rose-700"
-                onClick={() => deleteMutation.mutate(selectedPlanId)}
+          )}
+
+          <div className="w-px h-5 bg-slate-200 mx-0.5" />
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 p-0 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
               >
-                Sim, excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir plano de tratamento?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Isso remove os objetivos, condutas e os vínculos de procedimentos
+                  deste plano. A ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-rose-600 hover:bg-rose-700"
+                  onClick={() => deleteMutation.mutate(selectedPlanId)}
+                >
+                  Sim, excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
     </div>
   );
@@ -1263,69 +1288,100 @@ function PlanSelectorBar({
   handleCreatePlan: () => void;
   creatingNew: boolean;
 }) {
+  const selectedPlan = allPlans.find(p => p.id === selectedPlanId);
+
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white px-4 py-3 rounded-2xl border border-slate-100 shadow-sm">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="p-2 bg-gradient-to-br from-primary/15 to-primary/5 rounded-xl shrink-0">
-          <ClipboardList className="w-4 h-4 text-primary" />
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-4 pt-3.5 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <ClipboardList className="w-3.5 h-3.5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm leading-tight">Planos de Tratamento</h3>
+            <p className="text-[11px] text-slate-400 leading-tight mt-0.5">
+              {allPlans.length === 0
+                ? "Nenhum plano criado"
+                : `${allPlans.length} plano${allPlans.length !== 1 ? "s" : ""} · selecione ou crie novo`}
+            </p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h3 className="font-bold text-slate-800 text-sm">Planos de Tratamento</h3>
-          <p className="text-[11px] text-slate-400 truncate">
-            {allPlans.length === 0
-              ? "Nenhum plano"
-              : `${allPlans.length} plano${allPlans.length !== 1 ? "s" : ""} · selecione ou crie novo`}
-          </p>
-        </div>
+
+        {/* New plan button — always visible */}
+        <Button
+          size="sm"
+          className="h-8 gap-1.5 rounded-xl text-xs shadow-sm shadow-primary/20"
+          onClick={handleCreatePlan}
+          disabled={creatingNew}
+        >
+          {creatingNew
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Plus className="w-3.5 h-3.5" />}
+          Novo plano
+        </Button>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        {allPlans.length > 0 && (
+      {/* Controls row — only when plans exist */}
+      {allPlans.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-2.5 bg-slate-50/60">
+          {/* Plan selector */}
           <Select
             value={String(selectedPlanId ?? "")}
             onValueChange={(v) => setSelectedPlanId(Number(v))}
           >
-            <SelectTrigger className="w-full sm:w-[240px] h-9 bg-slate-50 border-slate-200 rounded-xl text-sm">
-              <SelectValue placeholder="Selecione um plano..." />
+            <SelectTrigger className="flex-1 sm:max-w-[280px] h-8 bg-white border-slate-200 rounded-xl text-sm shadow-sm">
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                {selectedPlan && (
+                  <span className={[
+                    "h-2 w-2 rounded-full shrink-0",
+                    selectedPlan.status === "ativo"
+                      ? "bg-emerald-500"
+                      : selectedPlan.status === "concluido"
+                        ? "bg-blue-400"
+                        : "bg-slate-300",
+                  ].join(" ")} />
+                )}
+                <SelectValue placeholder="Selecione um plano..." />
+              </div>
             </SelectTrigger>
             <SelectContent>
               {allPlans.map((p) => (
                 <SelectItem key={p.id} value={String(p.id)}>
-                  {p.status === "ativo" ? "🟢" : p.status === "concluido" ? "🔵" : "⚪"}{" "}
-                  Plano {formatDate(p.startDate)}{" "}
-                  {p.status === "ativo" ? "(Atual)" : ""}
+                  <div className="flex items-center gap-2">
+                    <span className={[
+                      "h-2 w-2 rounded-full shrink-0",
+                      p.status === "ativo"
+                        ? "bg-emerald-500"
+                        : p.status === "concluido"
+                          ? "bg-blue-400"
+                          : "bg-slate-300",
+                    ].join(" ")} />
+                    <span>
+                      Plano {formatDate(p.startDate)}
+                      {p.status === "ativo" ? " (Atual)" : ""}
+                    </span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-        )}
 
-        {allPlans.length > 0 && (
+          {/* History button */}
           <Button
             size="sm"
             variant="outline"
-            className="w-full sm:w-auto h-9 gap-1.5 rounded-xl text-sm"
+            className="h-8 gap-1.5 rounded-xl text-xs bg-white border-slate-200 hover:bg-slate-50 shadow-sm shrink-0"
             onClick={openHistory}
           >
-            <History className="w-3.5 h-3.5 shrink-0" />
-            Histórico
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+            <History className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <span className="text-slate-700">Histórico</span>
+            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center">
               {allPlans.length}
             </span>
           </Button>
-        )}
-
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full sm:w-auto h-9 gap-1.5 rounded-xl border-primary/30 text-primary hover:bg-primary/5 text-sm"
-          onClick={handleCreatePlan}
-          disabled={creatingNew}
-        >
-          {creatingNew ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Novo plano
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
