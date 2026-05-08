@@ -18,6 +18,7 @@ import {
 } from "./middleware/authRateLimits.js";
 import { logger } from "./lib/logger.js";
 import { initSentry, Sentry } from "./lib/sentry.js";
+import { requireClinicIdForMutations } from "./middleware/requireClinicId.js";
 
 initSentry();
 
@@ -123,6 +124,7 @@ app.use("/api/auth/reset-password", authLimiter, resetPasswordTokenLimiter);
 app.use("/api/public", publicLimiter);
 app.use("/api/storage/uploads", uploadsLimiter);
 
+app.use("/api", requireClinicIdForMutations);
 app.use("/api", router);
 
 if (process.env.NODE_ENV === "production") {
