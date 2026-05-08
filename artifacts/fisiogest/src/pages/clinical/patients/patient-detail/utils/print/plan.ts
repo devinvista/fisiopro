@@ -53,13 +53,15 @@ export function generatePlanHTML(
   const todayIso = todayISO();
   const clinicName = clinic?.name || "FisioGest Pro";
 
-  // ── Filtra agendamentos vinculados a este plano (quando possível) ──────────
-  // Se há itens, restringe aos appointments materializados deste plano. Caso
-  // contrário (plano legado sem itens carregados), usa todos do paciente.
+  // ── Filtra agendamentos vinculados a este plano ───────────────────────────
+  // O chamador já deve passar apenas os appointments deste plano (pré-filtrados
+  // por treatmentPlanProcedureId). Fazemos uma segunda passagem defensiva para
+  // garantir que appointments de outros planos nunca apareçam no PDF — inclusive
+  // quando planItems é vazio (plano em rascunho sem itens).
   const planItemIds = new Set(planItems.map((i) => i.id));
   const relevant: any[] = planItems.length > 0
     ? appointments.filter((a) => a.treatmentPlanProcedureId != null && planItemIds.has(a.treatmentPlanProcedureId))
-    : appointments;
+    : []; // rascunho sem itens → sem atendimentos a exibir
 
   // ── Buckets por status ────────────────────────────────────────────────────
   const upcoming = relevant

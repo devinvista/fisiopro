@@ -282,7 +282,17 @@ export function TreatmentPlanTab({ patientId, patient }: { patientId: number; pa
 
   const handlePrintPlan = () => {
     if (!selectedPlan || !patient) return;
-    const html = generatePlanHTML(patient, form, appointments, planItems, clinic);
+    // Only pass appointments that are linked to this specific plan's items.
+    // Without this filter, a draft plan (0 items) would fall back to showing
+    // all patient appointments, including those from other (active) plans.
+    const planItemIds = new Set(planItems.map((i) => i.id));
+    const planAppointments =
+      planItems.length > 0
+        ? appointments.filter(
+            (a) => a.treatmentPlanProcedureId != null && planItemIds.has(a.treatmentPlanProcedureId),
+          )
+        : [];
+    const html = generatePlanHTML(patient, form, planAppointments, planItems, clinic);
     printDocument(html, `Plano de Tratamento — ${patient.name}`);
   };
 
