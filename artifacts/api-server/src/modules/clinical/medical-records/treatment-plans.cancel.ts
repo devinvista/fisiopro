@@ -26,7 +26,7 @@ import {
   appointmentsTable,
   proceduresTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import {
   postReversal,
   postReceivableRevenue,
@@ -73,6 +73,11 @@ export interface CancelTreatmentPlanResult {
    * serviços já prestados; cobrança manual ou via fluxo padrão de pagamento.
    */
   partiallyConsumedInvoiceIds: number[];
+  /**
+   * Agendamentos futuros vinculados ao plano que foram automaticamente
+   * cancelados (status in 'agendado'|'confirmado' e data >= hoje).
+   */
+  appointmentsCancelled: number;
   reason: string;
   /**
    * Sprint Financeiro 13 (P4) — totais do recálculo de preço diferenciado.
@@ -269,7 +274,36 @@ export async function cancelTreatmentPlan(
       } as any)
       .where(eq(treatmentPlansTable.id, planId));
 
-    // 5) Sprint Financeiro 13 (P4) — Recálculo de preço diferenciado.
+    // 5) Cancelar agendamentos futuros vinculados ao plano.
+    //
+    // Todos os appointments com `treatmentPlanProcedureId` pertencente a
+    // este plano, com data >= hoje BRT e status ainda acionável
+    // ('agendado' | 'confirmado'), são marcados como 'cancelado'
+    // automaticamente para manter a agenda limpa.
+    let appointmentsCancelled = 0;
+    {
+      const planProcIds = planItems.map((it) => it.planProcedureId);
+      if (planProcIds.length > 0) {
+        const FINAL_STATUSES = ["concluido", "cancelado", "faltou", "remarcado", "compareceu"];
+        const cancelled = await tx
+          .update(appointmentsTable)
+          .set({
+            status: "cancelado",
+            notes: sql`COALESCE(${appointmentsTable.notes}, '') || ' [cancelado: plano #${sql.raw(String(planId))} encerrado]'`,
+          })
+          .where(
+            and(
+              inArray(appointmentsTable.treatmentPlanProcedureId as any, planProcIds),
+              gte(appointmentsTable.date, today),
+              notInArray(appointmentsTable.status, FINAL_STATUSES),
+            ),
+          )
+          .returning({ id: appointmentsTable.id });
+        appointmentsCancelled = cancelled.length;
+      }
+    }
+
+    // 6) Sprint Financeiro 13 (P4) — Recálculo de preço diferenciado.
     //
     // Para cada appointment confirmado/concluído ligado ao plano, calcula
     // `diff = preço_de_tabela − preço_efetivo_do_item`. Quando `diff > 0`,
@@ -439,6 +473,7 @@ export async function cancelTreatmentPlan(
       paidInvoicesSkipped: paidInvoiceIds.length,
       paidInvoiceIds,
       partiallyConsumedInvoiceIds,
+      appointmentsCancelled,
       reason,
       recalculatedAppointments,
       priceDifferenceTotal: priceDifferenceTotal.toFixed(2),

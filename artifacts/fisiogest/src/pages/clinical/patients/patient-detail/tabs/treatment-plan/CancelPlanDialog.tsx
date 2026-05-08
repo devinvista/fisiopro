@@ -5,7 +5,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
-  AlertTriangle, Loader2, XCircle, Info, CheckCircle2, ReceiptText,
+  AlertTriangle, Loader2, XCircle, Info, CheckCircle2, ReceiptText, CalendarX2,
 } from "lucide-react";
 import { apiSendJson } from "@/lib/api";
 import { useToast } from "@/lib/toast";
@@ -103,6 +103,12 @@ export function CancelPlanDialog({
                   <ReceiptText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   {result.invoicesCancelled} fatura(s) cancelada(s) e estornada(s).
                 </li>
+                {(result.appointmentsCancelled ?? 0) > 0 && (
+                  <li className="flex items-center gap-1.5">
+                    <CalendarX2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    {result.appointmentsCancelled} agendamento(s) futuro(s) cancelado(s) automaticamente.
+                  </li>
+                )}
                 {result.recalculatedAppointments > 0 && (
                   <li className="flex items-center gap-1.5">
                     <ReceiptText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -144,7 +150,7 @@ export function CancelPlanDialog({
               <ul className="text-xs text-rose-800/90 space-y-1 pl-1">
                 <li>• Faturas mensais futuras não pagas são estornadas automaticamente.</li>
                 <li>• Faturas já pagas ficam para ressarcimento manual.</li>
-                <li>• Agendamentos futuros <strong>não</strong> são cancelados automaticamente — faça isso na agenda.</li>
+                <li>• Agendamentos futuros vinculados ao plano são cancelados automaticamente.</li>
                 <li>• O motivo e o timestamp ficam gravados na trilha de auditoria (LGPD).</li>
               </ul>
             </div>
