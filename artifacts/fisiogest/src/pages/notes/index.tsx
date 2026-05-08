@@ -402,6 +402,7 @@ export default function NotesPage() {
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
+  const [filterPatient, setFilterPatient] = useState("");
   const [search2, setSearch2] = useState("");
   const [showDone, setShowDone] = useState(false);
 
@@ -411,9 +412,10 @@ export default function NotesPage() {
   queryParams.set("filter", tab);
   if (filterType) queryParams.set("type", filterType);
   if (filterStatus) queryParams.set("status", filterStatus);
+  if (filterPatient) queryParams.set("patientId", filterPatient);
 
   const { data: notes = [], isLoading } = useQuery<NoteItem[]>({
-    queryKey: ["notes", tab, filterType, filterStatus],
+    queryKey: ["notes", tab, filterType, filterStatus, filterPatient],
     queryFn: () => apiFetchJson(api(`/notes?${queryParams}`)),
     staleTime: 30_000,
   });
@@ -495,7 +497,8 @@ export default function NotesPage() {
     created: notes.filter((n) => n.createdBy === currentUserId).length,
   };
 
-  const hasFilters = filterType || filterStatus || filterPriority || search2;
+  const hasFilters = filterType || filterStatus || filterPriority || filterPatient || search2;
+  const activePatient = patients.find((p) => String(p.id) === filterPatient);
 
   return (
     <AppLayout title="Recados & Tarefas">
@@ -605,6 +608,24 @@ export default function NotesPage() {
             {PRIORITY_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
 
+          {patients.length > 0 && (
+            <select
+              value={filterPatient}
+              onChange={(e) => setFilterPatient(e.target.value)}
+              className={cn(
+                "border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 transition-colors",
+                filterPatient
+                  ? "border-teal-300 bg-teal-50 text-teal-700 font-semibold"
+                  : "border-slate-200"
+              )}
+            >
+              <option value="">Todos os pacientes</option>
+              {patients.map((p) => (
+                <option key={p.id} value={String(p.id)}>{p.name}</option>
+              ))}
+            </select>
+          )}
+
           <button
             onClick={() => setShowDone(!showDone)}
             className={cn(
@@ -620,13 +641,29 @@ export default function NotesPage() {
 
           {hasFilters && (
             <button
-              onClick={() => { setFilterType(""); setFilterStatus(""); setFilterPriority(""); setSearch2(""); }}
+              onClick={() => { setFilterType(""); setFilterStatus(""); setFilterPriority(""); setFilterPatient(""); setSearch2(""); }}
               className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
             >
               <RotateCcw className="w-3 h-3" /> Limpar filtros
             </button>
           )}
         </div>
+
+        {/* Active patient filter banner */}
+        {activePatient && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-200 rounded-xl w-fit">
+            <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
+            <span className="text-xs text-teal-700 font-semibold">
+              Filtrando por paciente: <span className="font-bold">{activePatient.name}</span>
+            </span>
+            <button
+              onClick={() => setFilterPatient("")}
+              className="text-teal-400 hover:text-teal-700 transition-colors ml-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Notes grid */}
         {isLoading ? (

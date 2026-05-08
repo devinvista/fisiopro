@@ -88,6 +88,8 @@ router.get("/", async (req: AuthRequest, res) => {
     const filter = req.query.filter as string | undefined;
     const status = req.query.status as string | undefined;
     const type = req.query.type as string | undefined;
+    const patientIdRaw = req.query.patientId as string | undefined;
+    const patientId = patientIdRaw ? parseInt(patientIdRaw) : null;
 
     const conditions: any[] = [];
     if (req.clinicId) conditions.push(eq(notesTable.clinicId, req.clinicId));
@@ -113,6 +115,7 @@ router.get("/", async (req: AuthRequest, res) => {
 
     if (status) conditions.push(eq(notesTable.status, status));
     if (type) conditions.push(eq(notesTable.type, type));
+    if (patientId && !isNaN(patientId)) conditions.push(eq(notesTable.patientId, patientId));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
