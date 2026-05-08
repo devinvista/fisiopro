@@ -1,17 +1,26 @@
 import { cn } from "@/lib/utils";
+import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 
-export function MarginBadge({ margin }: { margin: number }) {
-  const { color, bg, label } =
-    margin >= 60
-      ? { color: "text-emerald-700", bg: "bg-emerald-50", label: "Ótima" }
-      : margin >= 35
-      ? { color: "text-amber-700", bg: "bg-amber-50", label: "Ok" }
-      : { color: "text-red-600", bg: "bg-red-50", label: "Baixa" };
+type MarginSize = "sm" | "lg";
+
+export function MarginBadge({ margin, size = "sm" }: { margin: number; size?: MarginSize }) {
+  const isGood = margin >= 60;
+  const isOk = margin >= 35;
+
+  const { colorClass, bgClass, icon } = isGood
+    ? { colorClass: "text-emerald-700", bgClass: "bg-emerald-50", icon: <TrendingUp className={cn("shrink-0", size === "lg" ? "w-3.5 h-3.5" : "w-2.5 h-2.5")} /> }
+    : isOk
+    ? { colorClass: "text-amber-700", bgClass: "bg-amber-50", icon: <Minus className={cn("shrink-0", size === "lg" ? "w-3.5 h-3.5" : "w-2.5 h-2.5")} /> }
+    : { colorClass: "text-rose-600", bgClass: "bg-rose-50", icon: <TrendingDown className={cn("shrink-0", size === "lg" ? "w-3.5 h-3.5" : "w-2.5 h-2.5")} /> };
 
   return (
-    <span className={cn("inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums", bg, color)}>
+    <span className={cn(
+      "inline-flex items-center gap-1 font-bold rounded-full tabular-nums",
+      bgClass, colorClass,
+      size === "lg" ? "text-xs px-2.5 py-1" : "text-[10px] px-1.5 py-0.5"
+    )}>
+      {icon}
       {margin.toFixed(0)}%
-      <span className="font-medium opacity-70 hidden sm:inline">{label}</span>
     </span>
   );
 }

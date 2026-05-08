@@ -4,14 +4,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Pencil, Globe, Info } from "lucide-react";
+import { Plus, Pencil, Globe, Info, Wifi } from "lucide-react";
 import { getMargin } from "../constants";
 import { MarginBadge } from "./MarginBadge";
 import { cn } from "@/lib/utils";
@@ -63,29 +59,33 @@ export function ProcedureFormModal({
   isSuperAdmin = false,
 }: ProcedureFormModalProps) {
   const revenueAccounts = accountingAccounts.filter((a) => a.type === "revenue");
-  const formMargin = getMargin(form.price, form.cost);
-  const isGroup = form.modalidade === "grupo";
-  const isDupla = form.modalidade === "dupla";
+  const formMargin      = getMargin(form.price, form.cost);
+  const isGroup  = form.modalidade === "grupo";
+  const isDupla  = form.modalidade === "dupla";
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[90dvh] overflow-y-auto rounded-3xl border-none shadow-2xl">
         <DialogHeader className="px-1">
-          <DialogTitle className="font-display text-xl sm:text-2xl flex items-center gap-2">
-            <div className={cn("p-2 rounded-xl shrink-0", editingProcedure ? "bg-slate-100" : "bg-primary/10")}>
+          <DialogTitle className="font-display text-xl sm:text-2xl flex items-center gap-3">
+            <div className={cn("p-2 rounded-xl shrink-0",
+              editingProcedure ? "bg-muted" : "bg-primary/10"
+            )}>
               {editingProcedure
-                ? <Pencil className="w-5 h-5 text-slate-600" />
+                ? <Pencil className="w-5 h-5 text-muted-foreground" />
                 : <Plus className="w-5 h-5 text-primary" />}
             </div>
-            <span className="truncate">
-              {editingProcedure ? "Editar Procedimento" : "Novo Procedimento"}
-            </span>
+            <div>
+              <span className="block text-foreground">
+                {editingProcedure ? "Editar Procedimento" : "Novo Procedimento"}
+              </span>
+              <span className="block text-sm font-normal text-muted-foreground mt-0.5">
+                {editingProcedure
+                  ? "Atualize as informações do serviço."
+                  : "Cadastre um novo serviço ou modalidade de atendimento."}
+              </span>
+            </div>
           </DialogTitle>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            {editingProcedure
-              ? "Atualize as informações do serviço."
-              : "Cadastre um novo serviço ou modalidade de atendimento."}
-          </p>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
@@ -93,26 +93,21 @@ export function ProcedureFormModal({
           {/* ── Identificação ──────────────────────────────────────────── */}
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="name">Nome do Procedimento</Label>
+              <Label htmlFor="proc-name" className="text-sm font-medium">Nome do Procedimento</Label>
               <Input
-                id="name"
+                id="proc-name"
                 placeholder="Ex: RPG, Pilates Solo, Drenagem Linfática…"
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                className="rounded-xl border-slate-200 focus:ring-primary/20"
+                className="rounded-xl"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Categoria</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={v => setForm(f => ({ ...f, category: v }))}
-                >
-                  <SelectTrigger className="rounded-xl border-slate-200">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
+                <Label className="text-sm font-medium">Categoria</Label>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Reabilitação">Reabilitação</SelectItem>
                     <SelectItem value="Estética">Estética</SelectItem>
@@ -122,14 +117,12 @@ export function ProcedureFormModal({
               </div>
 
               <div className="space-y-1.5">
-                <Label>Modalidade</Label>
+                <Label className="text-sm font-medium">Modalidade</Label>
                 <Select
                   value={form.modalidade}
                   onValueChange={(v: any) => setForm(f => ({ ...f, modalidade: v }))}
                 >
-                  <SelectTrigger className="rounded-xl border-slate-200">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="individual">Individual</SelectItem>
                     <SelectItem value="dupla">Em Dupla</SelectItem>
@@ -141,95 +134,96 @@ export function ProcedureFormModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Duração (minutos)</Label>
+                <Label className="text-sm font-medium">Duração (minutos)</Label>
                 <Input
-                  type="number"
-                  min="5"
-                  max="480"
+                  type="number" min="5" max="480"
                   value={form.durationMinutes}
                   onChange={e => setForm(f => ({ ...f, durationMinutes: Number(e.target.value) }))}
-                  className="rounded-xl border-slate-200"
+                  className="rounded-xl"
                 />
               </div>
-
               {(isGroup || isDupla) && (
                 <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
-                  <Label>Capacidade Máxima</Label>
+                  <Label className="text-sm font-medium">Capacidade máxima</Label>
                   <Input
-                    type="number"
-                    min={isDupla ? 2 : 2}
+                    type="number" min={2}
                     value={form.maxCapacity}
                     onChange={e => setForm(f => ({ ...f, maxCapacity: Number(e.target.value) }))}
-                    className="rounded-xl border-slate-200"
+                    className="rounded-xl"
                   />
                 </div>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label>Descrição</Label>
+              <Label className="text-sm font-medium">Descrição</Label>
               <Textarea
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Descreva os benefícios, indicações ou detalhes do procedimento…"
-                className="rounded-xl border-slate-200 resize-none"
+                placeholder="Benefícios, indicações ou detalhes do procedimento…"
+                className="rounded-xl resize-none text-sm"
                 rows={2}
               />
             </div>
           </div>
 
           {/* ── Preço e Custo Base ──────────────────────────────────────── */}
-          <div className="rounded-2xl border border-slate-200 p-4 space-y-3 bg-slate-50/50">
+          <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">Preço e Custo Base</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Preço e Custo Base
+              </p>
               {form.price && <MarginBadge margin={formMargin} />}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-sm">Preço por sessão (R$)</Label>
+                <Label className="text-sm font-medium">Preço por sessão</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium pointer-events-none">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">R$</span>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="number" step="0.01"
                     value={form.price}
                     onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
                     placeholder="0,00"
-                    className="pl-9 rounded-xl border-slate-200 bg-white"
+                    className="pl-9 rounded-xl bg-card"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm">Custo base de insumos (R$)</Label>
+                <Label className="text-sm font-medium">Custo base de insumos</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium pointer-events-none">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">R$</span>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="number" step="0.01"
                     value={form.cost}
                     onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
                     placeholder="0,00"
-                    className="pl-9 rounded-xl border-slate-200 bg-white"
+                    className="pl-9 rounded-xl bg-card"
                   />
                 </div>
               </div>
             </div>
 
-            <p className="text-[10px] text-slate-400 flex items-start gap-1.5">
+            <p className="text-[10px] text-muted-foreground flex items-start gap-1.5">
               <Info className="w-3 h-3 shrink-0 mt-0.5" />
-              Custo base padrão para todas as clínicas. Custos variáveis específicos por clínica são
-              configurados via o botão <strong className="text-slate-500">R$</strong> em cada procedimento.
+              Custo base padrão para todos os planos. Custos variáveis específicos por clínica são
+              configurados via o botão <strong>R$</strong> em cada procedimento (Plano Pro).
             </p>
           </div>
 
           {/* ── Configurações ───────────────────────────────────────────── */}
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-medium cursor-pointer">Agendamento Online</Label>
-                <p className="text-[11px] text-slate-400">Permitir que pacientes agendem via link público</p>
+            <div className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-muted/30 border border-border">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center shrink-0">
+                  <Wifi className="w-4 h-4 text-teal-600" />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium cursor-pointer">Agendamento Online</Label>
+                  <p className="text-[11px] text-muted-foreground">Disponível no portal público da clínica</p>
+                </div>
               </div>
               <Switch
                 checked={form.onlineBookingEnabled}
@@ -238,12 +232,14 @@ export function ProcedureFormModal({
             </div>
 
             {isSuperAdmin && !editingProcedure && (
-              <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
+              <div className="flex items-center justify-between gap-4 p-3.5 rounded-2xl bg-amber-50 border border-amber-200">
                 <div className="flex items-center gap-2.5">
-                  <Globe className="w-4 h-4 text-amber-600 shrink-0" />
-                  <div className="space-y-0.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <Globe className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
                     <Label className="text-sm font-medium text-amber-800 cursor-pointer">Procedimento Global</Label>
-                    <p className="text-[11px] text-amber-600">Disponível para todas as clínicas — não editável por clínicas</p>
+                    <p className="text-[11px] text-amber-600">Disponível para todas as clínicas</p>
                   </div>
                 </div>
                 <Switch
@@ -255,14 +251,14 @@ export function ProcedureFormModal({
 
             {showAccountingField && (
               <div className="space-y-1.5">
-                <Label className="text-sm">Conta contábil de receita</Label>
+                <Label className="text-sm font-medium">Conta contábil de receita</Label>
                 <Select
                   value={form.accountingAccountId ?? ""}
                   onValueChange={(v) =>
                     setForm((f) => ({ ...f, accountingAccountId: v === "__default__" ? "" : v }))
                   }
                 >
-                  <SelectTrigger className="rounded-xl border-slate-200">
+                  <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Conta padrão (4.1.1 / 4.1.2)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,7 +270,7 @@ export function ProcedureFormModal({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-muted-foreground">
                   Sub-conta usada no DRE. Vazio = receita padrão.
                 </p>
               </div>
@@ -282,10 +278,10 @@ export function ProcedureFormModal({
           </div>
         </div>
 
-        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row bg-slate-50/50 p-4 -mx-6 -mb-6 border-t border-slate-100">
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row bg-muted/30 p-4 -mx-6 -mb-6 border-t border-border">
           <Button
             variant="outline"
-            className="w-full sm:w-auto h-10 rounded-xl border-slate-200"
+            className="w-full sm:w-auto h-10 rounded-xl"
             onClick={() => onOpenChange(false)}
           >
             Cancelar

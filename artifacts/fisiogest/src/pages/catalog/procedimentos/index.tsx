@@ -8,7 +8,7 @@ import {
   ListView,
   ProcedureFormModal,
 } from "./components";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, ReactNode } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +23,9 @@ import {
   BookOpen,
   TrendingUp,
   DollarSign,
+  Lock,
   CheckCircle2,
+  Sparkles,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -41,18 +43,19 @@ export default function Procedimentos() {
   const queryClient = useQueryClient();
   const { hasRole, isSuperAdmin, hasFeature } = useAuth();
   const isAdmin = hasRole("admin") || isSuperAdmin;
+  const hasCostFeature    = hasFeature("financial.cost_per_procedure");
   const showAccountingField = hasFeature("financial.view.accounting");
 
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("cards");
+  const [search, setSearch]           = useState("");
+  const [viewMode, setViewMode]       = useState<ViewMode>("cards");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProcedure, setEditingProcedure] = useState<Procedure | null>(null);
+  const [editingProcedure, setEditingProcedure]   = useState<Procedure | null>(null);
   const [deletingProcedure, setDeletingProcedure] = useState<Procedure | null>(null);
-  const [costingProcedure, setCostingProcedure] = useState<Procedure | null>(null);
+  const [costingProcedure, setCostingProcedure]   = useState<Procedure | null>(null);
   const [costForm, setCostForm] = useState({ priceOverride: "", variableCost: "", notes: "" });
   const [analysisMonth, setAnalysisMonth] = useState(new Date().getMonth() + 1);
-  const [analysisYear, setAnalysisYear] = useState(new Date().getFullYear());
+  const [analysisYear, setAnalysisYear]   = useState(new Date().getFullYear());
   const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [catalogOptions, setCatalogOptions] = useState({
     clinicName: "FisioGest Pro",
@@ -134,7 +137,7 @@ export default function Procedimentos() {
     (p) => search.trim() === "" || p.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // ── Mutations ──────────────────────────────────────────────────────────────
+  // ── Mutations ────────────────────────────────────────────────────────────
 
   const createMutation = useMutation({
     mutationFn: (data: typeof form) =>
@@ -216,15 +219,14 @@ export default function Procedimentos() {
         `/api/procedures/overhead-analysis?month=${analysisMonth}&year=${analysisYear}` +
           (costingProcedure ? `&procedureId=${costingProcedure.id}` : "")
       ),
-    enabled: !!costingProcedure,
+    enabled: !!costingProcedure && hasCostFeature,
     staleTime: 30_000,
   });
 
   const computedFixedCostPerSession =
     overheadData && costingProcedure
       ? (overheadData.procedureStats?.fixedCostPerSession ??
-          (overheadData.costPerHour *
-            (costingProcedure.durationMinutes / 60)) /
+          (overheadData.costPerHour * (costingProcedure.durationMinutes / 60)) /
             Math.max(
               costingProcedure.modalidade !== "individual"
                 ? (costingProcedure.maxCapacity ?? 1)
@@ -262,14 +264,14 @@ export default function Procedimentos() {
     },
   });
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
   function openConfigCosts(proc: Procedure) {
+    if (!hasCostFeature) return;
     setCostingProcedure(proc);
     setCostForm({
-      priceOverride: proc.clinicCost?.priceOverride
-        ? String(proc.clinicCost.priceOverride)
-        : "",
+      priceOverride:
+        proc.clinicCost?.priceOverride ? String(proc.clinicCost.priceOverride) : "",
       variableCost:
         proc.clinicCost?.variableCost && proc.clinicCost.variableCost !== "0"
           ? String(proc.clinicCost.variableCost)
@@ -307,10 +309,7 @@ export default function Procedimentos() {
   function handleSubmit() {
     const parsed = procedureFormSchema.safeParse(form);
     if (!parsed.success) {
-      toast({
-        variant: "destructive",
-        title: parsed.error.issues[0]?.message ?? "Dados inválidos",
-      });
+      toast({ variant: "destructive", title: parsed.error.issues[0]?.message ?? "Dados inválidos" });
       return;
     }
     const payload = buildProcedurePayload(parsed.data);
@@ -378,15 +377,7 @@ export default function Procedimentos() {
       .join("");
 
     const activeCount = allProcedures.filter((p) => p.isActive).length;
-    const html = getCatalogHtml(
-      clinicName,
-      tagline,
-      introText,
-      showPrices,
-      sectionsHtml,
-      activeCount,
-      today
-    );
+    const html = getCatalogHtml(clinicName, tagline, introText, showPrices, sectionsHtml, activeCount, today);
     const win = window.open("", "_blank");
     if (win) {
       win.document.write(html);
@@ -395,113 +386,118 @@ export default function Procedimentos() {
     setIsCatalogModalOpen(false);
   }
 
-  // ── Computed stats ─────────────────────────────────────────────────────────
+  // ── Computed stats ────────────────────────────────────────────────────────
 
-  const activeProcs = allProcedures.filter((p) => p.isActive);
+  const activeProcs   = allProcedures.filter((p) => p.isActive);
   const inactiveCount = allProcedures.length - activeProcs.length;
-  const withClinicCosts = allProcedures.filter((p) => !!p.clinicCost).length;
   const avgPrice =
     activeProcs.length
       ? activeProcs.reduce((s, p) => s + Number(p.price), 0) / activeProcs.length
       : 0;
   const avgMargin =
-    activeProcs.length
-      ? activeProcs.reduce((s, p) => s + getMargin(p.price, p.cost ?? 0), 0) /
-        activeProcs.length
-      : 0;
+    hasCostFeature && activeProcs.length
+      ? activeProcs.reduce((s, p) => s + getMargin(p.price, p.cost ?? 0), 0) / activeProcs.length
+      : null;
+  const withClinicCosts = hasCostFeature
+    ? allProcedures.filter((p) => !!p.clinicCost).length
+    : null;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <AppLayout title="Procedimentos">
       <div className="space-y-5">
 
-        {/* ── Header ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold font-display text-slate-800 truncate">
+            <h1 className="text-xl sm:text-2xl font-bold font-display text-foreground truncate">
               Procedimentos
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500">
-              Gerencie os serviços e procedimentos da clínica
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Catálogo de serviços, preços e indicadores da clínica
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
-              className="w-full sm:w-auto h-9 px-3 sm:px-4 rounded-lg gap-1.5 text-sm"
+              className="h-9 px-3 sm:px-4 rounded-xl gap-1.5 text-sm"
               onClick={() => setIsCatalogModalOpen(true)}
             >
               <BookOpen className="h-4 w-4 shrink-0" />
-              <span className="sm:hidden">Catálogo</span>
               <span className="hidden sm:inline">Gerar Catálogo</span>
+              <span className="sm:hidden">Catálogo</span>
             </Button>
             {isAdmin && (
               <Button
-                className="w-full sm:w-auto h-9 px-3 sm:px-4 rounded-lg shadow-md shadow-primary/20 gap-1.5 text-sm"
-                onClick={() => {
-                  resetForm();
-                  setEditingProcedure(null);
-                  setIsModalOpen(true);
-                }}
+                className="h-9 px-3 sm:px-4 rounded-xl shadow-md shadow-primary/20 gap-1.5 text-sm"
+                onClick={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}
               >
                 <Plus className="h-4 w-4 shrink-0" />
-                <span className="sm:hidden">Novo</span>
                 <span className="hidden sm:inline">Novo Procedimento</span>
+                <span className="sm:hidden">Novo</span>
               </Button>
             )}
           </div>
         </div>
 
-        {/* ── Stats strip ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        {/* ── Stats strip ────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
           <StatCard
             icon={<Stethoscope className="w-4 h-4" />}
-            label="Ativos"
-            value={activeProcs.length}
+            label="Procedimentos ativos"
+            value={isLoading ? "—" : String(activeProcs.length)}
             sub={inactiveCount > 0 ? `${inactiveCount} inativo${inactiveCount !== 1 ? "s" : ""}` : "todos ativos"}
-            color="text-primary"
-            bg="bg-primary/8"
+            colorClass="text-primary"
+            bgClass="bg-primary/10"
           />
           <StatCard
-            icon={<span className="text-xs font-bold">R$</span>}
+            icon={<span className="text-[11px] font-bold">R$</span>}
             label="Preço médio"
-            value={formatCurrency(avgPrice)}
+            value={isLoading ? "—" : formatCurrency(avgPrice)}
             sub="procedimentos ativos"
-            color="text-emerald-700"
-            bg="bg-emerald-50"
+            colorClass="text-emerald-700"
+            bgClass="bg-emerald-50"
           />
-          <StatCard
-            icon={<TrendingUp className="w-4 h-4" />}
-            label="Margem média"
-            value={`${avgMargin.toFixed(0)}%`}
-            sub={avgMargin >= 50 ? "saudável" : avgMargin >= 35 ? "atenção" : "baixa"}
-            color={avgMargin >= 50 ? "text-emerald-700" : avgMargin >= 35 ? "text-amber-600" : "text-rose-600"}
-            bg={avgMargin >= 50 ? "bg-emerald-50" : avgMargin >= 35 ? "bg-amber-50" : "bg-rose-50"}
-          />
-          <StatCard
-            icon={<DollarSign className="w-4 h-4" />}
-            label="Custos config."
-            value={withClinicCosts}
-            sub={withClinicCosts === allProcedures.length ? "todos configurados" : `de ${allProcedures.length} procedimentos`}
-            color="text-violet-700"
-            bg="bg-violet-50"
-          />
+          {avgMargin !== null ? (
+            <StatCard
+              icon={<TrendingUp className="w-4 h-4" />}
+              label="Margem média"
+              value={`${avgMargin.toFixed(0)}%`}
+              sub={avgMargin >= 50 ? "Saudável" : avgMargin >= 35 ? "Atenção" : "Baixa"}
+              colorClass={avgMargin >= 50 ? "text-emerald-700" : avgMargin >= 35 ? "text-amber-600" : "text-rose-600"}
+              bgClass={avgMargin >= 50 ? "bg-emerald-50" : avgMargin >= 35 ? "bg-amber-50" : "bg-rose-50"}
+            />
+          ) : (
+            <LockedStatCard label="Margem média" plan="Pro" />
+          )}
+          {withClinicCosts !== null ? (
+            <StatCard
+              icon={<DollarSign className="w-4 h-4" />}
+              label="Custos configurados"
+              value={String(withClinicCosts)}
+              sub={`de ${allProcedures.length} procedimento${allProcedures.length !== 1 ? "s" : ""}`}
+              colorClass="text-violet-700"
+              bgClass="bg-violet-50"
+            />
+          ) : (
+            <LockedStatCard label="Custos configurados" plan="Pro" />
+          )}
         </div>
 
-        {/* ── Filters + View toggle ─────────────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Category tabs */}
-          <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden text-xs font-medium bg-white">
+        {/* ── Filters ────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          {/* Category pills */}
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
             {CATEGORIES.map((c) => (
               <button
                 key={c.value}
                 onClick={() => setSelectedCategory(c.value)}
                 className={cn(
-                  "px-3 h-8 transition-colors border-r border-slate-200 last:border-r-0 whitespace-nowrap",
+                  "px-3 h-7 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
                   selectedCategory === c.value
-                    ? "bg-primary text-white"
-                    : "hover:bg-slate-50 text-slate-600"
+                    ? "bg-card shadow text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {c.label}
@@ -511,72 +507,61 @@ export default function Procedimentos() {
 
           {/* Search */}
           <div className="relative flex-1 min-w-[160px] max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Buscar procedimento…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-8 text-sm rounded-lg"
+              className="pl-8 h-8 text-sm"
             />
           </div>
 
           {/* View toggle */}
-          <div className="ml-auto flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+          <div className="sm:ml-auto flex items-center gap-1 p-1 bg-muted rounded-xl">
             <button
               onClick={() => setViewMode("cards")}
               className={cn(
-                "p-1.5 transition-colors",
-                viewMode === "cards" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
+                "p-1.5 rounded-lg transition-all",
+                viewMode === "cards"
+                  ? "bg-card shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
               title="Cards"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => setViewMode("list")}
               className={cn(
-                "p-1.5 transition-colors border-l border-slate-200",
-                viewMode === "list" ? "bg-primary text-white" : "hover:bg-slate-50 text-slate-500"
+                "p-1.5 rounded-lg transition-all",
+                viewMode === "list"
+                  ? "bg-card shadow text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               )}
               title="Lista"
             >
-              <LayoutList className="w-4 h-4" />
+              <LayoutList className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* ── Content ───────────────────────────────────────────────────── */}
+        {/* ── Content ────────────────────────────────────────────────────── */}
         {isLoading ? (
-          <div className="flex items-center justify-center h-48 text-slate-400 text-sm gap-2">
-            <div className="w-4 h-4 border-2 border-slate-200 border-t-primary rounded-full animate-spin" />
-            Carregando procedimentos…
-          </div>
+          <LoadingSkeleton viewMode={viewMode} />
         ) : procedures.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3 bg-white rounded-2xl border border-slate-200 border-dashed">
-            <Stethoscope className="w-10 h-10 text-slate-200" />
-            <p className="text-sm">Nenhum procedimento encontrado.</p>
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  resetForm();
-                  setEditingProcedure(null);
-                  setIsModalOpen(true);
-                }}
-              >
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> Adicionar procedimento
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            isAdmin={isAdmin}
+            onNew={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}
+          />
         ) : viewMode === "cards" ? (
           <CardView
             procedures={procedures}
             onEdit={openEdit}
             onDelete={setDeletingProcedure}
             isAdmin={isAdmin}
+            hasCostFeature={hasCostFeature}
             onToggleActive={(p) => toggleActiveMutation.mutate(p.id)}
-            onConfigCosts={isAdmin ? openConfigCosts : undefined}
+            onConfigCosts={hasCostFeature && isAdmin ? openConfigCosts : undefined}
           />
         ) : (
           <ListView
@@ -584,9 +569,15 @@ export default function Procedimentos() {
             onEdit={openEdit}
             onDelete={setDeletingProcedure}
             isAdmin={isAdmin}
+            hasCostFeature={hasCostFeature}
             onToggleActive={(p) => toggleActiveMutation.mutate(p.id)}
-            onConfigCosts={isAdmin ? openConfigCosts : undefined}
+            onConfigCosts={hasCostFeature && isAdmin ? openConfigCosts : undefined}
           />
+        )}
+
+        {/* ── Upgrade banner (only when feature is locked) ──────────────── */}
+        {!hasCostFeature && allProcedures.length > 0 && (
+          <UpgradeBanner />
         )}
       </div>
 
@@ -594,13 +585,8 @@ export default function Procedimentos() {
       <ProcedureFormModal
         isOpen={isModalOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            setIsModalOpen(false);
-            setEditingProcedure(null);
-            resetForm();
-          } else {
-            setIsModalOpen(true);
-          }
+          if (!open) { setIsModalOpen(false); setEditingProcedure(null); resetForm(); }
+          else { setIsModalOpen(true); }
         }}
         editingProcedure={editingProcedure}
         form={form}
@@ -619,65 +605,162 @@ export default function Procedimentos() {
         onGenerate={generateCatalog}
       />
 
-      <CostAnalysisModal
-        procedure={costingProcedure}
-        onOpenChange={(open) => {
-          if (!open) setCostingProcedure(null);
-        }}
-        analysisMonth={analysisMonth}
-        setAnalysisMonth={setAnalysisMonth}
-        analysisYear={analysisYear}
-        setAnalysisYear={setAnalysisYear}
-        overheadData={overheadData}
-        overheadLoading={overheadLoading}
-        costForm={costForm}
-        setCostForm={setCostForm}
-        computedFixedCostPerSession={computedFixedCostPerSession}
-        onSave={() =>
-          costingProcedure &&
-          updateCostsMutation.mutate({ ...costForm, id: costingProcedure.id })
-        }
-        isSaving={updateCostsMutation.isPending}
-      />
+      {hasCostFeature && (
+        <CostAnalysisModal
+          procedure={costingProcedure}
+          onOpenChange={(open) => { if (!open) setCostingProcedure(null); }}
+          analysisMonth={analysisMonth}
+          setAnalysisMonth={setAnalysisMonth}
+          analysisYear={analysisYear}
+          setAnalysisYear={setAnalysisYear}
+          overheadData={overheadData}
+          overheadLoading={overheadLoading}
+          costForm={costForm}
+          setCostForm={setCostForm}
+          computedFixedCostPerSession={computedFixedCostPerSession}
+          onSave={() =>
+            costingProcedure &&
+            updateCostsMutation.mutate({ ...costForm, id: costingProcedure.id })
+          }
+          isSaving={updateCostsMutation.isPending}
+        />
+      )}
 
       <DeleteConfirmationModal
         procedure={deletingProcedure}
-        onOpenChange={(open) => {
-          if (!open) setDeletingProcedure(null);
-        }}
+        onOpenChange={(open) => { if (!open) setDeletingProcedure(null); }}
         onConfirm={() => deletingProcedure && deleteMutation.mutate(deletingProcedure.id)}
       />
     </AppLayout>
   );
 }
 
-// ── StatCard ───────────────────────────────────────────────────────────────
+// ── Sub-components ──────────────────────────────────────────────────────────
 
 function StatCard({
-  icon,
-  label,
-  value,
-  sub,
-  color,
-  bg,
+  icon, label, value, sub, colorClass, bgClass,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
-  value: string | number;
+  value: string;
   sub: string;
-  color: string;
-  bg: string;
+  colorClass: string;
+  bgClass: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-3.5 flex items-center gap-3">
-      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bg, color)}>
+    <div className="bg-card rounded-2xl border border-border shadow-sm p-4 flex items-center gap-3">
+      <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", bgClass, colorClass)}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] text-slate-400 font-medium leading-none mb-0.5">{label}</p>
-        <p className={cn("text-lg font-bold leading-none tabular-nums", color)}>{value}</p>
-        <p className="text-[10px] text-slate-400 mt-0.5 truncate">{sub}</p>
+        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide leading-none mb-1">
+          {label}
+        </p>
+        <p className={cn("text-lg font-bold leading-none tabular-nums", colorClass)}>{value}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{sub}</p>
       </div>
+    </div>
+  );
+}
+
+function LockedStatCard({ label, plan }: { label: string; plan: string }) {
+  return (
+    <div className="bg-card rounded-2xl border border-dashed border-border shadow-sm p-4 flex items-center gap-3 opacity-70">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-muted text-muted-foreground">
+        <Lock className="w-4 h-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide leading-none mb-1">
+          {label}
+        </p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-base font-bold text-muted-foreground leading-none">—</p>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-blue-100 text-blue-700">
+            {plan}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadingSkeleton({ viewMode }: { viewMode: ViewMode }) {
+  if (viewMode === "list") {
+    return (
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className={cn("px-4 py-3.5 animate-pulse flex items-center gap-4", i !== 4 && "border-b border-border")}>
+            <div className="flex-1 space-y-1.5">
+              <div className="h-3.5 bg-muted rounded w-48" />
+              <div className="h-2.5 bg-muted rounded w-24" />
+            </div>
+            <div className="h-3 bg-muted rounded w-16" />
+            <div className="h-3 bg-muted rounded w-16" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="bg-card rounded-2xl border border-border shadow-sm p-4 animate-pulse space-y-3">
+          <div className="flex justify-between">
+            <div className="h-5 bg-muted rounded-full w-24" />
+            <div className="h-5 bg-muted rounded w-16" />
+          </div>
+          <div className="h-4 bg-muted rounded w-3/4" />
+          <div className="h-3 bg-muted rounded w-full" />
+          <div className="h-3 bg-muted rounded w-2/3" />
+          <div className="pt-2 border-t border-border flex justify-between items-end">
+            <div className="space-y-1">
+              <div className="h-2 bg-muted rounded w-16" />
+              <div className="h-6 bg-muted rounded w-20" />
+            </div>
+            <div className="h-5 bg-muted rounded-full w-12" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ isAdmin, onNew }: { isAdmin?: boolean; onNew: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center bg-card rounded-2xl border border-dashed border-border">
+      <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <Stethoscope className="w-7 h-7 text-muted-foreground" />
+      </div>
+      <p className="text-sm font-medium text-foreground mb-1">Nenhum procedimento encontrado</p>
+      <p className="text-xs text-muted-foreground mb-5 max-w-xs">
+        Adicione os serviços e procedimentos da clínica para começar a gerenciar preços e custos.
+      </p>
+      {isAdmin && (
+        <Button size="sm" onClick={onNew} className="rounded-xl gap-1.5 h-9">
+          <Plus className="h-3.5 w-3.5" /> Adicionar procedimento
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function UpgradeBanner() {
+  return (
+    <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4 flex items-center gap-4">
+      <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+        <Sparkles className="w-5 h-5 text-blue-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-blue-900">
+          Análise de custos e margem disponível no Plano Pro
+        </p>
+        <p className="text-xs text-blue-700 mt-0.5">
+          Configure custos variáveis por clínica, calcule overhead automaticamente e acompanhe a margem de cada procedimento.
+        </p>
+      </div>
+      <span className="shrink-0 inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-600 text-white">
+        Pro
+      </span>
     </div>
   );
 }
