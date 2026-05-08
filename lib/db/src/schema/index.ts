@@ -26,4 +26,5 @@ export * from "./accounting";
 export * from "./lgpd";
 export * from "./patient-access-requests";
 export * from "./patient-clinics";
+export * from "./notes";
 export * from "../plan-features";

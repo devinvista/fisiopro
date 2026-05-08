@@ -22,6 +22,7 @@ import { format, parseISO, differenceInYears } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link, useLocation } from "wouter";
 import { PatientPipelineWidget } from "./dashboard/PatientPipelineWidget";
+import { NotesWidget } from "./dashboard/NotesWidget";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -496,6 +497,9 @@ export default function Dashboard() {
 
         {/* ── PATIENT PIPELINE ─────────────────────────────────────────────── */}
         <PatientPipelineWidget />
+
+        {/* ── RECADOS & TAREFAS ────────────────────────────────────────────── */}
+        <NotesWidget />
 
         {/* ── BOTTOM ROW ───────────────────────────────────────────────────── */}
         <div className={cn(

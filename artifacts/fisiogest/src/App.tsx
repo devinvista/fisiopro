@@ -33,6 +33,7 @@ const Clinicas = lazy(() => import("./pages/saas/clinicas"));
 const SuperAdmin = lazy(() => import("./pages/saas/superadmin"));
 const Configuracoes = lazy(() => import("./pages/settings/configuracoes"));
 const NotFound = lazy(() => import("./pages/not-found"));
+const Notes = lazy(() => import("./pages/notes/index"));
 const AceitePage = lazy(() => import("./pages/public/aceite"));
 const PrivacyPolicyPage = lazy(() =>
   import("./pages/legal/policy-page").then((m) => ({ default: m.PrivacyPolicyPage })),
@@ -120,6 +121,9 @@ function Router() {
         </Route>
         <Route path="/configuracoes">
           {() => <ProtectedRoute component={Configuracoes} />}
+        </Route>
+        <Route path="/recados">
+          {() => <ProtectedRoute component={Notes} />}
         </Route>
         <Route path="/agendas">
           {() => <HashRedirect hash="agendas" />}

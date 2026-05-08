@@ -6,6 +6,7 @@ import authRouter from "./auth/auth.routes.js";
 import publicRouter from "./public/public.routes.js";
 import dashboardRouter from "./dashboard/dashboard.routes.js";
 import storageRouter from "./storage/storage.routes.js";
+import notesRouter from "./notes/notes.routes.js";
 
 // Clinical domain
 import patientsRouter from "./clinical/patients/patients.routes.js";
@@ -107,6 +108,7 @@ router.use("/reports", reportsRouter);
 // Cross-cutting
 router.use("/dashboard", dashboardRouter);
 router.use("/storage", storageRouter);
+router.use("/notes", notesRouter);
 
 // SaaS (mounted at root because they declare their own paths)
 router.use("/", couponsRouter);

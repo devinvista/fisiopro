@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchJson, API_BASE } from "@/lib/api";
 import {
   LayoutDashboard,
   LogOut,
@@ -17,6 +17,7 @@ import {
   Clock,
   X,
   Lock,
+  MessageSquare,
 } from "lucide-react";
 import {
   CalendarIcon,
@@ -169,6 +170,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/procedimentos", label: "Procedimentos", icon: StethoscopeIcon, permission: "procedures.manage" },
   { href: "/pacotes", label: "Pacotes", icon: Package, permission: "procedures.manage", feature: "module.patient_packages" },
   { href: "/financeiro", label: "Financeiro", icon: WalletIcon, permission: "financial.read" },
+  { href: "/recados", label: "Recados", icon: MessageSquare, permission: null },
   { href: "/relatorios", label: "Relatórios", icon: ReportsIcon, permission: "reports.read" },
   {
     href: "/configuracoes",
@@ -221,6 +223,14 @@ function SidebarContent({
   // Snapshot de uso x limites do plano (dados para as pílulas "X/Y" da nav).
   // Hook se auto-desabilita para super-admin / clínica sem subscription.
   const { data: planUsage } = usePlanUsage();
+
+  // Contagem de itens não vistos atribuídos ao usuário atual (badge de recados).
+  const { data: notesSummary } = useQuery<{ unread: number; overdue: number; dueToday: number; pending: number }>({
+    queryKey: ["notes-summary"],
+    queryFn: () => apiFetchJson(`${API_BASE}/api/notes/summary`),
+    staleTime: 60_000,
+    enabled: !isSuperAdmin,
+  });
 
   // Itens que o usuário tem permissão de papel para ver. Itens sem feature do
   // plano permanecem visíveis mas marcados como "trancados" (upsell).
@@ -359,6 +369,10 @@ function SidebarContent({
                   ) : usageInfo && usageInfo.limit != null ? (
                     <span className="ml-auto">
                       <UsageBadge current={usageInfo.current} limit={usageInfo.limit} />
+                    </span>
+                  ) : item.href === "/recados" && notesSummary && (notesSummary.unread + notesSummary.overdue) > 0 ? (
+                    <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${isActive ? "bg-white/20 text-white" : "bg-violet-500 text-white"}`}>
+                      {notesSummary.unread + notesSummary.overdue}
                     </span>
                   ) : (
                     isActive && <ChevronRight className="ml-auto h-4 w-4 opacity-60" />
