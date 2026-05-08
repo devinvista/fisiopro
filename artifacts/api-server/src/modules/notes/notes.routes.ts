@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, notesTable, usersTable, patientsTable } from "@workspace/db";
+import { db, notesTable, usersTable, patientsTable, patientClinicsTable } from "@workspace/db";
 import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
 
@@ -10,6 +10,30 @@ function clinicFilter(req: AuthRequest) {
   if (!req.clinicId) return undefined;
   return eq(notesTable.clinicId, req.clinicId);
 }
+
+router.get("/patients", async (req: AuthRequest, res) => {
+  try {
+    if (!req.clinicId) { res.json([]); return; }
+    const rows = await db
+      .select({ id: patientsTable.id, name: patientsTable.name })
+      .from(patientsTable)
+      .innerJoin(
+        patientClinicsTable,
+        and(
+          eq(patientClinicsTable.patientId, patientsTable.id),
+          eq(patientClinicsTable.clinicId, req.clinicId),
+          isNull(patientClinicsTable.deletedAt),
+        ),
+      )
+      .where(isNull(patientsTable.deletedAt))
+      .orderBy(patientsTable.name)
+      .limit(300);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 router.get("/summary", async (req: AuthRequest, res) => {
   try {
@@ -69,7 +93,12 @@ router.get("/", async (req: AuthRequest, res) => {
     if (req.clinicId) conditions.push(eq(notesTable.clinicId, req.clinicId));
 
     if (filter === "assigned") {
-      conditions.push(eq(notesTable.assignedTo, req.userId!));
+      conditions.push(
+        or(
+          eq(notesTable.assignedTo, req.userId!),
+          isNull(notesTable.assignedTo),
+        )!
+      );
     } else if (filter === "created") {
       conditions.push(eq(notesTable.createdBy, req.userId!));
     } else if (!req.isSuperAdmin) {
@@ -77,6 +106,7 @@ router.get("/", async (req: AuthRequest, res) => {
         or(
           eq(notesTable.assignedTo, req.userId!),
           eq(notesTable.createdBy, req.userId!),
+          isNull(notesTable.assignedTo),
         )!
       );
     }

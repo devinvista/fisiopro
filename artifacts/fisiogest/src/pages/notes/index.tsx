@@ -116,7 +116,23 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
   const [priority, setPriority] = useState(initial?.priority ?? "normal");
   const [assignedTo, setAssignedTo] = useState<number | "">(initial?.assignedTo ?? "");
   const [patientId, setPatientId] = useState<number | "">(initial?.patientId ?? "");
-  const [dueAt, setDueAt] = useState(initial?.dueAt ? initial.dueAt.slice(0, 16) : "");
+
+  const parseInitialDue = (dueAt?: string | null) => {
+    if (!dueAt) return { date: "", time: "" };
+    const d = new Date(dueAt);
+    const date = d.toLocaleDateString("sv-SE");
+    const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false });
+    return { date, time };
+  };
+  const initDue = parseInitialDue(initial?.dueAt);
+  const [dueDate, setDueDate] = useState(initDue.date);
+  const [dueTime, setDueTime] = useState(initDue.time);
+
+  function buildDueAt() {
+    if (!dueDate) return null;
+    const combined = dueTime ? `${dueDate}T${dueTime}:00` : `${dueDate}T00:00:00`;
+    return combined;
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,7 +141,7 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
       type, title, body: body || null, priority,
       assignedTo: assignedTo || null,
       patientId: patientId || null,
-      dueAt: dueAt || null,
+      dueAt: buildDueAt(),
     });
   }
 
@@ -196,12 +212,21 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
         {/* Due date */}
         <div>
           <label className="text-xs font-semibold text-slate-500 mb-1 block">Vencimento</label>
-          <input
-            type="datetime-local"
-            value={dueAt}
-            onChange={(e) => setDueAt(e.target.value)}
-            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
+          <div className="flex gap-1.5">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="flex-1 min-w-0 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            <input
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              disabled={!dueDate}
+              className="w-24 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+            />
+          </div>
         </div>
 
         {/* Assigned to */}
@@ -214,7 +239,7 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
             onChange={(e) => setAssignedTo(e.target.value ? Number(e.target.value) : "")}
             className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
-            <option value="">Ninguém (pessoal)</option>
+            <option value="">Todos da clínica</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}{u.id === currentUserId ? " (eu)" : ""}
@@ -402,7 +427,7 @@ export default function NotesPage() {
 
   const { data: patients = [] } = useQuery<Patient[]>({
     queryKey: ["patients-simple-notes"],
-    queryFn: () => apiFetchJson(api("/patients?limit=200")),
+    queryFn: () => apiFetchJson(api("/notes/patients")),
     staleTime: 300_000,
     select: (rows: any) => {
       const list = Array.isArray(rows) ? rows : rows?.data ?? [];
