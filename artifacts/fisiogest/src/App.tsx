@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
+import { AppLoader } from "@/components/app-loader";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -72,17 +73,9 @@ function HashRedirect({ hash }: { hash: string }) {
   return null;
 }
 
-function PageLoader() {
-  return (
-    <div className="flex min-h-[100dvh] items-center justify-center">
-      <div className="border-primary h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
-    </div>
-  );
-}
-
 function Router() {
   return (
-    <Suspense fallback={<PageLoader />}>
+    <Suspense fallback={<AppLoader />}>
       <Switch>
         <Route path="/" component={LandingPage} />
         <Route path="/login" component={Login} />

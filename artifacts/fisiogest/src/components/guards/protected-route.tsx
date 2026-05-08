@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { AppLoader } from "@/components/app-loader";
 
 interface ProtectedRouteProps {
   component: React.ComponentType;
@@ -16,13 +17,7 @@ export function ProtectedRoute({ component: Component }: ProtectedRouteProps) {
     }
   }, [isAuthenticated, isLoading, setLocation]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        Carregando…
-      </div>
-    );
-  }
+  if (isLoading) return <AppLoader />;
   if (!isAuthenticated) return null;
 
   return <Component />;

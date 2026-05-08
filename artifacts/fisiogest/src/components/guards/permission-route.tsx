@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { AppLoader } from "@/components/app-loader";
 import type { Permission } from "@/utils/permissions";
 
 interface PermissionRouteProps {
@@ -18,13 +19,7 @@ export function PermissionRoute({ component: Component, permission }: Permission
     }
   }, [isAuthenticated, isLoading, setLocation]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        Carregando…
-      </div>
-    );
-  }
+  if (isLoading) return <AppLoader />;
   if (!isAuthenticated) return null;
 
   if (!hasPermission(permission)) {

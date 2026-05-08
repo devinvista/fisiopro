@@ -1,8 +1,9 @@
 import { useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Crown, Sparkles, ShieldCheck, Loader2, Check, X } from "lucide-react";
+import { ArrowRight, Crown, Sparkles, ShieldCheck, Check, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { AppLoader } from "@/components/app-loader";
 import { apiFetchJson } from "@/lib/api";
 import {
   FEATURE_CATALOG,
@@ -91,13 +92,7 @@ export function FeatureRoute({ component: Component, feature }: FeatureRouteProp
     if (!isLoading && !isAuthenticated) setLocation("/login");
   }, [isAuthenticated, isLoading, setLocation]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-      </div>
-    );
-  }
+  if (isLoading) return <AppLoader />;
   if (!isAuthenticated) return null;
 
   if (hasFeature(feature)) return <Component />;
