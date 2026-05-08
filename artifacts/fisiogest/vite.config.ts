@@ -67,6 +67,10 @@ export default defineConfig({
         target: `http://localhost:${process.env.API_PORT ?? 8080}`,
         changeOrigin: true,
       },
+      "/__mockup": {
+        target: "http://localhost:8081",
+        changeOrigin: true,
+      },
     },
     fs: {
       strict: true,

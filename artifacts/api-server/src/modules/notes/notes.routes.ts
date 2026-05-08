@@ -38,7 +38,7 @@ router.get("/summary", async (req: AuthRequest, res) => {
     const now = new Date();
     const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
 
-    const [rows] = await db.execute(sql`
+    const rawResult = await db.execute(sql`
       SELECT
         COUNT(*) FILTER (
           WHERE assigned_to = ${req.userId} AND seen_at IS NULL AND status != 'concluido'
@@ -62,7 +62,8 @@ router.get("/summary", async (req: AuthRequest, res) => {
       WHERE clinic_id = ${req.clinicId}
     `) as any;
 
-    const r = Array.isArray(rows) ? rows[0] : rows;
+    const rawArr = Array.isArray(rawResult) ? rawResult : (rawResult?.rows ?? []);
+    const r = rawArr[0] ?? rawResult;
     res.json({
       unread: Number(r?.unread ?? 0),
       overdue: Number(r?.overdue ?? 0),
