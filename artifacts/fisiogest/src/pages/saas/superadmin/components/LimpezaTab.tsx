@@ -2,6 +2,7 @@ import { useState } from "react";
 import { apiSendJson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
@@ -120,11 +121,9 @@ export function LimpezaTab() {
         <div className="flex items-end gap-3">
           <div className="space-y-1.5 flex-1 max-w-xs">
             <Label className="text-xs">Apagar registros criados após</Label>
-            <Input
-              type="date"
+            <DatePickerPTBR
               value={afterDate}
-              onChange={(e) => { setAfterDate(e.target.value); setPreview(null); setResult(null); }}
-              max={todayISO()}
+              onChange={(v) => { setAfterDate(v); setPreview(null); setResult(null); }}
             />
           </div>
           <Button

@@ -11,6 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -470,11 +471,9 @@ export function PlanInstallmentsPanel({ patientId, planId, isAccepted, isMateria
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Data do pagamento</Label>
-              <Input
-                type="date"
+              <DatePickerPTBR
                 value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-                max={todayISO()}
+                onChange={(v) => setPayDate(v)}
               />
             </div>
             <div className="space-y-1.5">

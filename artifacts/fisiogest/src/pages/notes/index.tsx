@@ -11,6 +11,7 @@ import {
   AlertTriangle, Filter, Search, RotateCcw,
 } from "lucide-react";
 import { format, isPast, isToday, parseISO, formatDistanceToNow } from "date-fns";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -213,11 +214,10 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
         <div>
           <label className="text-xs font-semibold text-slate-500 mb-1 block">Vencimento</label>
           <div className="flex gap-1.5">
-            <input
-              type="date"
+            <DatePickerPTBR
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="flex-1 min-w-0 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              onChange={(v) => setDueDate(v)}
+              className="flex-1 min-w-0 h-9 rounded-xl border-slate-200"
             />
             <input
               type="time"

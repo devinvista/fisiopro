@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -190,13 +191,10 @@ export function FinancialTab({ patientId }: { patientId: number }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-sm font-semibold text-slate-700">Data do Pagamento <span className="text-slate-400 font-normal">(opcional)</span></Label>
-                    <Input
-                      type="date"
-                      className="bg-white border-slate-200 focus:border-green-400"
+                    <DatePickerPTBR
                       value={payForm.paymentDate}
-                      onChange={e => setPayForm({ ...payForm, paymentDate: e.target.value })}
-                      max={new Date().toISOString().slice(0, 10)}
-                      placeholder="Hoje"
+                      onChange={(v) => setPayForm({ ...payForm, paymentDate: v })}
+                      className="h-9 bg-white border-slate-200"
                     />
                     <p className="text-xs text-slate-500">Deixe em branco para usar a data de hoje.</p>
                   </div>

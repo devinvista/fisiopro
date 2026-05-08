@@ -12,6 +12,7 @@ import { Loader2, Layers, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { apiFetchJson } from "@/lib/api";
 import { formatCurrency } from "../utils";
@@ -105,21 +106,17 @@ export function DreByProcedureTab() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div>
               <Label htmlFor="dre-from" className="text-xs">De</Label>
-              <Input
-                id="dre-from"
-                type="date"
+              <DatePickerPTBR
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(v) => setFrom(v)}
                 className="h-9 rounded-xl"
               />
             </div>
             <div>
               <Label htmlFor="dre-to" className="text-xs">Até</Label>
-              <Input
-                id="dre-to"
-                type="date"
+              <DatePickerPTBR
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(v) => setTo(v)}
                 className="h-9 rounded-xl"
               />
             </div>

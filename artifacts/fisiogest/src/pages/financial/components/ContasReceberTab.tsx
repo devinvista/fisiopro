@@ -10,6 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -219,11 +220,9 @@ function BaixarDialog({
 
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Data do pagamento</Label>
-            <Input
-              type="date"
+            <DatePickerPTBR
               value={paymentDate}
-              max={today}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(v) => setPaymentDate(v)}
               className="h-9"
             />
           </div>

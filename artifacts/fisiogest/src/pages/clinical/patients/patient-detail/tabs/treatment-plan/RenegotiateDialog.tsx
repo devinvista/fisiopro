@@ -4,6 +4,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import {
   AlertTriangle, Loader2, CheckCircle2, RefreshCw, ArrowRight,
 } from "lucide-react";
@@ -220,11 +221,10 @@ export function RenegotiateDialog({
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-slate-500">Início do novo plano</Label>
-                  <input
-                    type="date"
-                    className="w-full h-9 px-3 text-sm rounded-lg border border-slate-200 bg-white focus:border-primary outline-none"
+                  <DatePickerPTBR
                     value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
+                    onChange={(v) => setStartDate(v)}
+                    className="h-9"
                   />
                 </div>
                 <div className="space-y-1">

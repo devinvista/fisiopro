@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
 import { Label } from "@/components/ui/label";
 import { apiFetchJson } from "@/lib/api";
 import { formatCurrency } from "../utils";
@@ -155,11 +156,11 @@ export function EstornosTab() {
         <CardContent className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div>
             <Label className="text-xs text-slate-500">De</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 rounded-xl mt-1" />
+            <DatePickerPTBR value={from} onChange={(v) => setFrom(v)} className="h-9 rounded-xl mt-1" />
           </div>
           <div>
             <Label className="text-xs text-slate-500">Até</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 rounded-xl mt-1" />
+            <DatePickerPTBR value={to} onChange={(v) => setTo(v)} className="h-9 rounded-xl mt-1" />
           </div>
           <div className="sm:col-span-2">
             <Label className="text-xs text-slate-500">Buscar</Label>
