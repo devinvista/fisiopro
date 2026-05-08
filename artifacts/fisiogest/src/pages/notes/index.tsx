@@ -11,7 +11,7 @@ import {
   AlertTriangle, Filter, Search, RotateCcw,
 } from "lucide-react";
 import { format, isPast, isToday, parseISO, formatDistanceToNow } from "date-fns";
-import { DatePickerPTBR } from "@/components/ui/date-picker-ptbr";
+import { DatePickerPTBR, TimeInputPTBR } from "@/components/ui/date-picker-ptbr";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -219,12 +219,10 @@ function NoteForm({ users, patients, initial, currentUserId, onSubmit, onCancel,
               onChange={(v) => setDueDate(v)}
               className="flex-1 min-w-0 h-9 rounded-xl border-slate-200"
             />
-            <input
-              type="time"
+            <TimeInputPTBR
               value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
-              disabled={!dueDate}
-              className="w-24 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40"
+              onChange={(v) => setDueTime(v)}
+              className={`w-24 border border-slate-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${!dueDate ? "opacity-40 pointer-events-none" : ""}`}
             />
           </div>
         </div>
