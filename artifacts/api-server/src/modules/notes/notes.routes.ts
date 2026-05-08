@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, notesTable, usersTable, patientsTable, patientClinicsTable } from "@workspace/db";
-import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
+import { db, notesTable, usersTable, patientsTable } from "@workspace/db";
+import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { authMiddleware, type AuthRequest } from "../../middleware/auth.js";
 
 const router = Router();
@@ -17,15 +17,10 @@ router.get("/patients", async (req: AuthRequest, res) => {
     const rows = await db
       .select({ id: patientsTable.id, name: patientsTable.name })
       .from(patientsTable)
-      .innerJoin(
-        patientClinicsTable,
-        and(
-          eq(patientClinicsTable.patientId, patientsTable.id),
-          eq(patientClinicsTable.clinicId, req.clinicId),
-          isNull(patientClinicsTable.deletedAt),
-        ),
-      )
-      .where(isNull(patientsTable.deletedAt))
+      .where(and(
+        eq(patientsTable.clinicId, req.clinicId),
+        isNull(patientsTable.deletedAt),
+      ))
       .orderBy(patientsTable.name)
       .limit(300);
     res.json(rows);
