@@ -49,13 +49,13 @@ export function CardView({
           <div
             key={proc.id}
             className={cn(
-              "bg-card rounded-2xl border border-border shadow-sm flex flex-col",
+              "bg-card rounded-2xl border border-border shadow-sm flex flex-col overflow-hidden",
               "hover:shadow-md transition-all duration-200 group",
               !proc.isActive && "opacity-55 grayscale-[20%]"
             )}
           >
             {/* Accent bar */}
-            {hasCostFeature && <div className={cn("h-0.5 rounded-t-2xl w-full", accentBar)} />}
+            {hasCostFeature && <div className={cn("h-0.5 w-full", accentBar)} />}
 
             <div className="p-4 flex flex-col gap-3 flex-1">
 
