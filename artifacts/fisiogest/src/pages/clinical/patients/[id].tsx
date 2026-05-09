@@ -589,7 +589,13 @@ export default function PatientDetail() {
   ];
 
   return (
-    <AppLayout title="Prontuário do Paciente">
+    <AppLayout
+      title={patient.name}
+      breadcrumbs={[
+        { label: "Pacientes", href: "/pacientes" },
+        { label: patient.name },
+      ]}
+    >
 
       {/* Dialogs */}
       {canEdit && (

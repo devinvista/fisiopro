@@ -144,9 +144,15 @@ function SubscriptionBanner({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   return null;
 }
 
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
 interface AppLayoutProps {
   children: ReactNode;
   title: string;
+  breadcrumbs?: BreadcrumbItem[];
 }
 
 interface NavItem {
@@ -504,7 +510,7 @@ function BottomNav({ location, hasPermission, onOpenMenu }: BottomNavProps) {
   );
 }
 
-export function AppLayout({ children, title }: AppLayoutProps) {
+export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
   const { user, logout, hasPermission, hasFeature, clinics, isSuperAdmin, refreshUser } = useAuth();
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -590,7 +596,32 @@ export function AppLayout({ children, title }: AppLayoutProps) {
               )}
             </Button>
 
-            <h1 className="font-display text-xl md:text-2xl font-bold text-foreground truncate">{title}</h1>
+            {breadcrumbs && breadcrumbs.length > 1 ? (
+              <nav aria-label="breadcrumb" className="flex items-center gap-1 min-w-0">
+                {breadcrumbs.map((crumb, i) => {
+                  const isLast = i === breadcrumbs.length - 1;
+                  return (
+                    <div key={i} className="flex items-center gap-1 min-w-0">
+                      {i > 0 && <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground/50" />}
+                      {isLast ? (
+                        <span className="font-display text-xl md:text-2xl font-bold text-foreground truncate">
+                          {crumb.label}
+                        </span>
+                      ) : (
+                        <Link
+                          href={crumb.href ?? "#"}
+                          className="font-display text-base md:text-lg font-semibold text-muted-foreground hover:text-foreground transition-colors truncate shrink-0"
+                        >
+                          {crumb.label}
+                        </Link>
+                      )}
+                    </div>
+                  );
+                })}
+              </nav>
+            ) : (
+              <h1 className="font-display text-xl md:text-2xl font-bold text-foreground truncate">{title}</h1>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
