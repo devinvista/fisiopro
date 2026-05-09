@@ -30,11 +30,25 @@ export function PackageCard({
     ? (pkg.monthlyPrice ? Number(pkg.monthlyPrice) / (pkg.sessionsPerWeek * 4) : null)
     : (pkg.totalSessions ? Number(pkg.price) / pkg.totalSessions : null);
 
+  const discountPct = pps !== null && Number(pkg.procedurePricePerSession) > 0
+    ? ((Number(pkg.procedurePricePerSession) - pps) / Number(pkg.procedurePricePerSession)) * 100
+    : null;
+
+  const accentBar = isLegacyFatura
+    ? "bg-amber-400"
+    : discountPct === null
+      ? "bg-blue-400"
+      : discountPct >= 20 ? "bg-emerald-400"
+      : discountPct >= 10 ? "bg-amber-400"
+      : "bg-slate-300";
+
   return (
     <div className={cn(
-      "bg-card border rounded-xl p-5 hover:shadow-md transition-shadow flex flex-col gap-4",
+      "bg-card border rounded-xl overflow-hidden hover:shadow-md transition-shadow flex flex-col",
       !pkg.isActive && "opacity-60"
     )}>
+      <div className={cn("h-0.5 w-full shrink-0", accentBar)} />
+      <div className="p-5 flex flex-col gap-4 flex-1">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
@@ -131,6 +145,7 @@ export function PackageCard({
             {(((Number(pkg.procedurePricePerSession) - pps) / Number(pkg.procedurePricePerSession)) * 100).toFixed(0)}% desc.
           </span>
         )}
+      </div>
       </div>
     </div>
   );
