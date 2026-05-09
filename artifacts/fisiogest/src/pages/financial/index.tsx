@@ -185,10 +185,7 @@ export default function Financial() {
 
       {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Financeiro</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Caixa, receitas, despesas e contas a receber</p>
-        </div>
+        <p className="text-sm text-slate-400">Caixa, receitas, despesas e contas a receber</p>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <MonthNavigator

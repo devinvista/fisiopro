@@ -137,8 +137,7 @@ export default function Pacotes() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground truncate">Pacotes de Serviços</h1>
-            <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">
+            <p className="text-muted-foreground text-xs sm:text-sm">
               Configure pacotes por sessões ou mensalidades com regras de frequência e falta
             </p>
           </div>

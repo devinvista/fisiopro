@@ -483,12 +483,9 @@ export default function Contabil() {
     <AppLayout title="Relatórios">
       {/* ── Header ────────────────────────────────────────────────────── */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Relatórios</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            Indicadores gerenciais, DRE, orçamento e análises contábeis
-          </p>
-        </div>
+        <p className="text-sm text-slate-400">
+          Indicadores gerenciais, DRE, orçamento e análises contábeis
+        </p>
 
         <MonthNavigator
           month={month}

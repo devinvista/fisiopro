@@ -505,8 +505,7 @@ export default function NotesPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Recados &amp; Tarefas</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Organize lembretes, tarefas e recados da equipe</p>
+            <p className="text-sm text-slate-500">Organize lembretes, tarefas e recados da equipe</p>
           </div>
           <Button
             onClick={() => { setEditingNote(null); setShowForm(true); }}

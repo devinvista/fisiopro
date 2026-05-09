@@ -103,7 +103,6 @@ export default function SuperAdmin() {
             <Activity className="w-5 h-5 text-indigo-600" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 truncate">Painel SuperAdmin</h1>
             <p className="text-xs sm:text-sm text-slate-500 truncate">Gestão de planos de adesão e assinaturas das clínicas</p>
           </div>
         </div>

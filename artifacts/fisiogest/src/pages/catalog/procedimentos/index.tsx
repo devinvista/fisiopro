@@ -411,10 +411,7 @@ export default function Procedimentos() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold font-display text-foreground truncate">
-              Procedimentos
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            <p className="text-xs sm:text-sm text-muted-foreground">
               Catálogo de serviços, preços e indicadores da clínica
             </p>
           </div>
