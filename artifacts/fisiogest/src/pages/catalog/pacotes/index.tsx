@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Plus, Search, Package, Layers, RefreshCw,
+  Plus, Search, Package, Layers, RefreshCw, TrendingDown, Banknote,
 } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -132,6 +132,36 @@ export default function Pacotes() {
   const sessoesPkg = packages.filter(p => p.packageType === "sessoes").length;
   const mensaisPkg = packages.filter(p => p.packageType === "mensal").length;
 
+  const activePkgs = packages.filter(p => p.isActive);
+
+  const discountValues = activePkgs
+    .filter(p => Number(p.procedurePricePerSession) > 0)
+    .map(p => {
+      const pps = p.packageType === "mensal" || (p.packageType as string) === "faturaConsolidada"
+        ? (p.monthlyPrice ? Number(p.monthlyPrice) / (p.sessionsPerWeek * 4) : null)
+        : (p.totalSessions ? Number(p.price) / p.totalSessions : null);
+      if (pps === null) return null;
+      return ((Number(p.procedurePricePerSession) - pps) / Number(p.procedurePricePerSession)) * 100;
+    })
+    .filter((v): v is number => v !== null && v > 0);
+
+  const avgDiscount = discountValues.length > 0
+    ? Math.round(discountValues.reduce((a, b) => a + b, 0) / discountValues.length)
+    : null;
+
+  const ppsValues = activePkgs
+    .map(p => {
+      if (p.packageType === "mensal" || (p.packageType as string) === "faturaConsolidada") {
+        return p.monthlyPrice ? Number(p.monthlyPrice) / (p.sessionsPerWeek * 4) : null;
+      }
+      return p.totalSessions ? Number(p.price) / p.totalSessions : null;
+    })
+    .filter((v): v is number => v !== null);
+
+  const avgPps = ppsValues.length > 0
+    ? ppsValues.reduce((a, b) => a + b, 0) / ppsValues.length
+    : null;
+
   return (
     <AppLayout title="Pacotes">
       <div className="space-y-6">
@@ -151,10 +181,22 @@ export default function Pacotes() {
         </div>
 
         {/* Métricas */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <MetricCard icon={<Package className="h-5 w-5 text-primary" />} bg="bg-primary/10" value={packages.length} label="Total de pacotes" />
-          <MetricCard icon={<Layers className="h-5 w-5 text-blue-600" />} bg="bg-blue-100" value={sessoesPkg} label="Por sessões" />
-          <MetricCard icon={<RefreshCw className="h-5 w-5 text-emerald-600" />} bg="bg-emerald-100" value={mensaisPkg} label="Mensalidades" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <MetricCard icon={<Package className="h-5 w-5 text-primary" />} bg="bg-primary/10" value={String(packages.length)} label="Total de pacotes" />
+          <MetricCard icon={<Layers className="h-5 w-5 text-blue-600" />} bg="bg-blue-100" value={String(sessoesPkg)} label="Por sessões" />
+          <MetricCard icon={<RefreshCw className="h-5 w-5 text-emerald-600" />} bg="bg-emerald-100" value={String(mensaisPkg)} label="Mensalidades" />
+          <MetricCard
+            icon={<TrendingDown className="h-5 w-5 text-violet-600" />}
+            bg="bg-violet-100"
+            value={avgDiscount !== null ? `${avgDiscount}%` : "—"}
+            label="Desconto médio"
+          />
+          <MetricCard
+            icon={<Banknote className="h-5 w-5 text-amber-600" />}
+            bg="bg-amber-100"
+            value={avgPps !== null ? avgPps.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }) : "—"}
+            label="Preço médio/sessão"
+          />
         </div>
 
         {/* Filtros */}
@@ -258,13 +300,13 @@ export default function Pacotes() {
   );
 }
 
-function MetricCard({ icon, bg, value, label }: { icon: React.ReactNode; bg: string; value: number; label: string }) {
+function MetricCard({ icon, bg, value, label }: { icon: React.ReactNode; bg: string; value: string; label: string }) {
   return (
     <div className="bg-card border rounded-xl p-4 flex items-center gap-3">
-      <div className={cn("p-2.5 rounded-lg", bg)}>{icon}</div>
-      <div>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
+      <div className={cn("p-2.5 rounded-lg shrink-0", bg)}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xl font-bold truncate">{value}</p>
+        <p className="text-xs text-muted-foreground leading-tight">{label}</p>
       </div>
     </div>
   );
