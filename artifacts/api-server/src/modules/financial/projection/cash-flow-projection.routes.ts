@@ -158,19 +158,15 @@ router.get(
     const cashReserveTarget = settings?.cashReserveTarget ?? null;
 
     // ── 3. Recebíveis pendentes na janela ─────────────────────────────────
-    // Data efetiva = COALESCE(due_date, payment_date): registros que só têm
-    // payment_date (sem due_date) também entram na projeção, coerente com o
-    // recordDateFilter usado nos demais relatórios.
+    // Visão caixa: saldo abertura já reflete pagamentos realizados (contábil).
+    // Para projeção futura usamos due_date — data prevista de recebimento.
     const recCondBase = clinicId
       ? eq(financialRecordsTable.clinicId, clinicId)
       : sql`TRUE`;
 
-    const effectiveDateIn = sql`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`;
-    const effectiveDateOut = sql`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`;
-
     const incomingRows = await db
       .select({
-        date: sql<string>`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`,
+        date: financialRecordsTable.dueDate,
         amount: sql<string>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
         count: sql<number>`COUNT(*)`,
       })
@@ -180,10 +176,10 @@ router.get(
         eq(financialRecordsTable.type, "receita"),
         eq(financialRecordsTable.status, "pendente"),
         inArray(financialRecordsTable.transactionType, RECEIVABLE_TYPES),
-        sql`${effectiveDateIn} >= ${startISO}::date`,
-        sql`${effectiveDateIn} <= ${endISO}::date`,
+        gte(financialRecordsTable.dueDate, startISO),
+        lte(financialRecordsTable.dueDate, endISO),
       ))
-      .groupBy(sql`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`);
+      .groupBy(financialRecordsTable.dueDate);
 
     const inflowsByDate = new Map<string, { amount: number; count: number }>();
     for (const r of incomingRows) {
@@ -195,9 +191,10 @@ router.get(
     }
 
     // ── 4. Despesas pontuais pendentes na janela ──────────────────────────
+    // Idem: due_date como data prevista de desembolso.
     const outgoingRows = await db
       .select({
-        date: sql<string>`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`,
+        date: financialRecordsTable.dueDate,
         amount: sql<string>`COALESCE(SUM(${financialRecordsTable.amount}::numeric), 0)`,
         count: sql<number>`COUNT(*)`,
       })
@@ -206,10 +203,10 @@ router.get(
         recCondBase,
         eq(financialRecordsTable.type, "despesa"),
         eq(financialRecordsTable.status, "pendente"),
-        sql`${effectiveDateOut} >= ${startISO}::date`,
-        sql`${effectiveDateOut} <= ${endISO}::date`,
+        gte(financialRecordsTable.dueDate, startISO),
+        lte(financialRecordsTable.dueDate, endISO),
       ))
-      .groupBy(sql`COALESCE(${financialRecordsTable.dueDate}::date, ${financialRecordsTable.paymentDate}::date)`);
+      .groupBy(financialRecordsTable.dueDate);
 
     const outflowsByDate = new Map<string, { adhocAmount: number; adhocCount: number; recurringAmount: number; recurringCount: number }>();
     for (const r of outgoingRows) {
