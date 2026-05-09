@@ -37,6 +37,7 @@ interface SeriesPoint {
   recurringOut: number;
   inflowCount: number;
   outflowCount: number;
+  isRealized: boolean;
   alert: "below_reserve" | "negative" | null;
 }
 
@@ -44,6 +45,7 @@ interface CashFlowResponse {
   days: number;
   startDate: string;
   endDate: string;
+  todayDate: string;
   openingBalance: number;
   cashReserveTarget: number | null;
   totals: {
@@ -265,8 +267,18 @@ export function CashFlowTab() {
 
       {/* ── Tabela diária ───────────────────────────────────────────────── */}
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Detalhamento diário</CardTitle>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-200" />
+              Realizado
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-50 border border-slate-200" />
+              Projetado
+            </span>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -284,9 +296,29 @@ export function CashFlowTab() {
               <tbody>
                 {data.series.map((p) => {
                   const dim = p.expectedIn === 0 && p.expectedOut === 0;
+                  const isToday = p.date === data.todayDate;
                   return (
-                    <tr key={p.date} className={`border-t border-slate-100 ${dim ? "text-slate-400" : "text-slate-700"}`}>
-                      <td className="px-4 py-2 font-medium">{formatFullDate(p.date)}</td>
+                    <tr
+                      key={p.date}
+                      className={[
+                        "border-t border-slate-100",
+                        p.isRealized
+                          ? "bg-blue-50/60 text-slate-600"
+                          : isToday
+                            ? "bg-amber-50/40 text-slate-700"
+                            : dim
+                              ? "text-slate-400"
+                              : "text-slate-700",
+                      ].join(" ")}
+                    >
+                      <td className="px-4 py-2 font-medium">
+                        <span>{formatFullDate(p.date)}</span>
+                        {isToday && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                            hoje
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-right tabular-nums">{formatCurrency(p.opening)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">
                         {p.expectedIn > 0 ? (
@@ -306,6 +338,9 @@ export function CashFlowTab() {
                         {formatCurrency(p.closing)}
                       </td>
                       <td className="px-4 py-2 text-right">
+                        {p.isRealized && !p.alert ? (
+                          <span className="text-xs font-medium text-blue-600">Realizado</span>
+                        ) : null}
                         {p.alert === "negative" && (
                           <Badge variant="destructive" className="text-[10px] gap-1">
                             <AlertTriangle className="h-3 w-3" /> Negativo
@@ -316,7 +351,7 @@ export function CashFlowTab() {
                             <ShieldAlert className="h-3 w-3" /> Abaixo reserva
                           </Badge>
                         )}
-                        {!p.alert && !dim && (
+                        {!p.isRealized && !p.alert && !dim && (
                           <span className="text-xs text-emerald-600">OK</span>
                         )}
                       </td>
