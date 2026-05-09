@@ -5,7 +5,6 @@ export const modules: ModuleMap = {
   "./components/mockups/brand-book/IconSystem.tsx": () => import("../components/mockups/brand-book/IconSystem.tsx"),
   "./components/mockups/brand-book/LogoSystem.tsx": () => import("../components/mockups/brand-book/LogoSystem.tsx"),
   "./components/mockups/brand-book/Page.tsx": () => import("../components/mockups/brand-book/Page.tsx"),
-  "./components/mockups/pitch-deck/Page.tsx": () => import("../components/mockups/pitch-deck/Page.tsx"),
   "./components/mockups/loaders/EsteticaLoader.tsx": () => import("../components/mockups/loaders/EsteticaLoader.tsx"),
   "./components/mockups/loaders/FisioterapiaLoader.tsx": () => import("../components/mockups/loaders/FisioterapiaLoader.tsx"),
   "./components/mockups/loaders/IconBone.tsx": () => import("../components/mockups/loaders/IconBone.tsx"),
@@ -13,5 +12,6 @@ export const modules: ModuleMap = {
   "./components/mockups/loaders/IconHeartPulse.tsx": () => import("../components/mockups/loaders/IconHeartPulse.tsx"),
   "./components/mockups/loaders/IconStethoscope.tsx": () => import("../components/mockups/loaders/IconStethoscope.tsx"),
   "./components/mockups/loaders/PilatesLoader.tsx": () => import("../components/mockups/loaders/PilatesLoader.tsx"),
+  "./components/mockups/pitch-deck/Page.tsx": () => import("../components/mockups/pitch-deck/Page.tsx"),
   "./components/mockups/tech-docs/Page.tsx": () => import("../components/mockups/tech-docs/Page.tsx")
 };
