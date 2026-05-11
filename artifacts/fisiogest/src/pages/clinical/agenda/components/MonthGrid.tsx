@@ -49,13 +49,13 @@ export function MonthGrid({
     blockedSlots.filter((b) => b.date === format(day, "yyyy-MM-dd"));
 
   const STATUS_COLORS: Record<string, string> = {
-    agendado: "bg-blue-400",
-    confirmado: "bg-emerald-400",
-    compareceu: "bg-teal-400",
+    agendado: "bg-amber-400",
+    confirmado: "bg-emerald-500",
+    compareceu: "bg-blue-500",
     concluido: "bg-slate-400",
     cancelado: "bg-red-400",
     faltou: "bg-orange-400",
-    remarcado: "bg-purple-400",
+    remarcado: "bg-violet-500",
   };
 
   return (

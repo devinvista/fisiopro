@@ -52,7 +52,14 @@ export default function Agenda() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<number | null>(null);
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [editingBlock, setEditingBlock] = useState<BlockedSlot | null>(null);
+
+  const handleToggleStatus = (status: string) => {
+    setSelectedStatuses((prev) =>
+      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
+    );
+  };
 
   // Buscar schedules primeiro (sem nav ainda) para derivar config visual
   const initialQueries = useAgendaQueries({
@@ -97,7 +104,8 @@ export default function Agenda() {
 
   const filteredAppointments = appointments
     .filter((a) => !selectedScheduleId || a.scheduleId === selectedScheduleId)
-    .filter((a) => !selectedProfessionalId || a.professionalId === selectedProfessionalId);
+    .filter((a) => !selectedProfessionalId || a.professionalId === selectedProfessionalId)
+    .filter((a) => selectedStatuses.length === 0 || selectedStatuses.includes(a.status));
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const todayCompareceu = filteredAppointments.filter(
@@ -191,18 +199,19 @@ export default function Agenda() {
         }}
       />
 
-      <div className="flex gap-4 items-start">
-        <div className="hidden lg:block">
-          <AgendaSidebar
-            currentDate={nav.currentDate}
-            miniCalMonth={nav.miniCalMonth}
-            onMiniCalMonthChange={nav.setMiniCalMonth}
-            onSelectDate={(d) => nav.setCurrentDate(d)}
-            weekDays={nav.weekDays}
-          />
-        </div>
+      <div className="flex gap-3 items-start">
+        <AgendaSidebar
+          currentDate={nav.currentDate}
+          miniCalMonth={nav.miniCalMonth}
+          onMiniCalMonthChange={nav.setMiniCalMonth}
+          onSelectDate={(d) => nav.setCurrentDate(d)}
+          weekDays={nav.weekDays}
+          selectedStatuses={selectedStatuses}
+          onToggleStatus={handleToggleStatus}
+          onClearStatuses={() => setSelectedStatuses([])}
+        />
 
-        <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           {nav.view === "month" && (
             <Suspense fallback={<ModalLoader />}>
               <MonthGrid
@@ -229,13 +238,13 @@ export default function Agenda() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
-              <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
+              <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 196px)" }}>
                 <div
                   style={{
-                    minWidth: nav.daysCount > 1 ? `${56 + nav.daysCount * 96}px` : undefined,
+                    minWidth: nav.daysCount > 1 ? `${52 + nav.daysCount * 96}px` : undefined,
                   }}
                 >
-                  <div className="sticky top-0 z-20 bg-white">
+                  <div className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_#f1f5f9]">
                     <WeekHeader
                       weekDays={nav.weekDays}
                       daysCount={nav.daysCount}
@@ -247,18 +256,18 @@ export default function Agenda() {
                   <div
                     className="grid relative"
                     style={{
-                      gridTemplateColumns: `56px repeat(${nav.daysCount}, minmax(96px, 1fr))`,
+                      gridTemplateColumns: `52px repeat(${nav.daysCount}, minmax(96px, 1fr))`,
                     }}
                   >
-                    <div className="border-r border-slate-200">
+                    <div className="border-r border-slate-100">
                       {config.hours.map((h) => (
                         <div
                           key={h}
                           className="border-b border-slate-100 flex items-start justify-end pr-2 pt-1"
                           style={{ height: SLOT_HEIGHT }}
                         >
-                          <span className="text-[10px] font-medium text-slate-400 leading-none">
-                            {String(h).padStart(2, "0")}:00
+                          <span className="text-[10px] font-semibold text-slate-300 leading-none tabular-nums">
+                            {String(h).padStart(2, "0")}h
                           </span>
                         </div>
                       ))}
