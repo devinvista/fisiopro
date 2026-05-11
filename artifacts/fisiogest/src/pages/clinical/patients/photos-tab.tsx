@@ -7,6 +7,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { useToast } from "@/lib/toast";
 import { apiFetch } from "@/lib/api";
 import { 
@@ -75,9 +76,12 @@ export function PhotosTab({ patientId }: { patientId: number }) {
               <SlidersHorizontal className="w-4 h-4" /> Comparar
             </Button>
           )}
-          <Button size="sm" onClick={() => setUploadOpen(true)} className="gap-1.5 flex-1 sm:flex-none">
-            <Upload className="w-4 h-4" /> Adicionar Fotos
-          </Button>
+          <PrimaryActionButton
+            label="Adicionar Fotos"
+            icon={<Upload className="w-4 h-4" />}
+            onClick={() => setUploadOpen(true)}
+            className="flex-1 sm:flex-none justify-center"
+          />
         </div>
       </div>
 

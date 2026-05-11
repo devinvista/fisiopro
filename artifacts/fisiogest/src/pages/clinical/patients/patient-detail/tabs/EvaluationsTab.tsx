@@ -15,6 +15,7 @@ import {
   FlaskConical, Brain, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
@@ -480,14 +481,12 @@ export function EvaluationsTab({ patientId }: { patientId: number }) {
           <h3 className="text-base sm:text-lg font-semibold text-slate-800">Avaliações Físicas</h3>
           <p className="text-xs sm:text-sm text-slate-500">{pluralAval(evaluations.length)}</p>
         </div>
-        <Button
+        <PrimaryActionButton
+          label="Nova Avaliação"
+          mobileLabel="Nova"
           onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvalForm); }}
-          className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5"
-        >
-          <Plus className="w-4 h-4 shrink-0" />
-          <span className="sm:hidden">Nova</span>
-          <span className="hidden sm:inline">Nova Avaliação</span>
-        </Button>
+          className="w-full sm:w-auto justify-center"
+        />
       </div>
 
       {/* New evaluation form */}

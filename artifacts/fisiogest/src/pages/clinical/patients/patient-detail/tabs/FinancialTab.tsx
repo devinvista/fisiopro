@@ -6,6 +6,7 @@ import {
   RefreshCw, History, Repeat, TrendingUp, TrendingDown, Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -161,14 +162,21 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
           {/* Registrar Pagamento — only visible on sm+ alongside tabs */}
           {activeSection === "history" && (
-            <Button
-              onClick={() => { setShowPayForm(v => !v); setPayForm(emptyPaymentForm); }}
-              variant={showPayForm ? "outline" : "default"}
-              className="hidden sm:flex h-9 px-4 rounded-xl text-xs gap-1.5 shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              {showPayForm ? "Cancelar" : "Registrar Pagamento"}
-            </Button>
+            showPayForm ? (
+              <Button
+                variant="outline"
+                className="hidden sm:flex h-9 px-4 rounded-full text-xs gap-1.5 shrink-0"
+                onClick={() => { setShowPayForm(false); setPayForm(emptyPaymentForm); }}
+              >
+                Cancelar
+              </Button>
+            ) : (
+              <PrimaryActionButton
+                label="Registrar Pagamento"
+                className="hidden sm:inline-flex"
+                onClick={() => setShowPayForm(true)}
+              />
+            )
           )}
         </div>
 
@@ -198,14 +206,21 @@ export function FinancialTab({ patientId }: { patientId: number }) {
 
           {/* Mobile-only Registrar Pagamento */}
           {activeSection === "history" && (
-            <Button
-              onClick={() => { setShowPayForm(v => !v); setPayForm(emptyPaymentForm); }}
-              variant={showPayForm ? "outline" : "default"}
-              className="sm:hidden w-full h-10 rounded-xl text-xs gap-1.5"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              {showPayForm ? "Cancelar" : "Registrar Pagamento"}
-            </Button>
+            showPayForm ? (
+              <Button
+                variant="outline"
+                className="sm:hidden w-full h-9 rounded-full text-xs gap-1.5"
+                onClick={() => { setShowPayForm(false); setPayForm(emptyPaymentForm); }}
+              >
+                Cancelar
+              </Button>
+            ) : (
+              <PrimaryActionButton
+                label="Registrar Pagamento"
+                className="sm:hidden w-full justify-center"
+                onClick={() => setShowPayForm(true)}
+              />
+            )
           )}
         </div>
       </div>

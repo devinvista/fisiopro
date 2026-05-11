@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { Loader2, Plus, Printer, TrendingUp } from "lucide-react";
 import { useToast } from "@/lib/toast";
 import { apiFetchJson } from "@/lib/api";
@@ -165,14 +166,12 @@ export function EvolutionsTab({ patientId, patient }: { patientId: number; patie
               <span className="hidden sm:inline">Imprimir / PDF</span>
             </Button>
           )}
-          <Button
+          <PrimaryActionButton
+            label="Nova Evolução"
+            mobileLabel="Nova"
             onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyEvoForm); }}
-            className="w-full sm:w-auto h-10 px-5 rounded-xl gap-1.5"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="sm:hidden">Nova</span>
-            <span className="hidden sm:inline">Nova Evolução</span>
-          </Button>
+            className="w-full sm:w-auto justify-center"
+          />
         </div>
       </div>
 
