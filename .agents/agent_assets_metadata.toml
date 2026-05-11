@@ -5,4 +5,4 @@ generated = []
 id = "7PafeRhkWRnX15_B3nI9a"
 uri = "file://fisiogest-pro.zip"
 type = "unspecified"
-title = "fisiogest-pro.zip — produção Hostinger (testado)"
+title = "fisiogest-pro.zip — produção Hostinger (debug + migrations + testado)"

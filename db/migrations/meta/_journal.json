@@ -204,6 +204,27 @@
       "when": 1778250000000,
       "tag": "0028_fix_wallet_tx_signs",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1746748800000,
+      "tag": "0029_journey_plan_steps",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1746835200000,
+      "tag": "0030_patient_sex",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1746921600000,
+      "tag": "0031_notes",
+      "breakpoints": true
     }
   ]
 }
