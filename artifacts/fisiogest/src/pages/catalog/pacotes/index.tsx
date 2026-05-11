@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { Input } from "@/components/ui/input";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -172,11 +173,11 @@ export default function Pacotes() {
             </p>
           </div>
           {isAdmin && (
-            <Button onClick={openCreate} className="w-full sm:w-auto h-10 rounded-xl gap-1.5 shrink-0">
-              <Plus className="h-4 w-4 shrink-0" />
-              <span className="sm:hidden">Novo</span>
-              <span className="hidden sm:inline">Novo Pacote</span>
-            </Button>
+            <PrimaryActionButton
+              label="Novo Pacote"
+              mobileLabel="Novo"
+              onClick={openCreate}
+            />
           )}
         </div>
 

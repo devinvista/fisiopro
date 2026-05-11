@@ -13,6 +13,7 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { Input } from "@/components/ui/input";
 import {
   Plus,
@@ -426,14 +427,11 @@ export default function Procedimentos() {
               <span className="sm:hidden">Catálogo</span>
             </Button>
             {isAdmin && (
-              <Button
-                className="h-9 px-3 sm:px-4 rounded-xl shadow-md shadow-primary/20 gap-1.5 text-sm"
+              <PrimaryActionButton
+                label="Novo Procedimento"
+                mobileLabel="Novo"
                 onClick={() => { resetForm(); setEditingProcedure(null); setIsModalOpen(true); }}
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Novo Procedimento</span>
-                <span className="sm:hidden">Novo</span>
-              </Button>
+              />
             )}
           </div>
         </div>

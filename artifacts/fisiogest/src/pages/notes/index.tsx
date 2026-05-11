@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetchJson, apiSendJson, API_BASE } from "@/lib/api";
 import { useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { cn } from "@/lib/utils";
 import {
   Plus, CheckCircle2, Circle, Clock, MessageSquare, Bell, ClipboardList,
@@ -507,12 +508,10 @@ export default function NotesPage() {
           <div>
             <p className="text-sm text-slate-500">Organize lembretes, tarefas e recados da equipe</p>
           </div>
-          <Button
+          <PrimaryActionButton
+            label="Novo"
             onClick={() => { setEditingNote(null); setShowForm(true); }}
-            className="rounded-xl gap-2"
-          >
-            <Plus className="w-4 h-4" /> Novo
-          </Button>
+          />
         </div>
 
         {/* New / Edit form */}

@@ -7,6 +7,7 @@ import { apiFetch, isPlanLimitPayload } from "@/lib/api";
 import { usePlanLimit } from "@/contexts/plan-limit-context";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -126,9 +127,7 @@ export default function PatientsList() {
           {canCreate && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="h-10 px-5 rounded-xl gap-2 text-sm font-semibold shadow-sm shrink-0">
-                  <Plus className="w-4 h-4" /> Novo Paciente
-                </Button>
+                <PrimaryActionButton label="Novo Paciente" mobileLabel="Novo" />
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto">
                 <CreatePatientForm onSuccess={() => { setIsDialogOpen(false); refetch(); }} />

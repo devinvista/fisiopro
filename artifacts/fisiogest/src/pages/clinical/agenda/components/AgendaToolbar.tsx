@@ -11,6 +11,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { cn } from "@/lib/utils";
 import type { ScheduleOption, ViewMode } from "../types";
 
@@ -197,14 +198,10 @@ export function AgendaToolbar({
           <span className="hidden md:inline">Bloquear</span>
         </Button>
 
-        <Button
-          size="sm"
-          className="h-9 px-4 rounded-xl shadow-sm shadow-primary/20 text-xs font-bold gap-1.5 shrink-0"
+        <PrimaryActionButton
+          label="Novo"
           onClick={onOpenNew}
-        >
-          <Plus className="w-3.5 h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Novo</span>
-        </Button>
+        />
       </div>
 
       {/* Mobile: date label + action row */}

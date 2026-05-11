@@ -7,6 +7,7 @@ import {
 import { AppLayout } from "@/components/layout/app-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { MONTH_NAMES, YEARS } from "./constants";
 import { VisaoMesTab } from "./components/VisaoMesTab";
 import { LancamentosTab } from "./components/LancamentosTab";
@@ -195,18 +196,14 @@ export default function Financial() {
             onYearChange={setYear}
           />
           {hasFeature("financial.view.simple") && (
-            <Button
-              size="sm"
-              className="h-9 rounded-xl gap-1.5 font-semibold shadow-sm shrink-0"
+            <PrimaryActionButton
+              label="Novo Lançamento"
+              mobileLabel="Novo"
               onClick={() => {
                 setActiveTab("lancamentos");
                 setTriggerNewRecord(true);
               }}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Novo Lançamento</span>
-              <span className="sm:hidden">Novo</span>
-            </Button>
+            />
           )}
         </div>
       </div>
