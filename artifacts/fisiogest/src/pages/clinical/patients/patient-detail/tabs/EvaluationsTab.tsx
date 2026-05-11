@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { confirm as confirmDialog } from "@/lib/confirm";
 import {
   Loader2, Activity, Plus, ChevronDown, ChevronUp,
-  Pencil, Trash2, Target, ClipboardCheck,
+  Pencil, Trash2, Target, ClipboardCheck, CheckCircle,
   Stethoscope, Move, Dumbbell, HandMetal, Footprints,
   FlaskConical, Brain, Eye,
 } from "lucide-react";
@@ -237,10 +237,13 @@ function EvalForm({ onSave, onCancel, saving, title, form, setForm }: EvalFormPr
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end pt-2 border-t border-slate-100">
           <Button variant="outline" onClick={onCancel} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
-          <Button onClick={onSave} className="w-full sm:w-auto h-10 rounded-xl gap-1.5" disabled={saving}>
-            {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-            Salvar Avaliação
-          </Button>
+          <PrimaryActionButton
+            label="Salvar Avaliação"
+            icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            onClick={onSave}
+            disabled={saving}
+            className="w-full sm:w-auto justify-center"
+          />
         </div>
       </CardContent>
     </Card>

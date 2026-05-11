@@ -40,6 +40,7 @@ import {
   ShieldCheck, Link2, Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -214,12 +215,13 @@ export function DischargeTab({ patientId, patient }: { patientId: number; patien
               {editing && (
                 <Button variant="outline" onClick={() => setEditing(false)} className="w-full sm:w-auto h-10 rounded-xl">Cancelar</Button>
               )}
-              <Button onClick={handleSave}
+              <PrimaryActionButton
+                label="Registrar Alta"
+                icon={mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                onClick={handleSave}
                 disabled={mutation.isPending || !form.dischargeReason || !form.dischargeDate}
-                className="w-full sm:w-auto h-11 sm:px-8 rounded-xl shadow-md shadow-primary/20 gap-1.5">
-                {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <LogOut className="w-4 h-4 shrink-0" />}
-                Registrar Alta
-              </Button>
+                className="w-full sm:w-auto justify-center"
+              />
             </div>
           </CardContent>
         </Card>

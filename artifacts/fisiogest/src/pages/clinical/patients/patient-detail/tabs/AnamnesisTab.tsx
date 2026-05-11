@@ -10,6 +10,7 @@ import {
   Loader2, Clock, CheckCircle, Check, Lock, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/lib/toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -312,10 +313,13 @@ export function AnamnesisTab({ patientId }: { patientId: number }) {
             <Button variant="outline" onClick={() => setForm(emptyForm)} className="w-full sm:w-auto h-10 rounded-xl">
               Limpar Campos
             </Button>
-            <Button className="w-full sm:w-auto h-10 sm:px-8 rounded-xl gap-1.5" disabled={mutation.isPending} onClick={handleSave}>
-              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <CheckCircle className="w-4 h-4 shrink-0" />}
-              Salvar Anamnese
-            </Button>
+            <PrimaryActionButton
+              label="Salvar Anamnese"
+              icon={mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              disabled={mutation.isPending}
+              onClick={handleSave}
+              className="w-full sm:w-auto justify-center"
+            />
           </div>
         )}
 

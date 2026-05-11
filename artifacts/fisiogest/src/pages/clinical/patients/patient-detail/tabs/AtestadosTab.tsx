@@ -40,6 +40,7 @@ import {
   ShieldCheck, Link2, Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -377,11 +378,13 @@ export function AtestadoDialog({ open, onClose, patientId, patient, onCreated, a
           </div>
 
           <div className="flex justify-end gap-2 pt-4 px-6 pb-2 border-t border-slate-100 shrink-0">
-            <Button variant="outline" onClick={onClose} className="h-10">Cancelar</Button>
-            <Button onClick={handleEmit} disabled={saving} className="h-10 gap-2 min-w-[155px] shadow-md shadow-primary/20">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-              {saving ? "Emitindo..." : "Emitir e Imprimir"}
-            </Button>
+            <Button variant="outline" onClick={onClose} className="h-9 rounded-full">Cancelar</Button>
+            <PrimaryActionButton
+              label={saving ? "Emitindo..." : "Emitir e Imprimir"}
+              icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              onClick={handleEmit}
+              disabled={saving}
+            />
           </div>
         </div>
       </DialogContent>
@@ -422,11 +425,13 @@ export function AtestadosTab({ patientId, patient }: { patientId: number; patien
             <CardTitle className="text-lg sm:text-xl">Atestados</CardTitle>
             <CardDescription className="text-xs sm:text-sm">Atestados e declarações emitidos para este paciente</CardDescription>
           </div>
-          <Button onClick={() => setShowDialog(true)} className="w-full sm:w-auto gap-1.5 h-10 rounded-xl shadow-md shadow-primary/20">
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="sm:hidden">Emitir</span>
-            <span className="hidden sm:inline">Emitir Atestado</span>
-          </Button>
+          <PrimaryActionButton
+            label="Emitir Atestado"
+            mobileLabel="Emitir"
+            icon={<ScrollText className="w-4 h-4" />}
+            onClick={() => setShowDialog(true)}
+            className="w-full sm:w-auto justify-center"
+          />
         </div>
       </CardHeader>
       <CardContent className="p-6">

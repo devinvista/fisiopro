@@ -40,6 +40,7 @@ import {
   ShieldCheck, Link2, Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PrimaryActionButton } from "@/components/ui/primary-action-button";
 import { VoiceTextarea as Textarea } from "@/components/ui/voice-textarea";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -248,10 +249,13 @@ export function HistoryTab({ patientId, patient }: { patientId: number; patient:
           </div>
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="rounded-xl flex-1" onClick={() => setRescheduleAppt(null)}>Cancelar</Button>
-            <Button className="rounded-xl flex-1" onClick={handleReschedule} disabled={rescheduleBusy}>
-              {rescheduleBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-              Confirmar
-            </Button>
+            <PrimaryActionButton
+              label={rescheduleBusy ? "Aguarde..." : "Confirmar"}
+              icon={rescheduleBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              onClick={handleReschedule}
+              disabled={rescheduleBusy}
+              className="flex-1 justify-center"
+            />
           </div>
         </DialogContent>
       </Dialog>
