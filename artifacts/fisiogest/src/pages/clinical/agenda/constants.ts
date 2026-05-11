@@ -16,7 +16,7 @@ export const STATUS_CONFIG: Record<
     cardSub: string;
   }
 > = {
-  agendado:   { label: "Agendado",   bg: "bg-green-400",   text: "text-white", dot: "bg-green-300",   border: "border-green-400",   badge: "bg-green-100 text-green-800",       cardBg: "bg-green-400",   cardSub: "text-white/80" },
+  agendado:   { label: "Agendado",   bg: "bg-amber-400",   text: "text-white", dot: "bg-amber-300",   border: "border-amber-400",   badge: "bg-amber-100 text-amber-800",       cardBg: "bg-amber-400",   cardSub: "text-white/80" },
   confirmado: { label: "Confirmado", bg: "bg-emerald-600", text: "text-white", dot: "bg-emerald-400", border: "border-emerald-600", badge: "bg-emerald-100 text-emerald-800",   cardBg: "bg-emerald-600", cardSub: "text-white/80" },
   compareceu: { label: "Compareceu", bg: "bg-blue-500",    text: "text-white", dot: "bg-blue-300",    border: "border-blue-500",    badge: "bg-blue-100 text-blue-800",         cardBg: "bg-blue-500",    cardSub: "text-white/80" },
   concluido:  { label: "Concluído",  bg: "bg-slate-400",   text: "text-white", dot: "bg-slate-300",   border: "border-slate-400",   badge: "bg-slate-100 text-slate-600",       cardBg: "bg-slate-400",   cardSub: "text-white/80" },
@@ -26,7 +26,7 @@ export const STATUS_CONFIG: Record<
 };
 
 export const STATUS_FILTER_OPTIONS = [
-  { value: "agendado",   label: "Agendado",   color: "#4ade80" },
+  { value: "agendado",   label: "Agendado",   color: "#f59e0b" },
   { value: "confirmado", label: "Confirmado",  color: "#059669" },
   { value: "compareceu", label: "Compareceu",  color: "#3b82f6" },
   { value: "concluido",  label: "Concluído",   color: "#94a3b8" },

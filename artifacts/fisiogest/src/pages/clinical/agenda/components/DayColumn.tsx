@@ -35,7 +35,7 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; light: string; border: string }> = {
-  agendado:   { bg: "#4ade80", light: "#f0fdf4", border: "#86efac" },
+  agendado:   { bg: "#f59e0b", light: "#fffbeb", border: "#fde68a" },
   confirmado: { bg: "#059669", light: "#ecfdf5", border: "#34d399" },
   compareceu: { bg: "#3b82f6", light: "#eff6ff", border: "#93c5fd" },
   concluido:  { bg: "#94a3b8", light: "#f8fafc", border: "#e2e8f0" },
