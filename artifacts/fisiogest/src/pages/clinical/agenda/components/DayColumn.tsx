@@ -35,13 +35,13 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; light: string; border: string }> = {
-  agendado:   { bg: "#f59e0b", light: "#fffbeb", border: "#fde68a" },
+  agendado:   { bg: "#10b981", light: "#ecfdf5", border: "#6ee7b7" },
   confirmado: { bg: "#059669", light: "#ecfdf5", border: "#34d399" },
   compareceu: { bg: "#3b82f6", light: "#eff6ff", border: "#93c5fd" },
   concluido:  { bg: "#94a3b8", light: "#f8fafc", border: "#e2e8f0" },
   cancelado:  { bg: "#f87171", light: "#fef2f2", border: "#fecaca" },
   faltou:     { bg: "#e11d48", light: "#fff1f2", border: "#fda4af" },
-  remarcado:  { bg: "#facc15", light: "#fefce8", border: "#fde047" },
+  remarcado:  { bg: "#f59e0b", light: "#fffbeb", border: "#fde68a" },
 };
 
 export function DayColumn({
