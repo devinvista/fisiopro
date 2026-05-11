@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetDashboard,
@@ -11,6 +11,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/lib/query-client";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Users, DollarSign, Calendar as CalendarIcon, TrendingUp, Clock,
   AlertCircle, Activity, UserX, Globe, Copy, Check, ExternalLink,
@@ -24,6 +25,13 @@ import { Link, useLocation } from "wouter";
 import { PatientPipelineWidget } from "./dashboard/PatientPipelineWidget";
 import { NotesWidget } from "./dashboard/NotesWidget";
 import { cn } from "@/lib/utils";
+
+const CreateAppointmentForm = lazy(() =>
+  import("./clinical/agenda/components/CreateAppointmentForm").then((m) => ({ default: m.CreateAppointmentForm }))
+);
+const CreatePatientForm = lazy(() =>
+  import("./clinical/patients/CreatePatientForm").then((m) => ({ default: m.CreatePatientForm }))
+);
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -194,6 +202,8 @@ export default function Dashboard() {
   const { data, isLoading } = useGetDashboard();
   const [copied, setCopied] = useState(false);
   const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [isNewApptOpen, setIsNewApptOpen] = useState(false);
+  const [isNewPatientOpen, setIsNewPatientOpen] = useState(false);
   const updateMutation = useUpdateAppointment();
   const queryClient = useQueryClient();
 
@@ -266,20 +276,22 @@ export default function Dashboard() {
               </div>
 
               <div className="flex gap-2 shrink-0">
-                <Link href="/agenda">
-                  <Button className="bg-white text-teal-900 hover:bg-teal-50 h-10 px-4 rounded-xl gap-2 text-sm font-bold shadow-sm">
-                    <CalendarPlus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Novo Agendamento</span>
-                    <span className="sm:hidden">Agendar</span>
-                  </Button>
-                </Link>
-                <Link href="/pacientes">
-                  <Button className="bg-white/10 border border-white/20 text-white hover:bg-white/20 h-10 px-4 rounded-xl gap-2 text-sm font-semibold">
-                    <Plus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Novo Paciente</span>
-                    <span className="sm:hidden">Paciente</span>
-                  </Button>
-                </Link>
+                <Button
+                  onClick={() => setIsNewApptOpen(true)}
+                  className="bg-white text-teal-900 hover:bg-teal-50 h-10 px-4 rounded-xl gap-2 text-sm font-bold shadow-sm"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Novo Agendamento</span>
+                  <span className="sm:hidden">Agendar</span>
+                </Button>
+                <Button
+                  onClick={() => setIsNewPatientOpen(true)}
+                  className="bg-white/10 border border-white/20 text-white hover:bg-white/20 h-10 px-4 rounded-xl gap-2 text-sm font-semibold"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Novo Paciente</span>
+                  <span className="sm:hidden">Paciente</span>
+                </Button>
               </div>
             </div>
 
@@ -590,6 +602,28 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* ── SHORTCUT DIALOGS ─────────────────────────────────────────────── */}
+      <Dialog open={isNewApptOpen} onOpenChange={setIsNewApptOpen}>
+        <DialogContent className="sm:max-w-[640px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto p-0">
+          <DialogTitle className="sr-only">Novo Agendamento</DialogTitle>
+          <Suspense fallback={<div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}>
+            <div className="p-6">
+              <CreateAppointmentForm onSuccess={() => setIsNewApptOpen(false)} />
+            </div>
+          </Suspense>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isNewPatientOpen} onOpenChange={setIsNewPatientOpen}>
+        <DialogContent className="sm:max-w-[600px] border-none shadow-2xl rounded-2xl max-h-[90dvh] overflow-y-auto">
+          <DialogTitle className="sr-only">Novo Paciente</DialogTitle>
+          <Suspense fallback={<div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}>
+            <CreatePatientForm onSuccess={() => setIsNewPatientOpen(false)} />
+          </Suspense>
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 }
