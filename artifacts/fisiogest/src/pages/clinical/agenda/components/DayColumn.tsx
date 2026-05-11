@@ -35,13 +35,13 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; light: string; border: string }> = {
-  agendado:   { bg: "#f59e0b", light: "#fffbeb", border: "#fde68a" },
-  confirmado: { bg: "#10b981", light: "#ecfdf5", border: "#6ee7b7" },
+  agendado:   { bg: "#4ade80", light: "#f0fdf4", border: "#86efac" },
+  confirmado: { bg: "#059669", light: "#ecfdf5", border: "#34d399" },
   compareceu: { bg: "#3b82f6", light: "#eff6ff", border: "#93c5fd" },
   concluido:  { bg: "#94a3b8", light: "#f8fafc", border: "#e2e8f0" },
   cancelado:  { bg: "#f87171", light: "#fef2f2", border: "#fecaca" },
-  faltou:     { bg: "#fb923c", light: "#fff7ed", border: "#fed7aa" },
-  remarcado:  { bg: "#8b5cf6", light: "#f5f3ff", border: "#ddd6fe" },
+  faltou:     { bg: "#e11d48", light: "#fff1f2", border: "#fda4af" },
+  remarcado:  { bg: "#facc15", light: "#fefce8", border: "#fde047" },
 };
 
 export function DayColumn({
@@ -205,7 +205,7 @@ export function DayColumn({
             ? STATUS_COLORS.faltou.bg
             : anyCancelado
             ? STATUS_COLORS.cancelado.bg
-            : "#8b5cf6";
+            : STATUS_COLORS.agendado.bg;
 
           return (
             <HoverCard key={`group-${item.procedureId}-${startTime}`} openDelay={200} closeDelay={80}>
