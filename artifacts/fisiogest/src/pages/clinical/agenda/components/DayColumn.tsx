@@ -281,7 +281,7 @@ export function DayColumn({
                             className="h-full rounded-b-lg transition-all"
                             style={{
                               width: `${Math.min((occupancy / maxCapacity) * 100, 100)}%`,
-                              backgroundColor: spotsLeft === 0 ? "#fca5a5" : "rgba(255,255,255,0.7)",
+                              backgroundColor: spotsLeft === 0 ? "#fca5a5" : "#f59e0b",
                             }}
                           />
                         </div>
