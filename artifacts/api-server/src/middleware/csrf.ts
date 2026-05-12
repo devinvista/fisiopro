@@ -28,13 +28,14 @@ function safeEqual(a: string, b: string): boolean {
 type CookieRequest = Request & { cookies?: Record<string, string> };
 
 /**
- * Middleware de CSRF (double-submit cookie).
+ * Middleware de CSRF (double-submit cookie + header de resposta).
  *
  * - Garante a presença do cookie `fisiogest_csrf` (não httpOnly) em qualquer request.
- * - Em métodos mutadores (POST/PUT/PATCH/DELETE) exige o header `x-csrf-token`
- *   com o mesmo valor do cookie.
- * - Pulado para rotas públicas (login, register, /api/public, etc.) e para
- *   chamadas autenticadas via `Authorization: Bearer ...` (não vulneráveis a CSRF).
+ * - Sempre expõe o token atual no header de resposta `X-CSRF-Token` para que o
+ *   frontend possa armazená-lo em memória (resiliente a bloqueio de cookies em iframes).
+ * - Em métodos mutadores (POST/PUT/PATCH/DELETE) aceita o token tanto via cookie
+ *   quanto via header `x-csrf-token`.
+ * - Pulado para rotas públicas (login, register, /api/public, etc.).
  */
 export function csrfMiddleware(req: CookieRequest, res: Response, next: NextFunction): void {
   const cookies = req.cookies ?? {};
@@ -44,6 +45,9 @@ export function csrfMiddleware(req: CookieRequest, res: Response, next: NextFunc
     cookieToken = generateCsrfToken();
     setCsrfCookie(res, cookieToken);
   }
+
+  // Sempre expõe o token no header de resposta para o frontend cachear em memória.
+  res.setHeader("X-CSRF-Token", cookieToken);
 
   if (SAFE_METHODS.has(req.method)) {
     next();
@@ -57,7 +61,6 @@ export function csrfMiddleware(req: CookieRequest, res: Response, next: NextFunc
 
   // Sem cookie de auth → request anônimo, sem ambient credentials → não há CSRF.
   if (!cookies[AUTH_COOKIE]) {
-    // Mas se vier Bearer token explícito, também não há CSRF (não é cookie).
     next();
     return;
   }
@@ -66,6 +69,7 @@ export function csrfMiddleware(req: CookieRequest, res: Response, next: NextFunc
   if (!headerToken || !safeEqual(headerToken, cookieToken)) {
     res.status(403).json({
       error: "Forbidden",
+      code: "CSRF_INVALID",
       message: "Token CSRF ausente ou inválido. Recarregue a página e tente novamente.",
     });
     return;

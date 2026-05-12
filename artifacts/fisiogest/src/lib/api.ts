@@ -11,10 +11,18 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
 }
 
 const CSRF_COOKIE = "fisiogest_csrf";
+const CSRF_RESPONSE_HEADER = "x-csrf-token";
 
 const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 /** Base path para chamadas REST. Ex.: "" em dev/raiz ou "/fisiogest" em deploy. */
 export const API_BASE = BASE.replace(/\/[^/]+$/, "");
+
+/**
+ * Token CSRF em memória — mais confiável que `document.cookie` em contextos de
+ * iframe cross-origin onde o acesso a cookies pode ser bloqueado pelo browser.
+ * Atualizado automaticamente a partir do header `X-CSRF-Token` de qualquer resposta.
+ */
+let _csrfTokenMemory: string | null = null;
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -26,6 +34,19 @@ function readCookie(name: string): string | null {
     }
   }
   return null;
+}
+
+/** Retorna o token CSRF — preferindo o valor em memória ao cookie. */
+export function getCsrfToken(): string | null {
+  return _csrfTokenMemory ?? readCookie(CSRF_COOKIE);
+}
+
+/** Extrai o token CSRF do header de resposta e o armazena em memória. */
+function saveCsrfFromResponse(res: Response): void {
+  const token = res.headers.get(CSRF_RESPONSE_HEADER);
+  if (token) {
+    _csrfTokenMemory = token;
+  }
 }
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -40,19 +61,65 @@ function genRequestId(): string {
 }
 
 /** Wrapper de baixo nível: anexa CSRF + x-request-id e usa cookies httpOnly de auth. */
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const method = (init?.method ?? "GET").toUpperCase();
+
   if (MUTATING_METHODS.has(method)) {
-    const csrf = readCookie(CSRF_COOKIE);
+    const csrf = getCsrfToken();
     if (csrf && !headers.has("x-csrf-token")) {
       headers.set("x-csrf-token", csrf);
     }
   }
+
   if (!headers.has(REQUEST_ID_HEADER)) {
     headers.set(REQUEST_ID_HEADER, genRequestId());
   }
-  return fetch(input, { ...init, headers, credentials: init?.credentials ?? "include" });
+
+  const res = await fetch(input, { ...init, headers, credentials: init?.credentials ?? "include" });
+
+  // Salva o token CSRF em memória para uso em próximas requisições.
+  saveCsrfFromResponse(res);
+
+  // Auto-retry em erro CSRF: faz um GET para obter token fresco, depois retenta.
+  if (res.status === 403 && MUTATING_METHODS.has(method)) {
+    let isCsrf = false;
+    try {
+      const body = await res.clone().json();
+      isCsrf = body?.code === "CSRF_INVALID" || String(body?.message ?? "").toLowerCase().includes("csrf");
+    } catch {
+      /* ignore */
+    }
+
+    if (isCsrf) {
+      // Busca um token CSRF fresco via GET (sem efeitos colaterais).
+      try {
+        const refresh = await fetch(`${API_BASE}/api/health`, {
+          method: "GET",
+          credentials: "include",
+        });
+        saveCsrfFromResponse(refresh);
+      } catch {
+        /* ignore — retenta de qualquer forma */
+      }
+
+      // Retenta a requisição original com o token atualizado.
+      const retryHeaders = new Headers(init?.headers);
+      const freshCsrf = getCsrfToken();
+      if (freshCsrf) retryHeaders.set("x-csrf-token", freshCsrf);
+      if (!retryHeaders.has(REQUEST_ID_HEADER)) retryHeaders.set(REQUEST_ID_HEADER, genRequestId());
+
+      const retryRes = await fetch(input, {
+        ...init,
+        headers: retryHeaders,
+        credentials: init?.credentials ?? "include",
+      });
+      saveCsrfFromResponse(retryRes);
+      return retryRes;
+    }
+  }
+
+  return res;
 }
 
 /**

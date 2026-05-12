@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/toast";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getCsrfToken } from "@/lib/api";
 import { 
   ViewType, 
   AppointmentOption, 
@@ -130,11 +130,8 @@ export function UploadModal({
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url, true);
       xhr.withCredentials = true;
-      const csrf = document.cookie
-        .split(";")
-        .map((c) => c.trim())
-        .find((c) => c.startsWith("fisiogest_csrf="));
-      if (csrf) xhr.setRequestHeader("x-csrf-token", decodeURIComponent(csrf.split("=")[1] ?? ""));
+      const csrf = getCsrfToken();
+      if (csrf) xhr.setRequestHeader("x-csrf-token", csrf);
 
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
