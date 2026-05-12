@@ -12,6 +12,7 @@ import {
   Repeat,
   Users,
   ClipboardList,
+  Gift,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import {
@@ -191,6 +192,30 @@ export function CreateAppointmentForm({
     enabled: !!formData.patientId,
     staleTime: 60_000,
   });
+
+  const { data: sessionCreditsStatement = [] } = useQuery<any[]>({
+    queryKey: ["session-credits-statement", formData.patientId],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/patients/${formData.patientId}/session-credits/statement`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!formData.patientId && step === 2,
+    staleTime: 30_000,
+  });
+
+  const availableReposicaoCredits = useMemo(() => {
+    if (!formData.procedureId || !sessionCreditsStatement.length) return [];
+    const today = new Date().toISOString().slice(0, 10);
+    return sessionCreditsStatement.filter(
+      (c) =>
+        c.origin === "reposicaoFalta" &&
+        c.status === "disponivel" &&
+        c.remaining > 0 &&
+        Number(c.procedureId) === Number(formData.procedureId) &&
+        (!c.validUntil || c.validUntil >= today)
+    );
+  }, [sessionCreditsStatement, formData.procedureId]);
 
   const lastProcedureId = useMemo(() => {
     if (!lastAppointments || !Array.isArray(lastAppointments)) return null;
@@ -500,6 +525,27 @@ export function CreateAppointmentForm({
             onSelect={(id) => setFormData({ ...formData, procedureId: id })}
             lastProcedureId={lastProcedureId}
           />
+
+          {/* ── Aviso de crédito de reposição disponível ── */}
+          {availableReposicaoCredits.length > 0 && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">
+              <Gift className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="text-sm font-semibold text-amber-800">
+                  {availableReposicaoCredits.length === 1
+                    ? "1 sessão de reposição disponível"
+                    : `${availableReposicaoCredits.length} sessões de reposição disponíveis`}
+                </p>
+                <p className="text-xs text-amber-700">
+                  Este paciente tem crédito de falta para este procedimento
+                  {availableReposicaoCredits[0].validUntil
+                    ? ` (válido até ${format(new Date(availableReposicaoCredits[0].validUntil + "T12:00:00"), "dd/MM/yyyy")})`
+                    : ""}
+                  . Ao confirmar, o crédito será consumido automaticamente — sem cobrar nada adicional.
+                </p>
+              </div>
+            </div>
+          )}
           {/* Profissional — only for admin/secretary when clinic has multiple professionals */}
           {canSelectProfessional && professionals.length > 1 && (
             <div className="space-y-1.5">

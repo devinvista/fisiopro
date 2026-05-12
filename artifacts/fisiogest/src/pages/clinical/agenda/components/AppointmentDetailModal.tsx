@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -17,6 +18,8 @@ import {
   Users,
   Globe,
   Plus,
+  Gift,
+  Info,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import {
@@ -64,6 +67,30 @@ export function AppointmentDetailModal({
 }) {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+
+  const { data: sessionCreditsStatement = [] } = useQuery<any[]>({
+    queryKey: ["session-credits-statement", appointment.patientId],
+    queryFn: async () => {
+      const res = await apiFetch(`/api/patients/${appointment.patientId}/session-credits/statement`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: appointment.status === "faltou" && !!appointment.patientId,
+    staleTime: 30_000,
+  });
+
+  const reposicaoCredit = useMemo(() => {
+    if (!sessionCreditsStatement.length) return null;
+    const today = new Date().toISOString().slice(0, 10);
+    return sessionCreditsStatement.find(
+      (c) =>
+        c.origin === "reposicaoFalta" &&
+        c.status === "disponivel" &&
+        c.remaining > 0 &&
+        Number(c.procedureId) === Number(appointment.procedureId) &&
+        (!c.validUntil || c.validUntil >= today)
+    ) ?? null;
+  }, [sessionCreditsStatement, appointment.procedureId]);
 
   const maxCap = appointment.procedure?.maxCapacity ?? 1;
   const isGroupSession = maxCap > 1;
@@ -486,6 +513,37 @@ export function AppointmentDetailModal({
                     Adicionar paciente ({spotsLeft} vaga{spotsLeft !== 1 ? "s" : ""} livre{spotsLeft !== 1 ? "s" : ""})
                   </Button>
                 )}
+              </div>
+            )}
+
+            {/* Faltou — banner de reposição */}
+            {!isGroupSession && appointment.status === "faltou" && (
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <Gift className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-orange-800">
+                      {reposicaoCredit
+                        ? "Crédito de reposição disponível"
+                        : "Sessão de reposição disponível"}
+                    </p>
+                    <p className="text-xs text-orange-700 leading-relaxed">
+                      {reposicaoCredit
+                        ? `Crédito gerado para este procedimento, válido até ${format(new Date(reposicaoCredit.validUntil + "T12:00:00"), "dd/MM/yyyy")}.`
+                        : "Um crédito de reposição será gerado automaticamente."}
+                      {" "}Use <strong>Remarcar</strong> abaixo para mover esta sessão (mantém o vínculo do plano) ou crie um novo agendamento — o crédito será consumido automaticamente na confirmação.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  className="w-full rounded-xl bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => startReschedule(appointment)}
+                  disabled={isBusy}
+                >
+                  <Repeat className="w-3.5 h-3.5 mr-1.5" />
+                  Remarcar esta sessão
+                </Button>
               </div>
             )}
 
