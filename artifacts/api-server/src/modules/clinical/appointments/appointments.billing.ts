@@ -738,10 +738,13 @@ export async function applyBillingRules(
     if (billingType === "porSessao") {
       await db.transaction(async (tx) => {
         // 2a. Verifica créditos de sessão (FIFO por vencimento)
-        // Apenas créditos `disponivel` e ainda não vencidos. Pendentes de
-        // pagamento (modo prepago) e expirados ficam fora.
+        // Créditos `disponivel` e ainda não vencidos têm prioridade.
+        // Fallback: créditos `pendentePagamento` de planos mensais cuja
+        // fatura já está `pago` são tratados como disponíveis — corrige
+        // a race condition em que o pagamento é processado no mesmo instante
+        // da confirmação da sessão e o pool ainda não foi liberado.
         const todayISO = todayBRT();
-        const availableCredit = await tx
+        let availableCredit = await tx
           .select()
           .from(sessionCreditsTable)
           .where(
@@ -758,6 +761,42 @@ export async function applyBillingRules(
             asc(sessionCreditsTable.id),
           )
           .limit(1);
+
+        // Fallback: pool mensal pendentePagamento com fatura já paga
+        if (availableCredit.length === 0) {
+          const paidPendingCredits = await tx
+            .select({ sc: sessionCreditsTable, invoiceStatus: financialRecordsTable.status })
+            .from(sessionCreditsTable)
+            .innerJoin(
+              financialRecordsTable,
+              eq(financialRecordsTable.id, sessionCreditsTable.financialRecordId),
+            )
+            .where(
+              and(
+                eq(sessionCreditsTable.patientId, patientId),
+                eq(sessionCreditsTable.procedureId, procedureId),
+                eq(sessionCreditsTable.status, "pendentePagamento"),
+                eq(sessionCreditsTable.origin, "mensal"),
+                eq(financialRecordsTable.status, "pago"),
+                gt(sql`${sessionCreditsTable.quantity} - ${sessionCreditsTable.usedQuantity}`, 0),
+                sql`(${sessionCreditsTable.validUntil} IS NULL OR ${sessionCreditsTable.validUntil} >= ${todayISO}::date)`,
+              ),
+            )
+            .orderBy(
+              sql`${sessionCreditsTable.validUntil} ASC NULLS LAST`,
+              asc(sessionCreditsTable.id),
+            )
+            .limit(1);
+
+          if (paidPendingCredits.length > 0) {
+            // Libera o pool imediatamente (idempotente: a fatura já está paga)
+            await tx
+              .update(sessionCreditsTable)
+              .set({ status: "disponivel" })
+              .where(eq(sessionCreditsTable.id, paidPendingCredits[0].sc.id));
+            availableCredit = [{ ...paidPendingCredits[0].sc, status: "disponivel" as const }];
+          }
+        }
 
         if (availableCredit.length > 0) {
           const credit = availableCredit[0];

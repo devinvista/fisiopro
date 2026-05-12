@@ -27,6 +27,7 @@ import {
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { logAudit } from "../../../utils/auditLog.js";
 import { postReceivableRevenue } from "../../shared/accounting/accounting.service.js";
+import { applyBillingRules } from "../appointments/appointments.billing.js";
 
 export interface PolicyRunResult {
   autoConfirmed: number;
@@ -138,6 +139,7 @@ export async function runEndOfDayPolicies(): Promise<PolicyRunResult> {
           procedureId: appointmentsTable.procedureId,
           date: appointmentsTable.date,
           endTime: appointmentsTable.endTime,
+          status: appointmentsTable.status,
         })
         .from(appointmentsTable)
         .where(
@@ -154,6 +156,7 @@ export async function runEndOfDayPolicies(): Promise<PolicyRunResult> {
 
       for (const appt of noShowCandidates) {
         try {
+          const oldStatus = appt.status;
           await db
             .update(appointmentsTable)
             .set({ status: "faltou" })
@@ -169,6 +172,18 @@ export async function runEndOfDayPolicies(): Promise<PolicyRunResult> {
             entityId: appt.id,
             summary: "Status: agendado/confirmado → faltou (fechamento automático do dia)",
           });
+
+          // Dispara regras de billing para a transição de no-show.
+          // Para planos materializados, gera o crédito de reposicaoFalta.
+          // Para planos padrão com billingType=mensal, gera creditoSessao.
+          try {
+            await applyBillingRules(appt.id, "faltou", oldStatus, clinic.id);
+          } catch (billingErr: any) {
+            console.error(
+              `[runEndOfDayPolicies] applyBillingRules failed for no-show — appointmentId=${appt.id}:`,
+              billingErr,
+            );
+          }
 
           // ── NO-SHOW FEE ──────────────────────────────────────────────────
           if (clinic.noShowFeeEnabled && clinic.noShowFeeAmount) {
