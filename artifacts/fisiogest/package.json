@@ -61,7 +61,7 @@
   "dependencies": {
     "@radix-ui/react-hover-card": "catalog:",
     "@sentry/react": "^10.50.0",
-    "@tanstack/react-virtual": "^3.13.24",
+    "@tanstack/react-virtual": "^3.13.25",
     "browser-image-compression": "^2.0.2"
   }
 }
