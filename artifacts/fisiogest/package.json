@@ -60,7 +60,7 @@
   },
   "dependencies": {
     "@radix-ui/react-hover-card": "catalog:",
-    "@sentry/react": "^10.50.0",
+    "@sentry/react": "^10.51.0",
     "@tanstack/react-virtual": "^3.13.24",
     "browser-image-compression": "^2.0.2"
   }
